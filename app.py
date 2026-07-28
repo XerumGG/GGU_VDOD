@@ -88,8 +88,11 @@ BITRATE_MAP = {
 
 MAX_RETRIES = 999999  # effectively unlimited - keep retrying until internet comes back
 RETRY_WAIT_SECONDS = 5
-CONNECTIVITY_HOST = "8.8.8.8"
-CONNECTIVITY_PORT = 53
+CONNECTIVITY_ENDPOINTS = (
+    ("1.1.1.1", 53),
+    ("8.8.8.8", 53),
+    ("www.youtube.com", 443),
+)
 
 # ---------------------------------------------------------- Dark theme -----
 BG = "#1e1e1e"
@@ -104,6 +107,17 @@ ACCENT = "#e5484d"
 ACCENT_ACTIVE = "#c53f43"
 SUCCESS = "#57c26a"
 WARNING = "#e5b84d"
+SCROLL_SPEED_MIN = 1
+SCROLL_SPEED_MAX = 6
+SCROLL_SPEED_DEFAULT = 1
+
+
+def clamp_scroll_speed(value):
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        value = SCROLL_SPEED_DEFAULT
+    return max(SCROLL_SPEED_MIN, min(SCROLL_SPEED_MAX, value))
 
 
 def format_rate(bytes_per_second):
@@ -281,11 +295,13 @@ def save_config(data):
 
 
 def is_internet_up(timeout=3):
-    try:
-        with socket.create_connection((CONNECTIVITY_HOST, CONNECTIVITY_PORT), timeout=timeout):
-            return True
-    except OSError:
-        return False
+    for host, port in CONNECTIVITY_ENDPOINTS:
+        try:
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 class _ConnectionLostError(Exception):
@@ -323,6 +339,17 @@ def explain_download_error(err):
     if "live" in lower and "not currently available" in lower:
         return "This live stream is not currently available to the extractor."
     return text
+
+
+def _looks_like_cookie_database_error(err):
+    text = str(err).lower()
+    return (("could not copy" in text and "cookie" in text)
+            or "cookie database" in text)
+
+
+def _looks_like_subtitle_rate_limit(err):
+    text = str(err).lower()
+    return "subtitle" in text and ("429" in text or "too many requests" in text)
 
 
 class GGUVDODApp(tk.Tk):
@@ -366,6 +393,10 @@ class GGUVDODApp(tk.Tk):
         self._playlist_seen = set()
         self._last_update_check = config.get("last_update_check", 0)
         self._tooltips = []
+        self._failed_count = 0
+        self.scroll_speed_var = tk.IntVar(value=clamp_scroll_speed(config.get("scroll_speed", SCROLL_SPEED_DEFAULT)))
+        self._scroll_target = None
+        self._scroll_animation_id = None
         self.download_status_var = tk.StringVar(value="Ready")
         self.download_rate_var = tk.StringVar(value="0 B/s")
         self.upload_rate_var = tk.StringVar(value="0 B/s")
@@ -649,6 +680,25 @@ class GGUVDODApp(tk.Tk):
         options_frame = self._labelframe(content, "Authentication and output options", padx=16, pady=12)
         options_frame.pack(fill="x", **pad)
 
+        scroll_row = self._frame(options_frame, bg=BG_PANEL)
+        scroll_row.pack(fill="x", pady=(0, 8))
+        scroll_label = self._label(scroll_row, text="Interface scroll speed:", bg=BG_PANEL)
+        scroll_label.pack(side="left")
+        self._add_tooltip(scroll_label, "Controls how far the main panel moves for each mouse-wheel step.")
+        scroll_spinbox = ttk.Spinbox(
+            scroll_row,
+            from_=SCROLL_SPEED_MIN,
+            to=SCROLL_SPEED_MAX,
+            textvariable=self.scroll_speed_var,
+            width=5,
+            state="readonly",
+        )
+        scroll_spinbox.pack(side="left", padx=(10, 8))
+        self._add_tooltip(scroll_spinbox, "1 is slow and gentle; 6 is fastest. The setting is remembered.")
+        scroll_hint = self._label(scroll_row, text="1 slow  ·  6 fast", bg=BG_PANEL,
+                                   fg=FG_MUTED, font=("Segoe UI", 9))
+        scroll_hint.pack(side="left")
+
         auth_row = self._frame(options_frame, bg=BG_PANEL)
         auth_row.pack(fill="x", pady=(0, 8))
         browser_label = self._label(auth_row, text="Browser cookies:", bg=BG_PANEL)
@@ -784,20 +834,45 @@ class GGUVDODApp(tk.Tk):
                  "Estimated time remaining when yt-dlp can calculate it.")
 
     def _scroll_main(self, event):
-        """Scroll the outer panel without stealing the wheel from text editors."""
+        """Animate the outer panel without stealing the wheel from text editors."""
         if isinstance(event.widget, tk.Text):
             return
         if getattr(event, "num", None) == 4:
-            units = -3
+            direction = -1
         elif getattr(event, "num", None) == 5:
-            units = 3
+            direction = 1
+        elif event.delta:
+            direction = -1 if event.delta > 0 else 1
         else:
-            units = -int(event.delta / 40) if event.delta else 0
-            units = max(-6, min(6, units))
-            if units == 0 and event.delta:
-                units = -1 if event.delta > 0 else 1
-        if units:
-            self.main_canvas.yview_scroll(units, "units")
+            return
+
+        current_top, current_bottom = self.main_canvas.yview()
+        if current_bottom - current_top >= 0.999:
+            return
+        if self._scroll_target is None:
+            self._scroll_target = current_top
+        step = 0.025 * clamp_scroll_speed(self.scroll_speed_var.get())
+        max_top = max(0.0, 1.0 - (current_bottom - current_top))
+        self._scroll_target = max(0.0, min(max_top, self._scroll_target + direction * step))
+        self._animate_main_scroll()
+
+    def _animate_main_scroll(self):
+        if self._scroll_animation_id is not None:
+            return
+        self._scroll_animation_id = self.after(10, self._step_main_scroll)
+
+    def _step_main_scroll(self):
+        self._scroll_animation_id = None
+        if self._scroll_target is None:
+            return
+        current_top, _current_bottom = self.main_canvas.yview()
+        distance = self._scroll_target - current_top
+        if abs(distance) < 0.001:
+            self.main_canvas.yview_moveto(self._scroll_target)
+            self._scroll_target = None
+            return
+        self.main_canvas.yview_moveto(current_top + distance * 0.30)
+        self._scroll_animation_id = self.after(10, self._step_main_scroll)
 
     def _toggle_format(self):
         if self.format_var.get() == "video":
@@ -895,6 +970,7 @@ class GGUVDODApp(tk.Tk):
             "live_from_start": self.live_from_start_var.get(),
             "format_id": self.format_id_var.get().strip(),
             "last_update_check": self._last_update_check,
+            "scroll_speed": clamp_scroll_speed(self.scroll_speed_var.get()),
         }
 
     def _list_formats(self):
@@ -1017,6 +1093,7 @@ class GGUVDODApp(tk.Tk):
 
         self._cancel_requested = False
         self._playlist_seen = set()
+        self._failed_count = 0
         self.download_status_var.set(f"Queued {len(urls)} link(s)")
         self.download_rate_var.set("0 B/s")
         self.upload_rate_var.set("0 B/s")
@@ -1040,10 +1117,13 @@ class GGUVDODApp(tk.Tk):
         for idx, url in enumerate(urls, start=1):
             self._enqueue(self.log, f"[{idx}/{total}] Starting: {url}")
             attempt = 0
+            active_settings = dict(settings)
+            cookie_fallback_attempted = False
+            subtitle_fallback_attempted = False
             while True:
                 attempt += 1
                 try:
-                    self._do_download(url, idx, total, settings)
+                    self._do_download(url, idx, total, active_settings)
                     self._enqueue(self.log, f"[{idx}/{total}] Finished: {url}")
                     break
                 except _ConnectionLostError:
@@ -1057,6 +1137,29 @@ class GGUVDODApp(tk.Tk):
                     self._enqueue(self.log, f"[{idx}/{total}] Connection restored - resuming download...")
                     continue
                 except yt_dlp.utils.DownloadError as e:
+                    if (_looks_like_cookie_database_error(e)
+                            and active_settings["cookies_browser"] != "None"
+                            and not cookie_fallback_attempted
+                            and not self._cancel_requested):
+                        cookie_fallback_attempted = True
+                        active_settings = dict(active_settings)
+                        active_settings["cookies_browser"] = "None"
+                        self._enqueue(self.log,
+                                      f"[{idx}/{total}] Could not copy the browser cookie database. "
+                                      "Retrying without browser cookies; close the browser or use cookies.txt "
+                                      "if sign-in is required...")
+                        continue
+                    if (_looks_like_subtitle_rate_limit(e)
+                            and active_settings["subtitles"]
+                            and not subtitle_fallback_attempted
+                            and not self._cancel_requested):
+                        subtitle_fallback_attempted = True
+                        active_settings = dict(active_settings)
+                        active_settings["subtitles"] = False
+                        self._enqueue(self.log,
+                                      f"[{idx}/{total}] Subtitle service returned HTTP 429. "
+                                      "Retrying the video without subtitles...")
+                        continue
                     if _looks_like_connection_error(e) and attempt < MAX_RETRIES and not self._cancel_requested:
                         self._enqueue(self.log,
                                       f"[{idx}/{total}] Network error, retrying in {RETRY_WAIT_SECONDS}s "
@@ -1065,10 +1168,12 @@ class GGUVDODApp(tk.Tk):
                         continue
                     self._enqueue(self.log, f"[{idx}/{total}] FAILED: {explain_download_error(e)}")
                     self._enqueue(self._set_transfer_status, "Failed")
+                    self._failed_count += 1
                     break
                 except Exception as e:
                     self._enqueue(self.log, f"[{idx}/{total}] FAILED (unexpected error): {explain_download_error(e)}")
                     self._enqueue(self._set_transfer_status, "Failed")
+                    self._failed_count += 1
                     break
                 if self._cancel_requested:
                     break
@@ -1239,11 +1344,22 @@ class GGUVDODApp(tk.Tk):
             self.log("\nCancelled. Partially downloaded files are kept and will resume next time you click Download.\n")
             messagebox.showinfo("Cancelled", "Download cancelled. Re-run the same link later to resume from where it stopped.")
         else:
-            self.download_status_var.set("Complete")
+            if self._failed_count:
+                self.download_status_var.set("Completed with errors")
+            else:
+                self.download_status_var.set("Complete")
             self.download_rate_var.set("0 B/s")
             self.eta_var.set("—")
-            self.log(f"\nAll done! Processed {total} link(s).\n")
-            messagebox.showinfo("Complete", f"Finished processing {total} link(s).\nCheck the log for any errors.")
+            if self._failed_count:
+                self.log(f"\nCompleted with errors. Processed {total} link(s); "
+                         f"{self._failed_count} failed.\n")
+                messagebox.showwarning(
+                    "Completed with errors",
+                    f"Processed {total} link(s); {self._failed_count} failed. Check the log for details."
+                )
+            else:
+                self.log(f"\nAll done! Processed {total} link(s).\n")
+                messagebox.showinfo("Complete", f"Finished processing {total} link(s).\nCheck the log for any errors.")
 
 
 if __name__ == "__main__":

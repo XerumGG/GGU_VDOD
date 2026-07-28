@@ -127,6 +127,9 @@ Then rebuild with `build.bat` on Windows or `build.sh` on macOS/Linux.
 - **Transfer status bar**: a fixed qBittorrent-style footer shows download rate, upload
   rate, progress, transferred bytes, ETA, and queue status. Upload remains `0 B/s` because
   this is a download-only application.
+- **Resilient optional features**: if a browser cookie database is locked or subtitle
+  requests are rate-limited, the app retries the video without that optional feature and
+  reports the result clearly.
 - **Authentication support**: browser cookies and `cookies.txt` can be supplied for
   content the user is authorized to access.
 - **Subtitles and media metadata**: subtitle downloads/embedding plus optional metadata
