@@ -120,6 +120,60 @@ def clamp_scroll_speed(value):
     return max(SCROLL_SPEED_MIN, min(SCROLL_SPEED_MAX, value))
 
 
+class UndoEntry(tk.Entry):
+    """Entry widget with portable undo/redo support."""
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+        self._history = [self.get()]
+        self._history_index = 0
+        self._internal_edit = False
+        self.bind("<KeyRelease>", self._capture_edit, add="+")
+        self.bind("<<Cut>>", self._capture_after_virtual_edit, add="+")
+        self.bind("<<Paste>>", self._capture_after_virtual_edit, add="+")
+        self.bind("<FocusIn>", self._sync_external_value, add="+")
+
+    def _sync_external_value(self, _event=None):
+        current = self.get()
+        if current != self._history[self._history_index]:
+            self._history = [current]
+            self._history_index = 0
+
+    def _capture_after_virtual_edit(self, _event=None):
+        self.after_idle(self._capture_edit)
+
+    def _capture_edit(self, _event=None):
+        if self._internal_edit:
+            return
+        current = self.get()
+        if current == self._history[self._history_index]:
+            return
+        if self._history_index < len(self._history) - 1:
+            self._history = self._history[:self._history_index + 1]
+        self._history.append(current)
+        self._history_index += 1
+
+    def _restore_history_value(self, index):
+        self._internal_edit = True
+        try:
+            self.delete(0, "end")
+            self.insert(0, self._history[index])
+        finally:
+            self._internal_edit = False
+
+    def edit_undo(self):
+        self._sync_external_value()
+        if self._history_index > 0:
+            self._history_index -= 1
+            self._restore_history_value(self._history_index)
+
+    def edit_redo(self):
+        self._sync_external_value()
+        if self._history_index < len(self._history) - 1:
+            self._history_index += 1
+            self._restore_history_value(self._history_index)
+
+
 def format_rate(bytes_per_second):
     """Format a transfer rate using compact units suitable for the status bar."""
     if not bytes_per_second:
@@ -412,6 +466,7 @@ class GGUVDODApp(tk.Tk):
 
         self._setup_style()
         self._build_ui()
+        self._build_menu_bar()
         self._update_ffmpeg_status()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -476,12 +531,31 @@ class GGUVDODApp(tk.Tk):
 
     def _add_context_menu(self, widget):
         widget.bind("<Button-3>", self._show_context_menu, add="+")
+        widget.bind("<Control-z>", lambda event: self._edit_action(event, "undo"), add="+")
+        widget.bind("<Control-y>", lambda event: self._edit_action(event, "redo"), add="+")
+        widget.bind("<Control-Shift-Z>", lambda event: self._edit_action(event, "redo"), add="+")
+        widget.bind("<Control-Alt-Z>", lambda event: self._edit_action(event, "redo"), add="+")
         return widget
+
+    def _edit_action(self, event, action):
+        try:
+            if action == "undo":
+                event.widget.edit_undo()
+            else:
+                event.widget.edit_redo()
+        except tk.TclError:
+            pass
+        return "break"
 
     def _show_context_menu(self, event):
         widget = event.widget
         menu = tk.Menu(self, tearoff=False, bg=BG_PANEL, fg=FG,
                        activebackground=ACCENT, activeforeground="#ffffff")
+        menu.add_command(label="Undo", accelerator="Ctrl+Z",
+                         command=lambda: self._edit_action_for_widget(widget, "undo"))
+        menu.add_command(label="Redo", accelerator="Ctrl+Y",
+                         command=lambda: self._edit_action_for_widget(widget, "redo"))
+        menu.add_separator()
         menu.add_command(label="Cut", command=lambda: widget.event_generate("<<Cut>>"))
         menu.add_command(label="Copy", command=lambda: widget.event_generate("<<Copy>>"))
         menu.add_command(label="Paste", command=lambda: widget.event_generate("<<Paste>>"))
@@ -491,6 +565,15 @@ class GGUVDODApp(tk.Tk):
             menu.tk_popup(event.x_root, event.y_root)
         finally:
             menu.grab_release()
+
+    def _edit_action_for_widget(self, widget, action):
+        try:
+            if action == "undo":
+                widget.edit_undo()
+            else:
+                widget.edit_redo()
+        except tk.TclError:
+            pass
 
     def _frame(self, parent, **kwargs):
         kwargs.setdefault("bg", BG)
@@ -516,7 +599,7 @@ class GGUVDODApp(tk.Tk):
         kwargs.setdefault("highlightbackground", BORDER)
         kwargs.setdefault("highlightcolor", ACCENT)
         kwargs.setdefault("font", ("Segoe UI", 11))
-        return self._add_context_menu(tk.Entry(parent, textvariable=textvariable, **kwargs))
+        return self._add_context_menu(UndoEntry(parent, textvariable=textvariable, **kwargs))
 
     def _button(self, parent, text, command, primary=False, **kwargs):
         if primary:
@@ -566,6 +649,8 @@ class GGUVDODApp(tk.Tk):
         kwargs.setdefault("bd", 0)
         kwargs.setdefault("highlightthickness", 1)
         kwargs.setdefault("highlightbackground", BORDER)
+        kwargs.setdefault("undo", True)
+        kwargs.setdefault("maxundo", 1000)
         widget = scrolledtext.ScrolledText(parent, **kwargs)
         try:
             widget.vbar.configure(bg=BG_PANEL, troughcolor=BG, activebackground=BORDER,
@@ -680,25 +765,6 @@ class GGUVDODApp(tk.Tk):
         options_frame = self._labelframe(content, "Authentication and output options", padx=16, pady=12)
         options_frame.pack(fill="x", **pad)
 
-        scroll_row = self._frame(options_frame, bg=BG_PANEL)
-        scroll_row.pack(fill="x", pady=(0, 8))
-        scroll_label = self._label(scroll_row, text="Interface scroll speed:", bg=BG_PANEL)
-        scroll_label.pack(side="left")
-        self._add_tooltip(scroll_label, "Controls how far the main panel moves for each mouse-wheel step.")
-        scroll_spinbox = ttk.Spinbox(
-            scroll_row,
-            from_=SCROLL_SPEED_MIN,
-            to=SCROLL_SPEED_MAX,
-            textvariable=self.scroll_speed_var,
-            width=5,
-            state="readonly",
-        )
-        scroll_spinbox.pack(side="left", padx=(10, 8))
-        self._add_tooltip(scroll_spinbox, "1 is slow and gentle; 6 is fastest. The setting is remembered.")
-        scroll_hint = self._label(scroll_row, text="1 slow  ·  6 fast", bg=BG_PANEL,
-                                   fg=FG_MUTED, font=("Segoe UI", 9))
-        scroll_hint.pack(side="left")
-
         auth_row = self._frame(options_frame, bg=BG_PANEL)
         auth_row.pack(fill="x", pady=(0, 8))
         browser_label = self._label(auth_row, text="Browser cookies:", bg=BG_PANEL)
@@ -801,6 +867,175 @@ class GGUVDODApp(tk.Tk):
                                             font=("Consolas", 11))
         self.log_box.pack(fill="both", expand=True)
         self._add_tooltip(log_frame, "The log records each link, playlist item, retry, conversion, and error.")
+
+    def _build_menu_bar(self):
+        menu_bar = tk.Menu(self)
+
+        file_menu = tk.Menu(menu_bar, tearoff=False)
+        file_menu.add_command(label="New link list", accelerator="Ctrl+N", command=self._new_link_list)
+        file_menu.add_command(label="Open save folder", command=self._open_output_folder)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", accelerator="Alt+F4", command=self._on_close)
+        menu_bar.add_cascade(label="File", menu=file_menu)
+
+        edit_menu = tk.Menu(menu_bar, tearoff=False)
+        edit_menu.add_command(label="Undo", accelerator="Ctrl+Z", command=lambda: self._edit_focused("undo"))
+        edit_menu.add_command(label="Redo", accelerator="Ctrl+Y", command=lambda: self._edit_focused("redo"))
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Cut", accelerator="Ctrl+X", command=lambda: self._edit_focused("cut"))
+        edit_menu.add_command(label="Copy", accelerator="Ctrl+C", command=lambda: self._edit_focused("copy"))
+        edit_menu.add_command(label="Paste", accelerator="Ctrl+V", command=lambda: self._edit_focused("paste"))
+        edit_menu.add_command(label="Select all", accelerator="Ctrl+A", command=lambda: self._edit_focused("select_all"))
+        preferences_menu = tk.Menu(edit_menu, tearoff=False)
+        preferences_menu.add_command(label="Key bindings and scroll speed...",
+                                     command=self._show_key_bindings_preferences)
+        edit_menu.add_cascade(label="Preferences", menu=preferences_menu)
+        menu_bar.add_cascade(label="Edit", menu=edit_menu)
+
+        view_menu = tk.Menu(menu_bar, tearoff=False)
+        view_menu.add_command(label="Scroll to top", command=lambda: self._set_scroll_position(0.0))
+        view_menu.add_command(label="Scroll to bottom", command=lambda: self._set_scroll_position(1.0))
+        view_menu.add_separator()
+        view_menu.add_command(label="Reset scroll speed", command=self._reset_scroll_speed)
+        menu_bar.add_cascade(label="View", menu=view_menu)
+
+        window_menu = tk.Menu(menu_bar, tearoff=False)
+        window_menu.add_command(label="Minimize", command=lambda: self.state("iconic"))
+        window_menu.add_command(label="Maximize", command=self._maximize_window)
+        window_menu.add_command(label="Restore", command=lambda: self.state("normal"))
+        menu_bar.add_cascade(label="Window", menu=window_menu)
+
+        help_menu = tk.Menu(menu_bar, tearoff=False)
+        help_menu.add_command(label="Keyboard shortcuts", command=self._show_shortcuts)
+        help_menu.add_command(label="Open README", command=self._open_readme)
+        help_menu.add_command(label="Check for yt-dlp updates", command=self._check_for_updates)
+        menu_bar.add_cascade(label="Help", menu=help_menu)
+
+        about_menu = tk.Menu(menu_bar, tearoff=False)
+        about_menu.add_command(label="About GGU_VDOD", command=self._show_about)
+        menu_bar.add_cascade(label="About", menu=about_menu)
+        self.config(menu=menu_bar)
+
+        self.bind("<Control-n>", lambda _event: self._new_link_list(), add="+")
+
+    def _edit_focused(self, action):
+        widget = self.focus_get()
+        if widget is None:
+            return
+        try:
+            if action == "undo":
+                widget.edit_undo()
+            elif action == "redo":
+                widget.edit_redo()
+            else:
+                widget.event_generate({
+                    "cut": "<<Cut>>",
+                    "copy": "<<Copy>>",
+                    "paste": "<<Paste>>",
+                    "select_all": "<<SelectAll>>",
+                }[action])
+        except (tk.TclError, KeyError):
+            pass
+
+    def _new_link_list(self):
+        self.url_text.focus_set()
+        self.url_text.delete("1.0", "end")
+        self.status_label.config(text="New link list ready.")
+
+    def _set_scroll_position(self, position):
+        self._scroll_target = position
+        self.main_canvas.yview_moveto(position)
+
+    def _reset_scroll_speed(self):
+        self.scroll_speed_var.set(SCROLL_SPEED_DEFAULT)
+        save_config(self._settings_from_ui())
+
+    def _maximize_window(self):
+        try:
+            self.state("zoomed")
+        except tk.TclError:
+            self.attributes("-zoomed", True)
+
+    def _show_key_bindings_preferences(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("Preferences - Key Bindings")
+        dialog.configure(bg=BG)
+        dialog.transient(self)
+        dialog.resizable(False, False)
+        dialog.grab_set()
+
+        body = self._frame(dialog, padx=20, pady=16)
+        body.pack(fill="both", expand=True)
+        title = self._label(body, text="Key bindings and scroll speed", font=("Segoe UI", 15, "bold"))
+        title.pack(anchor="w", pady=(0, 12))
+
+        speed_row = self._frame(body)
+        speed_row.pack(fill="x", pady=(0, 14))
+        self._label(speed_row, text="Scroll speed:").pack(side="left")
+        dialog_speed = tk.IntVar(value=clamp_scroll_speed(self.scroll_speed_var.get()))
+        speed_spinbox = ttk.Spinbox(speed_row, from_=SCROLL_SPEED_MIN, to=SCROLL_SPEED_MAX,
+                                    textvariable=dialog_speed, width=5, state="readonly")
+        speed_spinbox.pack(side="left", padx=(12, 8))
+        self._label(speed_row, text="1 slow  ·  6 fast", fg=FG_MUTED,
+                    font=("Segoe UI", 9)).pack(side="left")
+
+        self._label(body, text="Text editing shortcuts", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        shortcuts = (
+            ("Undo", "Ctrl+Z"),
+            ("Redo", "Ctrl+Y  /  Ctrl+Shift+Z  /  Ctrl+Alt+Z"),
+            ("Cut", "Ctrl+X"),
+            ("Copy", "Ctrl+C"),
+            ("Paste", "Ctrl+V"),
+            ("Select all", "Ctrl+A"),
+        )
+        for name, binding in shortcuts:
+            row = self._frame(body)
+            row.pack(fill="x", pady=2)
+            self._label(row, text=name, width=14, anchor="w").pack(side="left")
+            self._label(row, text=binding, fg=FG_MUTED, anchor="w").pack(side="left")
+
+        button_row = self._frame(body)
+        button_row.pack(fill="x", pady=(16, 0))
+        self._button(button_row, "Cancel", dialog.destroy).pack(side="right")
+
+        def apply_preferences():
+            self.scroll_speed_var.set(clamp_scroll_speed(dialog_speed.get()))
+            save_config(self._settings_from_ui())
+            dialog.destroy()
+
+        self._button(button_row, "Apply", apply_preferences, primary=True).pack(side="right", padx=(0, 10))
+
+    def _show_shortcuts(self):
+        messagebox.showinfo(
+            "Keyboard shortcuts",
+            "Ctrl+Z  Undo\n"
+            "Ctrl+Y / Ctrl+Shift+Z / Ctrl+Alt+Z  Redo\n"
+            "Ctrl+X  Cut\nCtrl+C  Copy\nCtrl+V  Paste\nCtrl+A  Select all\n"
+            "Ctrl+N  New link list",
+        )
+
+    def _open_readme(self):
+        readme = os.path.join(get_app_dir(), "README.md")
+        if os.path.isfile(readme):
+            try:
+                if sys.platform == "win32":
+                    os.startfile(readme)
+                elif sys.platform == "darwin":
+                    subprocess.Popen(["open", readme])
+                else:
+                    subprocess.Popen(["xdg-open", readme])
+            except OSError as e:
+                messagebox.showerror("Couldn't open README", str(e))
+        else:
+            messagebox.showinfo("README", "README.md is available in the project folder.")
+
+    def _show_about(self):
+        messagebox.showinfo(
+            "About GGU_VDOD",
+            "GGU_VDOD\n\n"
+            "A dark-themed yt-dlp desktop downloader with resumable downloads, subtitles, "
+            "metadata, cookies, proxy support, animated help, and traditional desktop menus.",
+        )
 
     def _build_status_bar(self):
         status_bar = tk.Frame(self, bg="#171717", height=38, bd=0,

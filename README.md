@@ -87,6 +87,11 @@ You only need to repeat the build if you change `app.py` or want to update `yt-d
 6. Click **Download**. Progress and any errors show up in the log at the bottom.
 7. Click **Open Save Folder** any time to jump straight to your files.
 
+The app includes traditional **File**, **Edit**, **View**, **Window**, **Help**, and
+**About** menus. Use **Edit > Preferences > Key bindings and scroll speed** to control
+scroll speed and review the keyboard shortcuts. Text fields support Undo, Redo, Cut, Copy,
+Paste, and Select all.
+
 Your last-used save folder and ffmpeg path are remembered automatically for next time.
 
 ### If your internet drops mid-download
@@ -160,8 +165,14 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
+- **#007 — Portable entry undo/redo fix**: replaced the unsupported Tk `Entry` undo option
+  with a compatible history implementation so the packaged app opens correctly on all
+  supported Tk builds.
 - **#005 — Quality identifiers in filenames**: video downloads now include the actual
   selected height, such as `[2160p]`, `[1440p]`, or `[720p]`; MP3 downloads include the
   selected encoding target, such as `[320kbps]` or `[144kbps]`.
+- **#006 — Traditional desktop controls**: added File/Edit/View/Window/Help/About menus,
+  Undo/Redo and standard text-editing commands, plus Preferences for key bindings and
+  scroll speed. The generated `VDOs/` output folder remains excluded by `.gitignore`.
 - **#004 — Scrolling and stable project improvements**: added animated scrolling,
   controllable scroll speed, and stability fixes while preserving the original executable.
