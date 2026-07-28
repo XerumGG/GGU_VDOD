@@ -120,6 +120,8 @@ SCROLL_SPEED_DEFAULT = 1
 CONTENT_MIN_WIDTH = 1000
 PREVIEW_WIDTH = 240
 PREVIEW_HEIGHT = 135
+PREVIEW_PLACEHOLDER_COLUMNS = 30
+PREVIEW_PLACEHOLDER_ROWS = 7
 
 
 def clamp_scroll_speed(value):
@@ -737,7 +739,8 @@ class GGUVDODApp(tk.Tk):
         preview_row = self._frame(preview_frame, bg=BG_PANEL)
         preview_row.pack(fill="x")
         self.preview_image_label = tk.Label(
-            preview_row, text="No preview", width=PREVIEW_WIDTH, height=PREVIEW_HEIGHT,
+            preview_row, text="No preview", width=PREVIEW_PLACEHOLDER_COLUMNS,
+            height=PREVIEW_PLACEHOLDER_ROWS,
             bg=BG_ENTRY, fg=FG_MUTED, relief="flat", font=("Segoe UI", 10),
             anchor="center",
         )
@@ -814,12 +817,13 @@ class GGUVDODApp(tk.Tk):
         ff_frame.pack(fill="x", padx=0, pady=(0, 10))
         ff_row = self._frame(ff_frame, bg=BG_PANEL)
         ff_row.pack(fill="x")
+        ff_row.grid_columnconfigure(0, weight=1)
         self._add_tooltip(ff_frame, "ffmpeg merges separate video and audio streams and creates MP3 files.")
         ffmpeg_entry = self._entry(ff_row, textvariable=self.ffmpeg_var)
-        ffmpeg_entry.pack(side="left", fill="x", expand=True, ipady=4)
+        ffmpeg_entry.grid(row=0, column=0, sticky="ew", ipady=4)
         self._add_tooltip(ffmpeg_entry, "Leave this path automatic, or select the ffmpeg executable manually.")
         ffmpeg_browse = self._button(ff_row, "Browse...", self._browse_ffmpeg)
-        ffmpeg_browse.pack(side="left", padx=(10, 0))
+        ffmpeg_browse.grid(row=0, column=1, sticky="e", padx=(10, 0))
         self._add_tooltip(ffmpeg_browse, "Find the ffmpeg executable on your computer.")
         self.ffmpeg_status_label = self._label(ff_frame, text="", bg=BG_PANEL, font=("Segoe UI", 9))
         self.ffmpeg_status_label.pack(anchor="w", pady=(8, 0))
@@ -831,37 +835,39 @@ class GGUVDODApp(tk.Tk):
 
         auth_row = self._frame(options_frame, bg=BG_PANEL)
         auth_row.pack(fill="x", pady=(0, 8))
+        auth_row.grid_columnconfigure(3, weight=1)
         browser_label = self._label(auth_row, text="Browser cookies:", bg=BG_PANEL)
-        browser_label.pack(side="left")
+        browser_label.grid(row=0, column=0, sticky="w")
         self._add_tooltip(browser_label, "Use cookies from a browser where you are already signed in.")
         browser_combo = ttk.Combobox(auth_row, textvariable=self.browser_var, values=COOKIE_BROWSERS,
                                      state="readonly", width=14, font=("Segoe UI", 11))
-        browser_combo.pack(side="left", padx=(10, 20))
+        browser_combo.grid(row=0, column=1, sticky="w", padx=(10, 20))
         self._add_tooltip(browser_combo, "Choose the browser whose active login should be used by yt-dlp.")
         cookies_label = self._label(auth_row, text="Cookies file:", bg=BG_PANEL)
-        cookies_label.pack(side="left")
+        cookies_label.grid(row=0, column=2, sticky="w")
         self._add_tooltip(cookies_label, "Use a Netscape-format cookies.txt file when browser cookies are not enough.")
         cookies_entry = self._entry(auth_row, textvariable=self.cookies_file_var)
-        cookies_entry.pack(side="left", fill="x", expand=True, padx=(10, 0), ipady=4)
+        cookies_entry.grid(row=0, column=3, sticky="ew", padx=(10, 0), ipady=4)
         self._add_tooltip(cookies_entry, "Optional path to a cookies.txt file.")
         cookies_browse = self._button(auth_row, "Browse...", self._browse_cookies)
-        cookies_browse.pack(side="left", padx=(10, 0))
+        cookies_browse.grid(row=0, column=4, sticky="e", padx=(10, 0))
         self._add_tooltip(cookies_browse, "Choose a cookies.txt file.")
 
         proxy_row = self._frame(options_frame, bg=BG_PANEL)
         proxy_row.pack(fill="x", pady=(0, 8))
+        proxy_row.grid_columnconfigure(1, weight=1)
         proxy_label = self._label(proxy_row, text="Proxy (optional):", bg=BG_PANEL)
-        proxy_label.pack(side="left")
+        proxy_label.grid(row=0, column=0, sticky="w")
         self._add_tooltip(proxy_label, "A proxy can help with network routing or region restrictions when authorized.")
         proxy_entry = self._entry(proxy_row, textvariable=self.proxy_var)
-        proxy_entry.pack(side="left", fill="x", expand=True, padx=(10, 10), ipady=4)
+        proxy_entry.grid(row=0, column=1, sticky="ew", padx=(10, 10), ipady=4)
         self._add_tooltip(proxy_entry, "Enter a proxy such as http://user:pass@host:port or socks5://host:port.")
         proxy_hint = self._label(proxy_row, text="Example: http://user:pass@host:port", bg=BG_PANEL,
-                                 fg=FG_MUTED, font=("Segoe UI", 9))
-        proxy_hint.pack(side="left")
+                                 fg=FG_MUTED, font=("Segoe UI", 9), wraplength=220)
+        proxy_hint.grid(row=0, column=2, sticky="w")
         self._add_tooltip(proxy_hint, "The proxy address should include its protocol and port.")
         update_button = self._button(proxy_row, "Check yt-dlp updates", self._check_for_updates)
-        update_button.pack(side="right", padx=(10, 0))
+        update_button.grid(row=0, column=3, sticky="e", padx=(10, 0))
         self._add_tooltip(update_button, "Check whether a newer yt-dlp version is available.")
 
         subtitle_row = self._frame(options_frame, bg=BG_PANEL)
@@ -878,26 +884,29 @@ class GGUVDODApp(tk.Tk):
         languages_entry = self._entry(subtitle_row, textvariable=self.subtitle_langs_var, width=18)
         languages_entry.pack(side="left", padx=(8, 0), ipady=4)
         self._add_tooltip(languages_entry, "Choose subtitle languages using codes such as en.*, hi, or all.")
-        metadata_check = self._check(subtitle_row, text="Embed metadata", variable=self.embed_metadata_var)
-        metadata_check.pack(side="left", padx=(18, 0))
+        embed_row = self._frame(options_frame, bg=BG_PANEL)
+        embed_row.pack(fill="x", pady=(0, 8))
+        metadata_check = self._check(embed_row, text="Embed metadata", variable=self.embed_metadata_var)
+        metadata_check.pack(side="left")
         self._add_tooltip(metadata_check, "Add the title, artist, and other available information to the media file.")
-        thumbnail_check = self._check(subtitle_row, text="Embed thumbnail", variable=self.embed_thumbnail_var)
+        thumbnail_check = self._check(embed_row, text="Embed thumbnail", variable=self.embed_thumbnail_var)
         thumbnail_check.pack(side="left", padx=(18, 0))
         self._add_tooltip(thumbnail_check, "Use the source thumbnail as the media cover image when supported.")
-        live_check = self._check(subtitle_row, text="Live: start from beginning", variable=self.live_from_start_var)
+        live_check = self._check(embed_row, text="Live: start from beginning", variable=self.live_from_start_var)
         live_check.pack(side="left", padx=(18, 0))
         self._add_tooltip(live_check, "For supported live streams, ask yt-dlp to capture from the beginning.")
 
         format_row = self._frame(options_frame, bg=BG_PANEL)
         format_row.pack(fill="x")
+        format_row.grid_columnconfigure(1, weight=1)
         format_label = self._label(format_row, text="Exact format ID(s) (optional):", bg=BG_PANEL)
-        format_label.pack(side="left")
+        format_label.grid(row=0, column=0, sticky="w")
         self._add_tooltip(format_label, "Leave blank for automatic quality selection, or enter IDs such as 137+140.")
         format_entry = self._entry(format_row, textvariable=self.format_id_var)
-        format_entry.pack(side="left", fill="x", expand=True, padx=(10, 10), ipady=4)
+        format_entry.grid(row=0, column=1, sticky="ew", padx=(10, 10), ipady=4)
         self._add_tooltip(format_entry, "Use List formats first, then enter the exact format ID or combination you want.")
         list_formats_button = self._button(format_row, "List formats", self._list_formats)
-        list_formats_button.pack(side="left")
+        list_formats_button.grid(row=0, column=2, sticky="e")
         self._add_tooltip(list_formats_button, "Inspect the formats reported for the first URL in the link box.")
 
         # Buttons
@@ -1040,8 +1049,8 @@ class GGUVDODApp(tk.Tk):
         dialog.resizable(False, False)
         dialog.grab_set()
 
-        body = self._frame(dialog, padx=20, pady=16)
-        body.pack(fill="both", expand=True)
+        body = self._frame(dialog)
+        body.pack(fill="both", expand=True, padx=20, pady=16)
         title = self._label(body, text="Key bindings and scroll speed", font=("Segoe UI", 15, "bold"))
         title.pack(anchor="w", pady=(0, 12))
 
@@ -1091,8 +1100,8 @@ class GGUVDODApp(tk.Tk):
         dialog.transient(self)
         dialog.geometry("900x700")
 
-        header = self._frame(dialog, padx=22, pady=16)
-        header.pack(fill="x")
+        header = self._frame(dialog)
+        header.pack(fill="x", padx=22, pady=16)
         self._label(header, text="GGU_VDOD Help Center",
                     font=("Segoe UI", 22, "bold")).pack(anchor="w")
         self._label(header,
@@ -1181,8 +1190,8 @@ class GGUVDODApp(tk.Tk):
         dialog.transient(self)
         dialog.geometry("820x620")
 
-        header = self._frame(dialog, padx=16, pady=12)
-        header.pack(fill="x")
+        header = self._frame(dialog)
+        header.pack(fill="x", padx=16, pady=12)
         self._label(
             header,
             text="Platforms supported by this installed yt-dlp build",
@@ -1272,8 +1281,8 @@ class GGUVDODApp(tk.Tk):
         dialog.transient(self)
         dialog.geometry("820x680")
 
-        header = self._frame(dialog, padx=28, pady=24)
-        header.pack(fill="x")
+        header = self._frame(dialog)
+        header.pack(fill="x", padx=28, pady=24)
         self._label(header, text="GGU_VDOD", font=("Segoe UI", 28, "bold")).pack()
         self._label(header, text="Media downloader and metadata workspace",
                     fg=FG_MUTED, font=("Segoe UI", 11)).pack(pady=(4, 12))
@@ -1303,8 +1312,8 @@ class GGUVDODApp(tk.Tk):
         )
         self._replace_text_widget(body, body_text)
 
-        footer = self._frame(dialog, padx=28, pady=(0, 18))
-        footer.pack(fill="x")
+        footer = self._frame(dialog)
+        footer.pack(fill="x", padx=28, pady=(0, 18))
         self._button(footer, "Open README", self._open_readme).pack(side="left")
         self._button(footer, "Close", dialog.destroy, primary=True).pack(side="right")
 
@@ -1443,7 +1452,11 @@ class GGUVDODApp(tk.Tk):
         self.preview_details_var.set("Title, thumbnail, duration, uploader, and platform will appear here.")
         self.preview_status_var.set("Waiting for a link")
         self._preview_photo = None
-        self.preview_image_label.configure(image="", text="No preview")
+        self.preview_image_label.configure(
+            image="", text="No preview",
+            width=PREVIEW_PLACEHOLDER_COLUMNS,
+            height=PREVIEW_PLACEHOLDER_ROWS,
+        )
 
     def _apply_preview_error(self, token, error):
         if token != self._preview_token:
@@ -1465,14 +1478,18 @@ class GGUVDODApp(tk.Tk):
                 self.preview_image_label.configure(
                     image=self._preview_photo,
                     text="",
-                    width=PREVIEW_WIDTH,
-                    height=PREVIEW_HEIGHT,
+                    width=0,
+                    height=0,
                 )
                 return
             except Exception:
                 pass
         self._preview_photo = None
-        self.preview_image_label.configure(image="", text="Thumbnail unavailable")
+        self.preview_image_label.configure(
+            image="", text="Thumbnail unavailable",
+            width=PREVIEW_PLACEHOLDER_COLUMNS,
+            height=PREVIEW_PLACEHOLDER_ROWS,
+        )
 
     def _scroll_main(self, event):
         """Animate the outer panel without stealing the wheel from text editors."""

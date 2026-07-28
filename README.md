@@ -185,6 +185,9 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
+- **#012 — Fix preview and dialog boundaries**: corrected the About/Help/Preferences
+  layout crash, constrained the preview placeholder to a real compact card, and reflowed
+  Advanced controls so browse and update buttons stay visible.
 - **#011 — Restore compact downloader layout**: returned the main controls to one
   single-page interface, made Advanced a collapsible tab-style section, reduced the
   preview card to a compact 16:9 size, and corrected the oversized content width.
