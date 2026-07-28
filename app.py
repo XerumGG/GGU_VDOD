@@ -117,8 +117,9 @@ WARNING = "#e5b84d"
 SCROLL_SPEED_MIN = 1
 SCROLL_SPEED_MAX = 6
 SCROLL_SPEED_DEFAULT = 1
-PREVIEW_WIDTH = 420
-PREVIEW_HEIGHT = 236
+CONTENT_MIN_WIDTH = 1000
+PREVIEW_WIDTH = 240
+PREVIEW_HEIGHT = 135
 
 
 def clamp_scroll_speed(value):
@@ -704,13 +705,13 @@ class GGUVDODApp(tk.Tk):
         container.bind("<Configure>", lambda _event: self.main_canvas.configure(
             scrollregion=self.main_canvas.bbox("all")))
         self.main_canvas.bind("<Configure>", lambda event: self.main_canvas.itemconfigure(
-            canvas_window, width=max(event.width, 1200)))
+            canvas_window, width=max(event.width, CONTENT_MIN_WIDTH)))
         self.main_canvas.bind_all("<MouseWheel>", self._scroll_main, add="+")
         self.main_canvas.bind_all("<Button-4>", self._scroll_main, add="+")
         self.main_canvas.bind_all("<Button-5>", self._scroll_main, add="+")
 
         container.grid_columnconfigure(0, weight=1)
-        container.grid_columnconfigure(1, weight=0, minsize=1200)
+        container.grid_columnconfigure(1, weight=0, minsize=CONTENT_MIN_WIDTH)
         container.grid_columnconfigure(2, weight=1)
         container.grid_rowconfigure(0, weight=1)
 
@@ -725,22 +726,14 @@ class GGUVDODApp(tk.Tk):
         guide_label.pack()
         self._add_tooltip(guide_label, "Paste one link per line. You can download several links in one queue.")
 
-        tabs = ttk.Notebook(content)
-        tabs.pack(fill="both", expand=True)
-        basic_page = self._frame(tabs)
-        advanced_page = self._frame(tabs)
-        tabs.add(basic_page, text="Basic")
-        tabs.add(advanced_page, text="Advanced")
-        self._add_tooltip(advanced_page, "Advanced contains ffmpeg, cookies, proxy, subtitle, metadata, and exact-format options.")
-
-        self.url_text = self._scrolled_text(basic_page, BG_ENTRY, FG, height=5, wrap="word", font=("Segoe UI", 12))
+        self.url_text = self._scrolled_text(content, BG_ENTRY, FG, height=5, wrap="word", font=("Segoe UI", 12))
         self.url_text.pack(fill="x", **pad)
         self._add_tooltip(self.url_text, "Enter the video, playlist, or live-stream URL you want to process.")
         self.url_text.bind("<<Modified>>", self._on_url_modified, add="+")
         self.url_text.edit_modified(False)
 
-        preview_frame = self._labelframe(basic_page, "Video preview", padx=16, pady=12)
-        preview_frame.pack(fill="x", **pad)
+        preview_frame = self._labelframe(content, "Video preview", padx=12, pady=8)
+        preview_frame.pack(fill="x", padx=24, pady=6)
         preview_row = self._frame(preview_frame, bg=BG_PANEL)
         preview_row.pack(fill="x")
         self.preview_image_label = tk.Label(
@@ -753,14 +746,14 @@ class GGUVDODApp(tk.Tk):
         preview_text.pack(side="left", fill="both", expand=True)
         preview_title = self._label(preview_text, textvariable=self.preview_title_var,
                                     bg=BG_PANEL, fg=FG, anchor="w",
-                                    justify="left", wraplength=820,
-                                    font=("Segoe UI", 14, "bold"))
+                                    justify="left", wraplength=640,
+                                    font=("Segoe UI", 12, "bold"))
         preview_title.pack(fill="x", pady=(4, 8))
         self._add_tooltip(preview_title, "The title and metadata are read from the first link in the box.")
         preview_details = self._label(preview_text, textvariable=self.preview_details_var,
                                       bg=BG_PANEL, fg=FG_MUTED, anchor="nw",
-                                      justify="left", wraplength=820,
-                                      font=("Segoe UI", 10))
+                                      justify="left", wraplength=640,
+                                      font=("Segoe UI", 9))
         preview_details.pack(fill="x")
         preview_status = self._label(preview_text, textvariable=self.preview_status_var,
                                      bg=BG_PANEL, fg=FG_MUTED, anchor="w",
@@ -768,7 +761,7 @@ class GGUVDODApp(tk.Tk):
         preview_status.pack(fill="x", pady=(10, 0))
 
         # Format + quality
-        fmt_frame = self._labelframe(basic_page, "Format", padx=16, pady=12)
+        fmt_frame = self._labelframe(content, "Format", padx=16, pady=12)
         fmt_frame.pack(fill="x", **pad)
 
         video_radio = self._radio(fmt_frame, text="Video (MP4)", variable=self.format_var, value="video",
@@ -794,7 +787,7 @@ class GGUVDODApp(tk.Tk):
         self._add_tooltip(playlist_check, "When enabled, a playlist URL downloads only the selected video.")
 
         # Output folder
-        out_frame = self._labelframe(basic_page, "Save to", padx=16, pady=12)
+        out_frame = self._labelframe(content, "Save to", padx=16, pady=12)
         out_frame.pack(fill="x", **pad)
         out_row = self._frame(out_frame, bg=BG_PANEL)
         out_row.pack(fill="x")
@@ -805,10 +798,20 @@ class GGUVDODApp(tk.Tk):
         output_browse.pack(side="left", padx=(10, 0))
         self._add_tooltip(output_browse, "Choose a folder where downloaded files should be saved.")
 
+        # Keep the original single-page interface. Advanced settings are tucked
+        # behind one compact tab-style toggle instead of splitting the app into
+        # Basic and Advanced pages.
+        advanced_toggle = self._button(content, "Advanced  [+]", self._toggle_advanced_panel)
+        advanced_toggle.pack(fill="x", padx=24, pady=(4, 4), ipady=4)
+        self._advanced_toggle = advanced_toggle
+        self._add_tooltip(advanced_toggle, "Show or hide ffmpeg, cookies, proxy, subtitles, metadata, thumbnails, and exact-format options.")
+        advanced_page = self._frame(content)
+        self._advanced_page = advanced_page
+
         # ffmpeg path (auto-detected by default; editable)
         ff_frame = self._labelframe(advanced_page, "ffmpeg location (auto-detected - change only if needed)",
                                      padx=16, pady=12)
-        ff_frame.pack(fill="x", **pad)
+        ff_frame.pack(fill="x", padx=0, pady=(0, 10))
         ff_row = self._frame(ff_frame, bg=BG_PANEL)
         ff_row.pack(fill="x")
         self._add_tooltip(ff_frame, "ffmpeg merges separate video and audio streams and creates MP3 files.")
@@ -824,7 +827,7 @@ class GGUVDODApp(tk.Tk):
 
         # Authentication and output options
         options_frame = self._labelframe(advanced_page, "Authentication and output options", padx=16, pady=12)
-        options_frame.pack(fill="x", **pad)
+        options_frame.pack(fill="x", padx=0, pady=(0, 4))
 
         auth_row = self._frame(options_frame, bg=BG_PANEL)
         auth_row.pack(fill="x", pady=(0, 8))
@@ -898,7 +901,8 @@ class GGUVDODApp(tk.Tk):
         self._add_tooltip(list_formats_button, "Inspect the formats reported for the first URL in the link box.")
 
         # Buttons
-        btn_frame = self._frame(basic_page)
+        btn_frame = self._frame(content)
+        self._advanced_anchor = btn_frame
         btn_frame.pack(fill="x", **pad)
         self.download_btn = self._button(btn_frame, "Download", self._start_download, primary=True)
         self.download_btn.pack(side="left", ipadx=30, ipady=10)
@@ -911,23 +915,32 @@ class GGUVDODApp(tk.Tk):
         self._add_tooltip(open_folder_button, "Open the selected save folder in your system file browser.")
 
         # Progress
-        prog_frame = self._frame(basic_page)
+        prog_frame = self._frame(content)
         prog_frame.pack(fill="x", **pad)
         self.progress = ttk.Progressbar(prog_frame, orient="horizontal", mode="determinate", maximum=100)
         self.progress.pack(fill="x", ipady=4)
         self._add_tooltip(self.progress, "Shows download progress for the current video or playlist item.")
 
-        self.status_label = self._label(basic_page, text="Ready.", fg=FG_MUTED, anchor="w")
+        self.status_label = self._label(content, text="Ready.", fg=FG_MUTED, anchor="w")
         self.status_label.pack(fill="x", padx=24)
         self._add_tooltip(self.status_label, "Current activity, speed, estimated time, and connection status appear here.")
 
         # Log
-        log_frame = self._labelframe(basic_page, "Log", padx=10, pady=10)
+        log_frame = self._labelframe(content, "Log", padx=10, pady=10)
         log_frame.pack(fill="both", expand=True, **pad)
         self.log_box = self._scrolled_text(log_frame, BG_LOG, FG_LOG, height=12, state="disabled",
                                             font=("Consolas", 11))
         self.log_box.pack(fill="both", expand=True)
         self._add_tooltip(log_frame, "The log records each link, playlist item, retry, conversion, and error.")
+
+    def _toggle_advanced_panel(self):
+        if self._advanced_page.winfo_manager():
+            self._advanced_page.pack_forget()
+            self._advanced_toggle.configure(text="Advanced  [+]")
+            return
+        self._advanced_page.pack(fill="x", padx=24, pady=(0, 10), before=self._advanced_anchor)
+        self._advanced_toggle.configure(text="Advanced  [-]")
+        self.after_idle(lambda: self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all")))
 
     def _build_menu_bar(self):
         menu_bar = tk.Menu(self)

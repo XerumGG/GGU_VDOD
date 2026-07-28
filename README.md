@@ -79,9 +79,9 @@ You only need to repeat the build if you change `app.py` or want to update `yt-d
 1. The window opens at 1920x1080 (or your full screen if smaller), centered, and resizable.
 2. Paste one or more video links into the box (one per line).
 3. Choose **Video (MP4)** or **Audio only (MP3)**, and pick a quality.
-4. Open the **Advanced** tab if you need browser cookies or a `cookies.txt` file for
+4. Expand the **Advanced** tab if you need browser cookies or a `cookies.txt` file for
    sign-in-gated content, subtitles, metadata, thumbnails, a proxy, live-stream capture,
-   or an exact format ID.
+   or an exact format ID. It stays collapsed so the main downloader remains compact.
 5. Check **"Save to"** - it defaults to an app folder inside your user Downloads folder,
    change it if you like.
 6. Click **Download**. Progress and any errors show up in the log at the bottom.
@@ -185,6 +185,9 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
+- **#011 — Restore compact downloader layout**: returned the main controls to one
+  single-page interface, made Advanced a collapsible tab-style section, reduced the
+  preview card to a compact 16:9 size, and corrected the oversized content width.
 - **#010 — Advanced tab and landing pages**: moved ffmpeg and advanced output controls
   into an Advanced tab, and replaced Help/About alert popups with full landing pages.
   About credits XerumGG and lists the supportive development resources used by the app.
