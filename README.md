@@ -30,8 +30,13 @@ You have two options - pick whichever is easier:
   dist\GGU_VDOD.exe
   dist\ffmpeg\ffmpeg.exe
   ```
-  The app automatically finds it there on startup - **no path to type in, no PATH
-  editing.** This is the default the app looks for first.
+The app automatically finds it there on startup - **no path to type in, no PATH
+editing.** This is the default the app looks for first.
+
+When rebuilding with `build.bat`, keep the same executable in the project-level
+`ffmpeg\` folder too. The build script copies it back to `dist\ffmpeg\ffmpeg.exe`
+after packaging, so it remains beside the rebuilt app. The local binary folder is
+intentionally ignored by Git.
 
 - **Option 2: install it system-wide.** Open Command Prompt and run:
   ```
@@ -185,6 +190,9 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
+- **#013 — Preserve bundled FFmpeg**: restored FFmpeg beside the release executable,
+  added a local preserved source folder for normal builds, and excluded that binary
+  folder from Git tracking.
 - **#012 — Fix preview and dialog boundaries**: corrected the About/Help/Preferences
   layout crash, constrained the preview placeholder to a real compact card, and reflowed
   Advanced controls so browse and update buttons stay visible.

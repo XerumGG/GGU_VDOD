@@ -12,6 +12,9 @@ venv/
 build/
 dist/
 
+# Local FFmpeg binary kept beside releases; copied into dist by build scripts
+ffmpeg/
+
 # Python build metadata
 *.egg-info/
 
