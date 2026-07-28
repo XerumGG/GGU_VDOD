@@ -1222,8 +1222,16 @@ class GGUVDODApp(tk.Tk):
                 raise _ConnectionLostError("Internet connection lost during download")
             self._enqueue(self._on_progress, d, idx, total)
 
+        if fmt == "video":
+            # height is resolved from the actual selected video format, so the suffix
+            # remains truthful when a requested ceiling is unavailable.
+            output_template = os.path.join(output_dir, "%(title)s [%(height)sp].%(ext)s")
+        else:
+            bitrate = BITRATE_MAP.get(quality, "192")
+            output_template = os.path.join(output_dir, f"%(title)s [{bitrate}kbps].%(ext)s")
+
         ydl_opts = {
-            "outtmpl": os.path.join(output_dir, "%(title)s.%(ext)s"),
+            "outtmpl": output_template,
             "noplaylist": only_this_video,
             "windowsfilenames": True,
             "progress_hooks": [hook],

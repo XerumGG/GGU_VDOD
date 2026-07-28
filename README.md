@@ -157,3 +157,11 @@ Downloading YouTube videos can conflict with YouTube's Terms of Service dependin
 the content and what you do with it. This tool is meant for content you own, have
 explicit permission to save, or that's licensed for reuse (e.g. Creative Commons) -
 please make sure you have the right to download whatever you use it on.
+
+## Change log
+
+- **#005 — Quality identifiers in filenames**: video downloads now include the actual
+  selected height, such as `[2160p]`, `[1440p]`, or `[720p]`; MP3 downloads include the
+  selected encoding target, such as `[320kbps]` or `[144kbps]`.
+- **#004 — Scrolling and stable project improvements**: added animated scrolling,
+  controllable scroll speed, and stability fixes while preserving the original executable.
