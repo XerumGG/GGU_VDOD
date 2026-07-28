@@ -184,6 +184,8 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
+- **#009 — Enlarge thumbnail preview**: the preview now uses a readable 16:9 display area
+  and scales the fetched thumbnail to fit it.
 - **#008 — Link preview and platform directory**: added title/thumbnail metadata preview
   after pasting a URL and a dynamic Help menu listing for the installed yt-dlp extractors,
   including adult-content extractors when present.

@@ -117,6 +117,8 @@ WARNING = "#e5b84d"
 SCROLL_SPEED_MIN = 1
 SCROLL_SPEED_MAX = 6
 SCROLL_SPEED_DEFAULT = 1
+PREVIEW_WIDTH = 420
+PREVIEW_HEIGHT = 236
 
 
 def clamp_scroll_speed(value):
@@ -727,8 +729,9 @@ class GGUVDODApp(tk.Tk):
         preview_row = self._frame(preview_frame, bg=BG_PANEL)
         preview_row.pack(fill="x")
         self.preview_image_label = tk.Label(
-            preview_row, text="No preview", width=30, height=8,
+            preview_row, text="No preview", width=PREVIEW_WIDTH, height=PREVIEW_HEIGHT,
             bg=BG_ENTRY, fg=FG_MUTED, relief="flat", font=("Segoe UI", 10),
+            anchor="center",
         )
         self.preview_image_label.pack(side="left", padx=(0, 16))
         preview_text = self._frame(preview_row, bg=BG_PANEL)
@@ -1309,9 +1312,14 @@ class GGUVDODApp(tk.Tk):
         if thumbnail_data and Image is not None and ImageTk is not None:
             try:
                 image = Image.open(io.BytesIO(thumbnail_data)).convert("RGB")
-                image.thumbnail((320, 180))
+                image.thumbnail((PREVIEW_WIDTH, PREVIEW_HEIGHT))
                 self._preview_photo = ImageTk.PhotoImage(image)
-                self.preview_image_label.configure(image=self._preview_photo, text="")
+                self.preview_image_label.configure(
+                    image=self._preview_photo,
+                    text="",
+                    width=PREVIEW_WIDTH,
+                    height=PREVIEW_HEIGHT,
+                )
                 return
             except Exception:
                 pass
