@@ -514,6 +514,13 @@ class GGUVDODApp(tk.Tk):
                          troughcolor=BG_PANEL, background=ACCENT, bordercolor=BG_PANEL,
                          lightcolor=ACCENT, darkcolor=ACCENT)
 
+        style.configure("TNotebook", background=BG, borderwidth=0)
+        style.configure("TNotebook.Tab", background=BG_ENTRY, foreground=FG,
+                        padding=(16, 8), borderwidth=0)
+        style.map("TNotebook.Tab",
+                  background=[("selected", ACCENT), ("active", BORDER)],
+                  foreground=[("selected", "#ffffff"), ("active", FG)])
+
         # Dropdown listbox popup isn't a ttk widget - themed via option database.
         self.option_add("*TCombobox*Listbox.background", BG_ENTRY)
         self.option_add("*TCombobox*Listbox.foreground", FG)
@@ -718,13 +725,21 @@ class GGUVDODApp(tk.Tk):
         guide_label.pack()
         self._add_tooltip(guide_label, "Paste one link per line. You can download several links in one queue.")
 
-        self.url_text = self._scrolled_text(content, BG_ENTRY, FG, height=5, wrap="word", font=("Segoe UI", 12))
+        tabs = ttk.Notebook(content)
+        tabs.pack(fill="both", expand=True)
+        basic_page = self._frame(tabs)
+        advanced_page = self._frame(tabs)
+        tabs.add(basic_page, text="Basic")
+        tabs.add(advanced_page, text="Advanced")
+        self._add_tooltip(advanced_page, "Advanced contains ffmpeg, cookies, proxy, subtitle, metadata, and exact-format options.")
+
+        self.url_text = self._scrolled_text(basic_page, BG_ENTRY, FG, height=5, wrap="word", font=("Segoe UI", 12))
         self.url_text.pack(fill="x", **pad)
         self._add_tooltip(self.url_text, "Enter the video, playlist, or live-stream URL you want to process.")
         self.url_text.bind("<<Modified>>", self._on_url_modified, add="+")
         self.url_text.edit_modified(False)
 
-        preview_frame = self._labelframe(content, "Video preview", padx=16, pady=12)
+        preview_frame = self._labelframe(basic_page, "Video preview", padx=16, pady=12)
         preview_frame.pack(fill="x", **pad)
         preview_row = self._frame(preview_frame, bg=BG_PANEL)
         preview_row.pack(fill="x")
@@ -753,7 +768,7 @@ class GGUVDODApp(tk.Tk):
         preview_status.pack(fill="x", pady=(10, 0))
 
         # Format + quality
-        fmt_frame = self._labelframe(content, "Format", padx=16, pady=12)
+        fmt_frame = self._labelframe(basic_page, "Format", padx=16, pady=12)
         fmt_frame.pack(fill="x", **pad)
 
         video_radio = self._radio(fmt_frame, text="Video (MP4)", variable=self.format_var, value="video",
@@ -779,7 +794,7 @@ class GGUVDODApp(tk.Tk):
         self._add_tooltip(playlist_check, "When enabled, a playlist URL downloads only the selected video.")
 
         # Output folder
-        out_frame = self._labelframe(content, "Save to", padx=16, pady=12)
+        out_frame = self._labelframe(basic_page, "Save to", padx=16, pady=12)
         out_frame.pack(fill="x", **pad)
         out_row = self._frame(out_frame, bg=BG_PANEL)
         out_row.pack(fill="x")
@@ -791,7 +806,7 @@ class GGUVDODApp(tk.Tk):
         self._add_tooltip(output_browse, "Choose a folder where downloaded files should be saved.")
 
         # ffmpeg path (auto-detected by default; editable)
-        ff_frame = self._labelframe(content, "ffmpeg location (auto-detected - change only if needed)",
+        ff_frame = self._labelframe(advanced_page, "ffmpeg location (auto-detected - change only if needed)",
                                      padx=16, pady=12)
         ff_frame.pack(fill="x", **pad)
         ff_row = self._frame(ff_frame, bg=BG_PANEL)
@@ -808,7 +823,7 @@ class GGUVDODApp(tk.Tk):
         self.ffmpeg_var.trace_add("write", lambda *a: self._update_ffmpeg_status())
 
         # Authentication and output options
-        options_frame = self._labelframe(content, "Authentication and output options", padx=16, pady=12)
+        options_frame = self._labelframe(advanced_page, "Authentication and output options", padx=16, pady=12)
         options_frame.pack(fill="x", **pad)
 
         auth_row = self._frame(options_frame, bg=BG_PANEL)
@@ -883,7 +898,7 @@ class GGUVDODApp(tk.Tk):
         self._add_tooltip(list_formats_button, "Inspect the formats reported for the first URL in the link box.")
 
         # Buttons
-        btn_frame = self._frame(content)
+        btn_frame = self._frame(basic_page)
         btn_frame.pack(fill="x", **pad)
         self.download_btn = self._button(btn_frame, "Download", self._start_download, primary=True)
         self.download_btn.pack(side="left", ipadx=30, ipady=10)
@@ -896,18 +911,18 @@ class GGUVDODApp(tk.Tk):
         self._add_tooltip(open_folder_button, "Open the selected save folder in your system file browser.")
 
         # Progress
-        prog_frame = self._frame(content)
+        prog_frame = self._frame(basic_page)
         prog_frame.pack(fill="x", **pad)
         self.progress = ttk.Progressbar(prog_frame, orient="horizontal", mode="determinate", maximum=100)
         self.progress.pack(fill="x", ipady=4)
         self._add_tooltip(self.progress, "Shows download progress for the current video or playlist item.")
 
-        self.status_label = self._label(content, text="Ready.", fg=FG_MUTED, anchor="w")
+        self.status_label = self._label(basic_page, text="Ready.", fg=FG_MUTED, anchor="w")
         self.status_label.pack(fill="x", padx=24)
         self._add_tooltip(self.status_label, "Current activity, speed, estimated time, and connection status appear here.")
 
         # Log
-        log_frame = self._labelframe(content, "Log", padx=10, pady=10)
+        log_frame = self._labelframe(basic_page, "Log", padx=10, pady=10)
         log_frame.pack(fill="both", expand=True, **pad)
         self.log_box = self._scrolled_text(log_frame, BG_LOG, FG_LOG, height=12, state="disabled",
                                             font=("Consolas", 11))
@@ -952,8 +967,9 @@ class GGUVDODApp(tk.Tk):
         menu_bar.add_cascade(label="Window", menu=window_menu)
 
         help_menu = tk.Menu(menu_bar, tearoff=False)
-        help_menu.add_command(label="Keyboard shortcuts", command=self._show_shortcuts)
-        help_menu.add_command(label="Supported platforms", command=self._show_supported_platforms)
+        help_menu.add_command(label="Help center", command=self._show_help_page)
+        help_menu.add_command(label="Keyboard shortcuts", command=lambda: self._show_help_page("shortcuts"))
+        help_menu.add_command(label="Supported platforms", command=lambda: self._show_help_page("platforms"))
         help_menu.add_command(label="Open README", command=self._open_readme)
         help_menu.add_command(label="Check for yt-dlp updates", command=self._check_for_updates)
         menu_bar.add_cascade(label="Help", menu=help_menu)
@@ -1053,13 +1069,97 @@ class GGUVDODApp(tk.Tk):
         self._button(button_row, "Apply", apply_preferences, primary=True).pack(side="right", padx=(0, 10))
 
     def _show_shortcuts(self):
-        messagebox.showinfo(
-            "Keyboard shortcuts",
-            "Ctrl+Z  Undo\n"
-            "Ctrl+Y / Ctrl+Shift+Z / Ctrl+Alt+Z  Redo\n"
-            "Ctrl+X  Cut\nCtrl+C  Copy\nCtrl+V  Paste\nCtrl+A  Select all\n"
-            "Ctrl+N  New link list",
-        )
+        self._show_help_page("shortcuts")
+
+    def _show_help_page(self, section="overview"):
+        dialog = tk.Toplevel(self)
+        dialog.title("GGU_VDOD Help Center")
+        dialog.configure(bg=BG)
+        dialog.transient(self)
+        dialog.geometry("900x700")
+
+        header = self._frame(dialog, padx=22, pady=16)
+        header.pack(fill="x")
+        self._label(header, text="GGU_VDOD Help Center",
+                    font=("Segoe UI", 22, "bold")).pack(anchor="w")
+        self._label(header,
+                    text="Guides, shortcuts, troubleshooting, and the installed platform extractor directory.",
+                    fg=FG_MUTED, font=("Segoe UI", 10)).pack(anchor="w", pady=(4, 12))
+
+        nav = self._frame(header)
+        nav.pack(fill="x")
+        self._button(nav, "Overview", lambda: render_section("overview")).pack(side="left")
+        self._button(nav, "Keyboard shortcuts", lambda: render_section("shortcuts")).pack(side="left", padx=(8, 0))
+        self._button(nav, "Supported platforms", lambda: render_section("platforms")).pack(side="left", padx=(8, 0))
+
+        search_var = tk.StringVar()
+        search_label = self._label(header, text="Filter platform list:", fg=FG_MUTED,
+                                   font=("Segoe UI", 9))
+        search_entry = self._entry(header, textvariable=search_var)
+        self._add_tooltip(search_entry, "The filter is used on the Supported platforms page.")
+
+        content = self._scrolled_text(dialog, BG_LOG, FG_LOG, state="disabled",
+                                      wrap="word", font=("Segoe UI", 11))
+        content.pack(fill="both", expand=True, padx=22, pady=(0, 16))
+        self._help_dialog = dialog
+        self._help_text_widget = content
+        self._supported_platform_widget = content
+        self._supported_platform_search = search_var
+        search_var.trace_add("write", lambda *_args: self._render_supported_platforms(search_var.get()))
+
+        def render_section(name):
+            if not dialog.winfo_exists():
+                return
+            self._help_section = name
+            if name == "platforms":
+                search_label.pack(anchor="w", pady=(10, 4))
+                search_entry.pack(fill="x", ipady=4)
+                if self._supported_platform_lines is None:
+                    self._set_help_text("Loading the installed yt-dlp extractor list...\n\n"
+                                        "This list can include mainstream, music, live-stream, news, and adult-content platforms.")
+                    threading.Thread(target=self._load_supported_platforms,
+                                     args=(dialog,), daemon=True).start()
+                else:
+                    self._render_supported_platforms(search_var.get())
+            else:
+                search_label.pack_forget()
+                search_entry.pack_forget()
+                if name == "shortcuts":
+                    self._set_help_text(
+                        "KEYBOARD SHORTCUTS\n\n"
+                        "Ctrl+Z                         Undo\n"
+                        "Ctrl+Y / Ctrl+Shift+Z / Ctrl+Alt+Z   Redo\n"
+                        "Ctrl+X                         Cut\n"
+                        "Ctrl+C                         Copy\n"
+                        "Ctrl+V                         Paste\n"
+                        "Ctrl+A                         Select all\n"
+                        "Ctrl+N                         New link list\n\n"
+                        "These commands work in the URL box and editable text fields."
+                    )
+                else:
+                    self._set_help_text(
+                        "GETTING STARTED\n\n"
+                        "1. Paste one or more media links, one per line.\n"
+                        "2. Review the title and thumbnail preview.\n"
+                        "3. Choose Video (MP4) or Audio only (MP3).\n"
+                        "4. Use the Advanced tab for cookies, proxy, subtitles, metadata, thumbnails, and exact formats.\n"
+                        "5. Choose a save folder and press Download.\n\n"
+                        "TROUBLESHOOTING\n\n"
+                        "Keep yt-dlp current. MP4 merging and MP3 conversion require ffmpeg.\n"
+                        "For sign-in-gated content, use authorized browser cookies or cookies.txt.\n"
+                        "The log and bottom status bar show retries, speed, ETA, and errors.\n\n"
+                        "Use Supported platforms to search the extractor list bundled with this app."
+                    )
+
+        self._set_help_text = lambda text: self._replace_text_widget(content, text)
+        render_section(section)
+
+    @staticmethod
+    def _replace_text_widget(widget, text):
+        widget.configure(state="normal")
+        widget.delete("1.0", "end")
+        widget.insert("end", text)
+        widget.configure(state="disabled")
 
     def _show_supported_platforms(self):
         dialog = tk.Toplevel(self)
@@ -1153,12 +1253,47 @@ class GGUVDODApp(tk.Tk):
             messagebox.showinfo("README", "README.md is available in the project folder.")
 
     def _show_about(self):
-        messagebox.showinfo(
-            "About GGU_VDOD",
-            "GGU_VDOD\n\n"
-            "A dark-themed yt-dlp desktop downloader with resumable downloads, subtitles, "
-            "metadata, cookies, proxy support, animated help, and traditional desktop menus.",
+        dialog = tk.Toplevel(self)
+        dialog.title("About GGU_VDOD")
+        dialog.configure(bg=BG)
+        dialog.transient(self)
+        dialog.geometry("820x680")
+
+        header = self._frame(dialog, padx=28, pady=24)
+        header.pack(fill="x")
+        self._label(header, text="GGU_VDOD", font=("Segoe UI", 28, "bold")).pack()
+        self._label(header, text="Media downloader and metadata workspace",
+                    fg=FG_MUTED, font=("Segoe UI", 11)).pack(pady=(4, 12))
+        self._label(header, text="Developed by: XerumGG",
+                    fg=ACCENT, font=("Segoe UI", 13, "bold")).pack()
+
+        body = self._scrolled_text(dialog, BG_LOG, FG_LOG, state="disabled",
+                                   wrap="word", font=("Segoe UI", 11))
+        body.pack(fill="both", expand=True, padx=28, pady=(0, 16))
+        body_text = (
+            "ABOUT THE APP\n\n"
+            "GGU_VDOD is a dark-themed desktop downloader for video and audio links. "
+            "It includes resumable downloads, title and thumbnail previews, subtitles, "
+            "metadata, cookies, proxy support, playlist progress, live-stream options, "
+            "quality identifiers, and a traditional desktop menu system.\n\n"
+            "SUPPORTIVE RESOURCES USED\n\n"
+            "• Python — application language and standard-library foundation\n"
+            "• Tkinter and ttk — desktop interface, menus, dialogs, tabs, and controls\n"
+            "• yt-dlp — media extraction, format discovery, metadata, playlists, and site extractors\n"
+            "• FFmpeg — video/audio merging, MP3 conversion, subtitles, thumbnails, and metadata embedding\n"
+            "• Pillow — thumbnail decoding and display inside the preview panel\n"
+            "• PyInstaller — Windows executable packaging\n"
+            "• Python threading, queues, sockets, and urllib — background work, progress updates, connectivity checks, and preview retrieval\n\n"
+            "RESPONSIBLE USE\n\n"
+            "Use the app only for media you own, are authorized to download, or that is licensed "
+            "for reuse. Respect each platform's terms, copyright, age requirements, and local laws."
         )
+        self._replace_text_widget(body, body_text)
+
+        footer = self._frame(dialog, padx=28, pady=(0, 18))
+        footer.pack(fill="x")
+        self._button(footer, "Open README", self._open_readme).pack(side="left")
+        self._button(footer, "Close", dialog.destroy, primary=True).pack(side="right")
 
     def _build_status_bar(self):
         status_bar = tk.Frame(self, bg="#171717", height=38, bd=0,

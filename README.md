@@ -79,18 +79,19 @@ You only need to repeat the build if you change `app.py` or want to update `yt-d
 1. The window opens at 1920x1080 (or your full screen if smaller), centered, and resizable.
 2. Paste one or more video links into the box (one per line).
 3. Choose **Video (MP4)** or **Audio only (MP3)**, and pick a quality.
-4. Optionally choose browser cookies or a `cookies.txt` file for sign-in-gated content,
-   configure subtitles, metadata, thumbnails, a proxy, live-stream capture, or an exact
-   format ID.
+4. Open the **Advanced** tab if you need browser cookies or a `cookies.txt` file for
+   sign-in-gated content, subtitles, metadata, thumbnails, a proxy, live-stream capture,
+   or an exact format ID.
 5. Check **"Save to"** - it defaults to an app folder inside your user Downloads folder,
    change it if you like.
 6. Click **Download**. Progress and any errors show up in the log at the bottom.
 7. Click **Open Save Folder** any time to jump straight to your files.
 
 The app includes traditional **File**, **Edit**, **View**, **Window**, **Help**, and
-**About** menus. Use **Edit > Preferences > Key bindings and scroll speed** to control
-scroll speed and review the keyboard shortcuts. Text fields support Undo, Redo, Cut, Copy,
-Paste, and Select all.
+**About** menus. Help and About open full landing pages instead of small alert popups.
+Use **Edit > Preferences > Key bindings and scroll speed** to control scroll speed and
+review the keyboard shortcuts. Text fields support Undo, Redo, Cut, Copy, Paste, and
+Select all.
 
 Your last-used save folder and ffmpeg path are remembered automatically for next time.
 
@@ -184,6 +185,9 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
+- **#010 — Advanced tab and landing pages**: moved ffmpeg and advanced output controls
+  into an Advanced tab, and replaced Help/About alert popups with full landing pages.
+  About credits XerumGG and lists the supportive development resources used by the app.
 - **#009 — Enlarge thumbnail preview**: the preview now uses a readable 16:9 display area
   and scales the fetched thumbnail to fit it.
 - **#008 — Link preview and platform directory**: added title/thumbnail metadata preview
