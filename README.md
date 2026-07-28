@@ -122,6 +122,11 @@ Then rebuild with `build.bat` on Windows or `build.sh` on macOS/Linux.
   download defaults, ffmpeg discovery, and folder-opening behavior.
 - **Animated tooltips**: hover over guidance text, controls, paths, and options to see a
   short plain-English explanation with a smooth fade-in/fade-out popup.
+- **Scrollable interface and context menus**: the main panel supports mouse-wheel
+  scrolling, and text fields provide right-click Cut, Copy, Paste, and Select all actions.
+- **Transfer status bar**: a fixed qBittorrent-style footer shows download rate, upload
+  rate, progress, transferred bytes, ETA, and queue status. Upload remains `0 B/s` because
+  this is a download-only application.
 - **Authentication support**: browser cookies and `cookies.txt` can be supplied for
   content the user is authorized to access.
 - **Subtitles and media metadata**: subtitle downloads/embedding plus optional metadata

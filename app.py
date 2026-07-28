@@ -106,6 +106,28 @@ SUCCESS = "#57c26a"
 WARNING = "#e5b84d"
 
 
+def format_rate(bytes_per_second):
+    """Format a transfer rate using compact units suitable for the status bar."""
+    if not bytes_per_second:
+        return "0 B/s"
+    value = float(bytes_per_second)
+    for unit in ("B/s", "KB/s", "MB/s", "GB/s"):
+        if value < 1024 or unit == "GB/s":
+            return f"{value:.1f} {unit}"
+        value /= 1024
+
+
+def format_bytes(byte_count):
+    """Format a byte count for compact progress information."""
+    if not byte_count:
+        return "0 B"
+    value = float(byte_count)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.1f} {unit}"
+        value /= 1024
+
+
 class Tooltip:
     """Small animated help popup shown when the pointer rests over a widget."""
 
@@ -344,6 +366,12 @@ class GGUVDODApp(tk.Tk):
         self._playlist_seen = set()
         self._last_update_check = config.get("last_update_check", 0)
         self._tooltips = []
+        self.download_status_var = tk.StringVar(value="Ready")
+        self.download_rate_var = tk.StringVar(value="0 B/s")
+        self.upload_rate_var = tk.StringVar(value="0 B/s")
+        self.progress_summary_var = tk.StringVar(value="0%")
+        self.transfer_summary_var = tk.StringVar(value="0 B / 0 B")
+        self.eta_var = tk.StringVar(value="—")
 
         # Thread-safe UI update queue. The download worker thread NEVER touches
         # Tk widgets directly - it only pushes (callable, args) here, and a
@@ -415,6 +443,24 @@ class GGUVDODApp(tk.Tk):
         self._tooltips.append(Tooltip(widget, text))
         return widget
 
+    def _add_context_menu(self, widget):
+        widget.bind("<Button-3>", self._show_context_menu, add="+")
+        return widget
+
+    def _show_context_menu(self, event):
+        widget = event.widget
+        menu = tk.Menu(self, tearoff=False, bg=BG_PANEL, fg=FG,
+                       activebackground=ACCENT, activeforeground="#ffffff")
+        menu.add_command(label="Cut", command=lambda: widget.event_generate("<<Cut>>"))
+        menu.add_command(label="Copy", command=lambda: widget.event_generate("<<Copy>>"))
+        menu.add_command(label="Paste", command=lambda: widget.event_generate("<<Paste>>"))
+        menu.add_separator()
+        menu.add_command(label="Select all", command=lambda: widget.event_generate("<<SelectAll>>"))
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
     def _frame(self, parent, **kwargs):
         kwargs.setdefault("bg", BG)
         return tk.Frame(parent, **kwargs)
@@ -439,7 +485,7 @@ class GGUVDODApp(tk.Tk):
         kwargs.setdefault("highlightbackground", BORDER)
         kwargs.setdefault("highlightcolor", ACCENT)
         kwargs.setdefault("font", ("Segoe UI", 11))
-        return tk.Entry(parent, textvariable=textvariable, **kwargs)
+        return self._add_context_menu(tk.Entry(parent, textvariable=textvariable, **kwargs))
 
     def _button(self, parent, text, command, primary=False, **kwargs):
         if primary:
@@ -495,15 +541,35 @@ class GGUVDODApp(tk.Tk):
                                    highlightthickness=0, bd=0, relief="flat")
         except Exception:
             pass
-        return widget
+        return self._add_context_menu(widget)
 
     # ---------------------------------------------------------- UI build --
     def _build_ui(self):
         pad = {"padx": 24, "pady": 10}
 
-        # Center column so the UI doesn't stretch edge-to-edge on a 1920px window
-        container = self._frame(self)
-        container.pack(fill="both", expand=True)
+        # Keep the transfer summary fixed at the bottom while the main content scrolls.
+        self._build_status_bar()
+
+        scroll_area = self._frame(self)
+        scroll_area.pack(fill="both", expand=True)
+        self.main_canvas = tk.Canvas(scroll_area, bg=BG, highlightthickness=0,
+                                     yscrollincrement=1)
+        main_scrollbar = ttk.Scrollbar(scroll_area, orient="vertical", command=self.main_canvas.yview)
+        self.main_canvas.configure(yscrollcommand=main_scrollbar.set)
+        self.main_canvas.pack(side="left", fill="both", expand=True)
+        main_scrollbar.pack(side="right", fill="y")
+
+        # Center column so the UI doesn't stretch edge-to-edge on a wide window.
+        container = self._frame(self.main_canvas)
+        canvas_window = self.main_canvas.create_window((0, 0), window=container, anchor="nw")
+        container.bind("<Configure>", lambda _event: self.main_canvas.configure(
+            scrollregion=self.main_canvas.bbox("all")))
+        self.main_canvas.bind("<Configure>", lambda event: self.main_canvas.itemconfigure(
+            canvas_window, width=max(event.width, 1200)))
+        self.main_canvas.bind_all("<MouseWheel>", self._scroll_main, add="+")
+        self.main_canvas.bind_all("<Button-4>", self._scroll_main, add="+")
+        self.main_canvas.bind_all("<Button-5>", self._scroll_main, add="+")
+
         container.grid_columnconfigure(0, weight=1)
         container.grid_columnconfigure(1, weight=0, minsize=1200)
         container.grid_columnconfigure(2, weight=1)
@@ -685,6 +751,53 @@ class GGUVDODApp(tk.Tk):
                                             font=("Consolas", 11))
         self.log_box.pack(fill="both", expand=True)
         self._add_tooltip(log_frame, "The log records each link, playlist item, retry, conversion, and error.")
+
+    def _build_status_bar(self):
+        status_bar = tk.Frame(self, bg="#171717", height=38, bd=0,
+                              highlightthickness=1, highlightbackground=BORDER)
+        status_bar.pack(side="bottom", fill="x")
+        status_bar.pack_propagate(False)
+
+        def add_cell(caption, variable, width, tooltip):
+            cell = tk.Frame(status_bar, bg="#171717", width=width)
+            cell.pack(side="left", fill="y", padx=(10, 0))
+            cell.pack_propagate(False)
+            label = tk.Label(cell, text=caption, bg="#171717", fg=FG_MUTED,
+                             font=("Segoe UI", 9, "bold"), anchor="w")
+            label.pack(side="left")
+            value = tk.Label(cell, textvariable=variable, bg="#171717", fg=FG,
+                             font=("Segoe UI", 9), anchor="w")
+            value.pack(side="left", padx=(5, 0))
+            self._add_tooltip(cell, tooltip)
+
+        add_cell("Status:", self.download_status_var, 250,
+                 "The current queue state, such as ready, downloading, retrying, or complete.")
+        add_cell("↓ Download:", self.download_rate_var, 145,
+                 "Current download speed reported by yt-dlp.")
+        add_cell("↑ Upload:", self.upload_rate_var, 145,
+                 "This application only downloads, so its upload rate remains 0 B/s.")
+        add_cell("Progress:", self.progress_summary_var, 110,
+                 "Percentage completed for the current download item.")
+        add_cell("Transferred:", self.transfer_summary_var, 170,
+                 "Downloaded bytes compared with the available file size estimate.")
+        add_cell("ETA:", self.eta_var, 100,
+                 "Estimated time remaining when yt-dlp can calculate it.")
+
+    def _scroll_main(self, event):
+        """Scroll the outer panel without stealing the wheel from text editors."""
+        if isinstance(event.widget, tk.Text):
+            return
+        if getattr(event, "num", None) == 4:
+            units = -3
+        elif getattr(event, "num", None) == 5:
+            units = 3
+        else:
+            units = -int(event.delta / 40) if event.delta else 0
+            units = max(-6, min(6, units))
+            if units == 0 and event.delta:
+                units = -1 if event.delta > 0 else 1
+        if units:
+            self.main_canvas.yview_scroll(units, "units")
 
     def _toggle_format(self):
         if self.format_var.get() == "video":
@@ -904,6 +1017,12 @@ class GGUVDODApp(tk.Tk):
 
         self._cancel_requested = False
         self._playlist_seen = set()
+        self.download_status_var.set(f"Queued {len(urls)} link(s)")
+        self.download_rate_var.set("0 B/s")
+        self.upload_rate_var.set("0 B/s")
+        self.progress_summary_var.set("0%")
+        self.transfer_summary_var.set("0 B / 0 B")
+        self.eta_var.set("—")
         self.download_btn.config(state="disabled", text="Downloading...")
         self.cancel_btn.config(state="normal")
         self.progress["value"] = 0
@@ -912,6 +1031,7 @@ class GGUVDODApp(tk.Tk):
 
     def _cancel_download(self):
         self._cancel_requested = True
+        self.download_status_var.set("Cancelling")
         self.status_label.config(text="Cancelling... (finishing current chunk)")
         self.cancel_btn.config(state="disabled")
 
@@ -944,9 +1064,11 @@ class GGUVDODApp(tk.Tk):
                         time.sleep(RETRY_WAIT_SECONDS)
                         continue
                     self._enqueue(self.log, f"[{idx}/{total}] FAILED: {explain_download_error(e)}")
+                    self._enqueue(self._set_transfer_status, "Failed")
                     break
                 except Exception as e:
                     self._enqueue(self.log, f"[{idx}/{total}] FAILED (unexpected error): {explain_download_error(e)}")
+                    self._enqueue(self._set_transfer_status, "Failed")
                     break
                 if self._cancel_requested:
                     break
@@ -960,7 +1082,11 @@ class GGUVDODApp(tk.Tk):
             time.sleep(RETRY_WAIT_SECONDS)
 
     def _on_connection_lost(self, idx, total):
+        self.download_status_var.set("Waiting for connection")
         self.status_label.config(text=f"[{idx}/{total}] Internet connection lost - waiting to resume...")
+
+    def _set_transfer_status(self, status):
+        self.download_status_var.set(status)
 
     def _do_download(self, url, idx, total, settings):
         fmt = settings["format"]
@@ -1073,16 +1199,28 @@ class GGUVDODApp(tk.Tk):
             grand_total = d.get("total_bytes") or d.get("total_bytes_estimate")
             percent = (downloaded / grand_total * 100) if grand_total else 0
             self.progress["value"] = percent
+            self.download_status_var.set("Downloading")
+            self.progress_summary_var.set(f"{percent:.1f}%")
+            if grand_total:
+                self.transfer_summary_var.set(f"{format_bytes(downloaded)} / {format_bytes(grand_total)}")
+            else:
+                self.transfer_summary_var.set(f"{format_bytes(downloaded)} / —")
 
             speed = d.get("speed")
-            speed_str = f"{speed / 1024 / 1024:.2f} MB/s" if speed else "..."
+            speed_str = format_rate(speed)
+            self.download_rate_var.set(speed_str)
             eta = d.get("eta")
             eta_str = f"{eta}s" if eta else "..."
+            self.eta_var.set(eta_str)
             self.status_label.config(
                 text=f"[{idx}/{total}] Downloading: {percent:.1f}%  |  Speed: {speed_str}  |  ETA: {eta_str}"
             )
         elif status == "finished":
             self.progress["value"] = 100
+            self.download_status_var.set("Processing")
+            self.progress_summary_var.set("100%")
+            self.download_rate_var.set("0 B/s")
+            self.eta_var.set("—")
             self.status_label.config(text=f"[{idx}/{total}] Converting/merging (this can take a moment)...")
 
     def _on_playlist_item(self, idx, total, playlist_index, playlist_count, title):
@@ -1097,9 +1235,13 @@ class GGUVDODApp(tk.Tk):
         self.cancel_btn.config(state="disabled")
         self.status_label.config(text="Ready.")
         if self._cancel_requested:
+            self.download_status_var.set("Cancelled")
             self.log("\nCancelled. Partially downloaded files are kept and will resume next time you click Download.\n")
             messagebox.showinfo("Cancelled", "Download cancelled. Re-run the same link later to resume from where it stopped.")
         else:
+            self.download_status_var.set("Complete")
+            self.download_rate_var.set("0 B/s")
+            self.eta_var.set("—")
             self.log(f"\nAll done! Processed {total} link(s).\n")
             messagebox.showinfo("Complete", f"Finished processing {total} link(s).\nCheck the log for any errors.")
 

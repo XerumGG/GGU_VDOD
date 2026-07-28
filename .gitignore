@@ -29,4 +29,6 @@ Thumbs.db
 # Zip backups
 *.zip
 
+# vdo file (local to user)
+VDOs/
 #Dev : GG_Uranium
