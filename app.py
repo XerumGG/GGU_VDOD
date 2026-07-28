@@ -15,6 +15,7 @@ Also requires ffmpeg to be installed on the system (see README.md).
 import os
 import sys
 import json
+import io
 import re
 import time
 import queue
@@ -40,6 +41,12 @@ except ImportError:
         "Then restart this app."
     )
     sys.exit(1)
+
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = None
+    ImageTk = None
 
 
 APP_NAME = "GGU_VDOD"
@@ -451,6 +458,13 @@ class GGUVDODApp(tk.Tk):
         self.scroll_speed_var = tk.IntVar(value=clamp_scroll_speed(config.get("scroll_speed", SCROLL_SPEED_DEFAULT)))
         self._scroll_target = None
         self._scroll_animation_id = None
+        self.preview_title_var = tk.StringVar(value="Paste a link to preview it")
+        self.preview_details_var = tk.StringVar(value="Title, thumbnail, duration, uploader, and platform will appear here.")
+        self.preview_status_var = tk.StringVar(value="Waiting for a link")
+        self._preview_after_id = None
+        self._preview_token = 0
+        self._preview_photo = None
+        self._supported_platform_lines = None
         self.download_status_var = tk.StringVar(value="Ready")
         self.download_rate_var = tk.StringVar(value="0 B/s")
         self.upload_rate_var = tk.StringVar(value="0 B/s")
@@ -705,6 +719,35 @@ class GGUVDODApp(tk.Tk):
         self.url_text = self._scrolled_text(content, BG_ENTRY, FG, height=5, wrap="word", font=("Segoe UI", 12))
         self.url_text.pack(fill="x", **pad)
         self._add_tooltip(self.url_text, "Enter the video, playlist, or live-stream URL you want to process.")
+        self.url_text.bind("<<Modified>>", self._on_url_modified, add="+")
+        self.url_text.edit_modified(False)
+
+        preview_frame = self._labelframe(content, "Video preview", padx=16, pady=12)
+        preview_frame.pack(fill="x", **pad)
+        preview_row = self._frame(preview_frame, bg=BG_PANEL)
+        preview_row.pack(fill="x")
+        self.preview_image_label = tk.Label(
+            preview_row, text="No preview", width=30, height=8,
+            bg=BG_ENTRY, fg=FG_MUTED, relief="flat", font=("Segoe UI", 10),
+        )
+        self.preview_image_label.pack(side="left", padx=(0, 16))
+        preview_text = self._frame(preview_row, bg=BG_PANEL)
+        preview_text.pack(side="left", fill="both", expand=True)
+        preview_title = self._label(preview_text, textvariable=self.preview_title_var,
+                                    bg=BG_PANEL, fg=FG, anchor="w",
+                                    justify="left", wraplength=820,
+                                    font=("Segoe UI", 14, "bold"))
+        preview_title.pack(fill="x", pady=(4, 8))
+        self._add_tooltip(preview_title, "The title and metadata are read from the first link in the box.")
+        preview_details = self._label(preview_text, textvariable=self.preview_details_var,
+                                      bg=BG_PANEL, fg=FG_MUTED, anchor="nw",
+                                      justify="left", wraplength=820,
+                                      font=("Segoe UI", 10))
+        preview_details.pack(fill="x")
+        preview_status = self._label(preview_text, textvariable=self.preview_status_var,
+                                     bg=BG_PANEL, fg=FG_MUTED, anchor="w",
+                                     font=("Segoe UI", 9))
+        preview_status.pack(fill="x", pady=(10, 0))
 
         # Format + quality
         fmt_frame = self._labelframe(content, "Format", padx=16, pady=12)
@@ -907,6 +950,7 @@ class GGUVDODApp(tk.Tk):
 
         help_menu = tk.Menu(menu_bar, tearoff=False)
         help_menu.add_command(label="Keyboard shortcuts", command=self._show_shortcuts)
+        help_menu.add_command(label="Supported platforms", command=self._show_supported_platforms)
         help_menu.add_command(label="Open README", command=self._open_readme)
         help_menu.add_command(label="Check for yt-dlp updates", command=self._check_for_updates)
         menu_bar.add_cascade(label="Help", menu=help_menu)
@@ -1014,6 +1058,82 @@ class GGUVDODApp(tk.Tk):
             "Ctrl+N  New link list",
         )
 
+    def _show_supported_platforms(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("Supported platforms and extractors")
+        dialog.configure(bg=BG)
+        dialog.transient(self)
+        dialog.geometry("820x620")
+
+        header = self._frame(dialog, padx=16, pady=12)
+        header.pack(fill="x")
+        self._label(
+            header,
+            text="Platforms supported by this installed yt-dlp build",
+            font=("Segoe UI", 14, "bold"),
+        ).pack(anchor="w")
+        self._label(
+            header,
+            text="Support changes over time and individual sites may be broken, restricted, or require cookies.",
+            fg=FG_MUTED,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(4, 8))
+        search_var = tk.StringVar()
+        search_entry = self._entry(header, textvariable=search_var)
+        search_entry.pack(fill="x", ipady=4)
+        self._add_tooltip(search_entry, "Filter the installed extractor list by site or platform name.")
+
+        listing = self._scrolled_text(dialog, BG_LOG, FG_LOG, state="disabled",
+                                      wrap="none", font=("Consolas", 10))
+        listing.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+        self._supported_platform_widget = listing
+        self._supported_platform_search = search_var
+        search_var.trace_add("write", lambda *_args: self._render_supported_platforms(search_var.get()))
+
+        if self._supported_platform_lines is None:
+            self._supported_platform_widget.configure(state="normal")
+            self._supported_platform_widget.insert("end", "Loading installed extractors...\n")
+            self._supported_platform_widget.configure(state="disabled")
+            threading.Thread(target=self._load_supported_platforms, args=(dialog,), daemon=True).start()
+        else:
+            self._render_supported_platforms("")
+
+    def _load_supported_platforms(self, dialog):
+        try:
+            from yt_dlp.extractor import gen_extractors
+            lines = sorted({
+                f"{extractor.IE_NAME}"
+                + (f" — {extractor.IE_DESC}" if extractor.IE_DESC else "")
+                for extractor in gen_extractors()
+            }, key=str.casefold)
+            self._enqueue(self._set_supported_platforms, dialog, lines)
+        except Exception as error:
+            self._enqueue(self._apply_supported_platform_error, dialog, str(error))
+
+    def _set_supported_platforms(self, dialog, lines):
+        if not dialog.winfo_exists():
+            return
+        self._supported_platform_lines = lines
+        self._render_supported_platforms(self._supported_platform_search.get())
+
+    def _apply_supported_platform_error(self, dialog, error):
+        if not dialog.winfo_exists():
+            return
+        self._supported_platform_lines = [f"Could not load extractor list: {error}"]
+        self._render_supported_platforms("")
+
+    def _render_supported_platforms(self, query):
+        if not hasattr(self, "_supported_platform_widget") or self._supported_platform_lines is None:
+            return
+        query = (query or "").casefold().strip()
+        lines = [line for line in self._supported_platform_lines if not query or query in line.casefold()]
+        widget = self._supported_platform_widget
+        widget.configure(state="normal")
+        widget.delete("1.0", "end")
+        widget.insert("end", f"{len(lines)} matching extractor(s)\n\n")
+        widget.insert("end", "\n".join(lines))
+        widget.configure(state="disabled")
+
     def _open_readme(self):
         readme = os.path.join(get_app_dir(), "README.md")
         if os.path.isfile(readme):
@@ -1067,6 +1187,136 @@ class GGUVDODApp(tk.Tk):
                  "Downloaded bytes compared with the available file size estimate.")
         add_cell("ETA:", self.eta_var, 100,
                  "Estimated time remaining when yt-dlp can calculate it.")
+
+    def _on_url_modified(self, _event=None):
+        if not self.url_text.edit_modified():
+            return
+        self.url_text.edit_modified(False)
+        self._schedule_preview()
+
+    def _schedule_preview(self):
+        if self._preview_after_id is not None:
+            self.after_cancel(self._preview_after_id)
+            self._preview_after_id = None
+        self._preview_token += 1
+        urls = [u.strip() for u in self.url_text.get("1.0", "end").splitlines() if u.strip()]
+        if not urls:
+            self._clear_preview()
+            return
+        self.preview_status_var.set("Waiting for typing to finish...")
+        token = self._preview_token
+        self._preview_after_id = self.after(500, self._start_preview, urls[0], token)
+
+    def _start_preview(self, url, token):
+        self._preview_after_id = None
+        if token != self._preview_token:
+            return
+        self.preview_status_var.set("Fetching preview...")
+        browser = self.browser_var.get()
+        cookies_file = self.cookies_file_var.get().strip()
+        proxy = self.proxy_var.get().strip()
+        threading.Thread(
+            target=self._preview_worker,
+            args=(url, token, browser, cookies_file, proxy),
+            daemon=True,
+        ).start()
+
+    def _preview_worker(self, url, token, browser, cookies_file, proxy):
+        options = {"quiet": True, "no_warnings": True, "skip_download": True}
+        if browser != "None":
+            options["cookiesfrombrowser"] = (browser.lower(), None, None, None)
+        if cookies_file:
+            options["cookiefile"] = cookies_file
+        if proxy:
+            options["proxy"] = proxy
+        try:
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=False)
+        except Exception as error:
+            if browser == "None" or not _looks_like_cookie_database_error(error):
+                self._enqueue(self._apply_preview_error, token, str(error))
+                return
+            options.pop("cookiesfrombrowser", None)
+            try:
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    info = ydl.extract_info(url, download=False)
+            except Exception as retry_error:
+                self._enqueue(self._apply_preview_error, token, str(retry_error))
+                return
+
+        if info.get("_type") == "playlist":
+            entries = info.get("entries") or []
+            info = next((entry for entry in entries if entry), info)
+
+        thumbnail_data = None
+        thumbnail_url = info.get("thumbnail")
+        if thumbnail_url:
+            try:
+                request = urllib.request.Request(thumbnail_url, headers={"User-Agent": APP_NAME})
+                with urllib.request.urlopen(request, timeout=8) as response:
+                    thumbnail_data = response.read(4 * 1024 * 1024)
+            except Exception:
+                thumbnail_data = None
+
+        height = info.get("height")
+        abr = info.get("abr")
+        resolution = info.get("resolution") or (f"{height}p" if height else "")
+        if not resolution and abr:
+            resolution = f"{abr:.0f} kbps"
+        preview = {
+            "title": info.get("title") or "Untitled media",
+            "details": "  •  ".join(filter(None, [
+                info.get("extractor_key") or info.get("extractor"),
+                info.get("uploader") or info.get("channel"),
+                self._format_duration(info.get("duration")),
+                resolution,
+            ])) or "Metadata available",
+            "thumbnail_data": thumbnail_data,
+        }
+        self._enqueue(self._apply_preview, token, preview)
+
+    @staticmethod
+    def _format_duration(seconds):
+        if not seconds:
+            return ""
+        try:
+            seconds = int(seconds)
+        except (TypeError, ValueError):
+            return ""
+        hours, remainder = divmod(seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
+
+    def _clear_preview(self):
+        self.preview_title_var.set("Paste a link to preview it")
+        self.preview_details_var.set("Title, thumbnail, duration, uploader, and platform will appear here.")
+        self.preview_status_var.set("Waiting for a link")
+        self._preview_photo = None
+        self.preview_image_label.configure(image="", text="No preview")
+
+    def _apply_preview_error(self, token, error):
+        if token != self._preview_token:
+            return
+        self.preview_status_var.set(f"Preview unavailable: {explain_download_error(error)}")
+
+    def _apply_preview(self, token, preview):
+        if token != self._preview_token:
+            return
+        self.preview_title_var.set(preview["title"])
+        self.preview_details_var.set(preview["details"])
+        self.preview_status_var.set("Preview ready")
+        thumbnail_data = preview.get("thumbnail_data")
+        if thumbnail_data and Image is not None and ImageTk is not None:
+            try:
+                image = Image.open(io.BytesIO(thumbnail_data)).convert("RGB")
+                image.thumbnail((320, 180))
+                self._preview_photo = ImageTk.PhotoImage(image)
+                self.preview_image_label.configure(image=self._preview_photo, text="")
+                return
+            except Exception:
+                pass
+        self._preview_photo = None
+        self.preview_image_label.configure(image="", text="Thumbnail unavailable")
 
     def _scroll_main(self, event):
         """Animate the outer panel without stealing the wheel from text editors."""

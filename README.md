@@ -143,6 +143,25 @@ Then rebuild with `build.bat` on Windows or `build.sh` on macOS/Linux.
   URL, then enter an exact format expression such as `137+140` when needed.
 - **Playlist visibility and proxy support**: playlist items are logged individually, and
   an HTTP/SOCKS proxy can be configured per user.
+
+## Supported platforms and preview
+
+After you paste the first link, GGU_VDOD fetches a lightweight preview containing the
+title, thumbnail, uploader, duration, platform, and available resolution/bitrate when the
+site exposes that metadata. Preview fetching never starts a download.
+
+The app uses the extractor set bundled with its installed yt-dlp version. Open
+**Help → Supported platforms** to search the complete live extractor list for that build.
+Common categories include YouTube, Vimeo, TikTok, Instagram, Facebook, X/Twitter, Reddit,
+Twitch, Kick, Rumble, Dailymotion, SoundCloud, Bandcamp, Bilibili, archive.org, news and
+streaming services, podcasts, music sites, and live-stream platforms.
+
+The extractor list can also include adult-content platforms such as PornHub, XHamster,
+XNXX, XVideos, YouPorn, SpankBang, Stripchat, and related sites when supported by the
+installed yt-dlp version. Availability is extractor-dependent, may change without notice,
+and may require cookies, a proxy, age verification, or other authorized access. The
+official list explains that listed sites are not guaranteed to work because websites
+change frequently: https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md.
 - **Live-stream capture**: live URLs can be handed to yt-dlp while broadcasting, with an
   option to request capture from the beginning when the service provides that stream.
 - **Dark mode**: the whole interface, including the log panel, dropdowns, and progress
@@ -165,6 +184,9 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
+- **#008 — Link preview and platform directory**: added title/thumbnail metadata preview
+  after pasting a URL and a dynamic Help menu listing for the installed yt-dlp extractors,
+  including adult-content extractors when present.
 - **#007 — Portable entry undo/redo fix**: replaced the unsupported Tk `Entry` undo option
   with a compatible history implementation so the packaged app opens correctly on all
   supported Tk builds.
