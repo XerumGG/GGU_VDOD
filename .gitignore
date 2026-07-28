@@ -1,0 +1,32 @@
+# This folder contains temporary files
+# Do not commit
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual Environment
+venv/
+
+# Build output
+build/
+dist/
+
+# Python build metadata
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Zip backups
+*.zip
+
+#Dev : GG_Uranium
