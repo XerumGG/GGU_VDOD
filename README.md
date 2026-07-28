@@ -1,8 +1,10 @@
  # GGU_VDOD (cross-platform desktop app)
+__Put the link ; Get the VDO, download the MP3, yo yo yo...__
+
 
 A dark-themed desktop app: paste a video link, pick MP4 (video) or MP3 (audio), click
-**Download**. If your internet drops mid-download, it automatically waits, reconnects, and
-**resumes from where it stopped** instead of starting over.
+__Download__. If your internet drops mid-download, it automatically waits, reconnects, and
+__resumes from where it stopped__ instead of starting over.
 
 The source runs on Windows, macOS, and Linux. Native packaged executables must be built
 on the target operating system with PyInstaller. The Windows build produces
@@ -118,6 +120,8 @@ Then rebuild with `build.bat` on Windows or `build.sh` on macOS/Linux.
 - **Renamed** to **GGU_VDOD** throughout (window title, built app name).
 - **Cross-platform runtime**: Windows, macOS, and Linux use native config folders,
   download defaults, ffmpeg discovery, and folder-opening behavior.
+- **Animated tooltips**: hover over guidance text, controls, paths, and options to see a
+  short plain-English explanation with a smooth fade-in/fade-out popup.
 - **Authentication support**: browser cookies and `cookies.txt` can be supplied for
   content the user is authorized to access.
 - **Subtitles and media metadata**: subtitle downloads/embedding plus optional metadata

@@ -106,6 +106,102 @@ SUCCESS = "#57c26a"
 WARNING = "#e5b84d"
 
 
+class Tooltip:
+    """Small animated help popup shown when the pointer rests over a widget."""
+
+    def __init__(self, widget, text, delay_ms=300):
+        self.widget = widget
+        self.text = text
+        self.delay_ms = delay_ms
+        self.window = None
+        self.show_after_id = None
+        self.fade_id = None
+        widget.bind("<Enter>", self._on_enter, add="+")
+        widget.bind("<Leave>", self._on_leave, add="+")
+
+    def _on_enter(self, _event=None):
+        self._cancel_timer("show_after_id")
+        self._cancel_timer("fade_id")
+        self.show_after_id = self.widget.after(self.delay_ms, self._show)
+
+    def _on_leave(self, _event=None):
+        self._cancel_timer("show_after_id")
+        if self.window is not None:
+            self._fade_out()
+
+    def _cancel_timer(self, attribute):
+        timer_id = getattr(self, attribute)
+        if timer_id is not None:
+            try:
+                self.widget.after_cancel(timer_id)
+            except tk.TclError:
+                pass
+            setattr(self, attribute, None)
+
+    def _show(self):
+        self.show_after_id = None
+        if self.window is not None:
+            self._fade_in()
+            return
+        try:
+            window = tk.Toplevel(self.widget)
+            window.overrideredirect(True)
+            window.attributes("-topmost", True)
+            window.configure(bg="#101010")
+            label = tk.Label(
+                window, text=self.text, justify="left", wraplength=360,
+                bg="#101010", fg="#f4f4f4", padx=12, pady=8,
+                relief="solid", bd=1, highlightthickness=1,
+                highlightbackground="#555555", font=("Segoe UI", 10),
+            )
+            label.pack()
+            window.update_idletasks()
+            x = self.widget.winfo_rootx()
+            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 8
+            screen_w = self.widget.winfo_screenwidth()
+            popup_w = window.winfo_reqwidth()
+            if x + popup_w > screen_w - 8:
+                x = max(8, screen_w - popup_w - 8)
+            window.geometry(f"+{x}+{y}")
+            self.window = window
+            try:
+                window.attributes("-alpha", 0.0)
+            except tk.TclError:
+                pass
+            self._fade_in()
+        except tk.TclError:
+            self.window = None
+
+    def _fade_in(self, alpha=0.0):
+        if self.window is None or not self.window.winfo_exists():
+            return
+        alpha = min(alpha + 0.12, 1.0)
+        try:
+            self.window.attributes("-alpha", alpha)
+        except tk.TclError:
+            alpha = 1.0
+        if alpha < 1.0:
+            self.fade_id = self.widget.after(18, self._fade_in, alpha)
+
+    def _fade_out(self, alpha=1.0):
+        if self.window is None:
+            return
+        self._cancel_timer("fade_id")
+        alpha -= 0.16
+        if alpha <= 0.0:
+            try:
+                self.window.destroy()
+            except tk.TclError:
+                pass
+            self.window = None
+            return
+        try:
+            self.window.attributes("-alpha", alpha)
+        except tk.TclError:
+            alpha = 0.0
+        self.fade_id = self.widget.after(18, self._fade_out, alpha)
+
+
 def get_app_dir():
     """Folder the running exe (or script) lives in - used to look for a bundled ffmpeg."""
     if getattr(sys, "frozen", False):
@@ -247,6 +343,7 @@ class GGUVDODApp(tk.Tk):
         self._download_settings = None
         self._playlist_seen = set()
         self._last_update_check = config.get("last_update_check", 0)
+        self._tooltips = []
 
         # Thread-safe UI update queue. The download worker thread NEVER touches
         # Tk widgets directly - it only pushes (callable, args) here, and a
@@ -313,6 +410,10 @@ class GGUVDODApp(tk.Tk):
         kwargs.setdefault("fg", FG)
         kwargs.setdefault("font", ("Segoe UI", 11))
         return tk.Label(parent, **kwargs)
+
+    def _add_tooltip(self, widget, text):
+        self._tooltips.append(Tooltip(widget, text))
+        return widget
 
     def _frame(self, parent, **kwargs):
         kwargs.setdefault("bg", BG)
@@ -411,37 +512,55 @@ class GGUVDODApp(tk.Tk):
         content = self._frame(container)
         content.grid(row=0, column=1, sticky="nsew")
 
-        self._label(content, text=APP_NAME, font=("Segoe UI", 28, "bold")).pack(pady=(26, 6))
-        self._label(content, text="Paste one or more video links below (one per line)",
-                     font=("Segoe UI", 12), fg=FG_MUTED).pack()
+        title_label = self._label(content, text=APP_NAME, font=("Segoe UI", 28, "bold"))
+        title_label.pack(pady=(26, 6))
+        self._add_tooltip(title_label, "GGU_VDOD downloads video or audio from links you provide.")
+        guide_label = self._label(content, text="Paste one or more video links below (one per line)",
+                                  font=("Segoe UI", 12), fg=FG_MUTED)
+        guide_label.pack()
+        self._add_tooltip(guide_label, "Paste one link per line. You can download several links in one queue.")
 
         self.url_text = self._scrolled_text(content, BG_ENTRY, FG, height=5, wrap="word", font=("Segoe UI", 12))
         self.url_text.pack(fill="x", **pad)
+        self._add_tooltip(self.url_text, "Enter the video, playlist, or live-stream URL you want to process.")
 
         # Format + quality
         fmt_frame = self._labelframe(content, "Format", padx=16, pady=12)
         fmt_frame.pack(fill="x", **pad)
 
-        self._radio(fmt_frame, text="Video (MP4)", variable=self.format_var, value="video",
-                    command=self._toggle_format).grid(row=0, column=0, sticky="w", padx=(0, 30))
-        self._radio(fmt_frame, text="Audio only (MP3)", variable=self.format_var, value="audio",
-                    command=self._toggle_format).grid(row=0, column=1, sticky="w")
+        video_radio = self._radio(fmt_frame, text="Video (MP4)", variable=self.format_var, value="video",
+                                  command=self._toggle_format)
+        video_radio.grid(row=0, column=0, sticky="w", padx=(0, 30))
+        self._add_tooltip(video_radio, "Download video and save it as an MP4 when the available formats allow it.")
+        audio_radio = self._radio(fmt_frame, text="Audio only (MP3)", variable=self.format_var, value="audio",
+                                  command=self._toggle_format)
+        audio_radio.grid(row=0, column=1, sticky="w")
+        self._add_tooltip(audio_radio, "Extract the audio and convert it to an MP3 file using ffmpeg.")
 
-        self._label(fmt_frame, text="Quality:", bg=BG_PANEL).grid(row=1, column=0, sticky="w", pady=(12, 0))
+        quality_label = self._label(fmt_frame, text="Quality:", bg=BG_PANEL)
+        quality_label.grid(row=1, column=0, sticky="w", pady=(12, 0))
+        self._add_tooltip(quality_label, "Choose the highest quality the app should try to use.")
         self.quality_combo = ttk.Combobox(fmt_frame, textvariable=self.quality_var, values=VIDEO_QUALITIES,
                                            state="readonly", width=22, font=("Segoe UI", 11))
         self.quality_combo.grid(row=1, column=1, sticky="w", pady=(12, 0))
+        self._add_tooltip(self.quality_combo, "The final choice depends on the formats available for that specific link.")
 
-        self._check(fmt_frame, text="Only download this video (ignore playlist)",
-                    variable=self.playlist_var).grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        playlist_check = self._check(fmt_frame, text="Only download this video (ignore playlist)",
+                                     variable=self.playlist_var)
+        playlist_check.grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        self._add_tooltip(playlist_check, "When enabled, a playlist URL downloads only the selected video.")
 
         # Output folder
         out_frame = self._labelframe(content, "Save to", padx=16, pady=12)
         out_frame.pack(fill="x", **pad)
         out_row = self._frame(out_frame, bg=BG_PANEL)
         out_row.pack(fill="x")
-        self._entry(out_row, textvariable=self.output_var).pack(side="left", fill="x", expand=True, ipady=4)
-        self._button(out_row, "Browse...", self._browse_output).pack(side="left", padx=(10, 0))
+        output_entry = self._entry(out_row, textvariable=self.output_var)
+        output_entry.pack(side="left", fill="x", expand=True, ipady=4)
+        self._add_tooltip(output_entry, "Files are saved in this folder. The folder is created if it does not exist.")
+        output_browse = self._button(out_row, "Browse...", self._browse_output)
+        output_browse.pack(side="left", padx=(10, 0))
+        self._add_tooltip(output_browse, "Choose a folder where downloaded files should be saved.")
 
         # ffmpeg path (auto-detected by default; editable)
         ff_frame = self._labelframe(content, "ffmpeg location (auto-detected - change only if needed)",
@@ -449,8 +568,13 @@ class GGUVDODApp(tk.Tk):
         ff_frame.pack(fill="x", **pad)
         ff_row = self._frame(ff_frame, bg=BG_PANEL)
         ff_row.pack(fill="x")
-        self._entry(ff_row, textvariable=self.ffmpeg_var).pack(side="left", fill="x", expand=True, ipady=4)
-        self._button(ff_row, "Browse...", self._browse_ffmpeg).pack(side="left", padx=(10, 0))
+        self._add_tooltip(ff_frame, "ffmpeg merges separate video and audio streams and creates MP3 files.")
+        ffmpeg_entry = self._entry(ff_row, textvariable=self.ffmpeg_var)
+        ffmpeg_entry.pack(side="left", fill="x", expand=True, ipady=4)
+        self._add_tooltip(ffmpeg_entry, "Leave this path automatic, or select the ffmpeg executable manually.")
+        ffmpeg_browse = self._button(ff_row, "Browse...", self._browse_ffmpeg)
+        ffmpeg_browse.pack(side="left", padx=(10, 0))
+        self._add_tooltip(ffmpeg_browse, "Find the ffmpeg executable on your computer.")
         self.ffmpeg_status_label = self._label(ff_frame, text="", bg=BG_PANEL, font=("Segoe UI", 9))
         self.ffmpeg_status_label.pack(anchor="w", pady=(8, 0))
         self.ffmpeg_var.trace_add("write", lambda *a: self._update_ffmpeg_status())
@@ -461,57 +585,98 @@ class GGUVDODApp(tk.Tk):
 
         auth_row = self._frame(options_frame, bg=BG_PANEL)
         auth_row.pack(fill="x", pady=(0, 8))
-        self._label(auth_row, text="Browser cookies:", bg=BG_PANEL).pack(side="left")
-        ttk.Combobox(auth_row, textvariable=self.browser_var, values=COOKIE_BROWSERS,
-                     state="readonly", width=14, font=("Segoe UI", 11)).pack(side="left", padx=(10, 20))
-        self._label(auth_row, text="Cookies file:", bg=BG_PANEL).pack(side="left")
-        self._entry(auth_row, textvariable=self.cookies_file_var).pack(side="left", fill="x", expand=True,
-                                                                        padx=(10, 0), ipady=4)
-        self._button(auth_row, "Browse...", self._browse_cookies).pack(side="left", padx=(10, 0))
+        browser_label = self._label(auth_row, text="Browser cookies:", bg=BG_PANEL)
+        browser_label.pack(side="left")
+        self._add_tooltip(browser_label, "Use cookies from a browser where you are already signed in.")
+        browser_combo = ttk.Combobox(auth_row, textvariable=self.browser_var, values=COOKIE_BROWSERS,
+                                     state="readonly", width=14, font=("Segoe UI", 11))
+        browser_combo.pack(side="left", padx=(10, 20))
+        self._add_tooltip(browser_combo, "Choose the browser whose active login should be used by yt-dlp.")
+        cookies_label = self._label(auth_row, text="Cookies file:", bg=BG_PANEL)
+        cookies_label.pack(side="left")
+        self._add_tooltip(cookies_label, "Use a Netscape-format cookies.txt file when browser cookies are not enough.")
+        cookies_entry = self._entry(auth_row, textvariable=self.cookies_file_var)
+        cookies_entry.pack(side="left", fill="x", expand=True, padx=(10, 0), ipady=4)
+        self._add_tooltip(cookies_entry, "Optional path to a cookies.txt file.")
+        cookies_browse = self._button(auth_row, "Browse...", self._browse_cookies)
+        cookies_browse.pack(side="left", padx=(10, 0))
+        self._add_tooltip(cookies_browse, "Choose a cookies.txt file.")
 
         proxy_row = self._frame(options_frame, bg=BG_PANEL)
         proxy_row.pack(fill="x", pady=(0, 8))
-        self._label(proxy_row, text="Proxy (optional):", bg=BG_PANEL).pack(side="left")
-        self._entry(proxy_row, textvariable=self.proxy_var).pack(side="left", fill="x", expand=True,
-                                                                 padx=(10, 10), ipady=4)
-        self._label(proxy_row, text="Example: http://user:pass@host:port", bg=BG_PANEL,
-                    fg=FG_MUTED, font=("Segoe UI", 9)).pack(side="left")
-        self._button(proxy_row, "Check yt-dlp updates", self._check_for_updates).pack(side="right", padx=(10, 0))
+        proxy_label = self._label(proxy_row, text="Proxy (optional):", bg=BG_PANEL)
+        proxy_label.pack(side="left")
+        self._add_tooltip(proxy_label, "A proxy can help with network routing or region restrictions when authorized.")
+        proxy_entry = self._entry(proxy_row, textvariable=self.proxy_var)
+        proxy_entry.pack(side="left", fill="x", expand=True, padx=(10, 10), ipady=4)
+        self._add_tooltip(proxy_entry, "Enter a proxy such as http://user:pass@host:port or socks5://host:port.")
+        proxy_hint = self._label(proxy_row, text="Example: http://user:pass@host:port", bg=BG_PANEL,
+                                 fg=FG_MUTED, font=("Segoe UI", 9))
+        proxy_hint.pack(side="left")
+        self._add_tooltip(proxy_hint, "The proxy address should include its protocol and port.")
+        update_button = self._button(proxy_row, "Check yt-dlp updates", self._check_for_updates)
+        update_button.pack(side="right", padx=(10, 0))
+        self._add_tooltip(update_button, "Check whether a newer yt-dlp version is available.")
 
         subtitle_row = self._frame(options_frame, bg=BG_PANEL)
         subtitle_row.pack(fill="x", pady=(0, 8))
-        self._check(subtitle_row, text="Download subtitles", variable=self.subtitles_var).pack(side="left")
-        self._check(subtitle_row, text="Include auto-generated", variable=self.auto_subtitles_var).pack(side="left", padx=(18, 0))
-        self._label(subtitle_row, text="Languages:", bg=BG_PANEL).pack(side="left", padx=(18, 0))
-        self._entry(subtitle_row, textvariable=self.subtitle_langs_var, width=18).pack(side="left", padx=(8, 0), ipady=4)
-        self._check(subtitle_row, text="Embed metadata", variable=self.embed_metadata_var).pack(side="left", padx=(18, 0))
-        self._check(subtitle_row, text="Embed thumbnail", variable=self.embed_thumbnail_var).pack(side="left", padx=(18, 0))
-        self._check(subtitle_row, text="Live: start from beginning", variable=self.live_from_start_var).pack(side="left", padx=(18, 0))
+        subtitles_check = self._check(subtitle_row, text="Download subtitles", variable=self.subtitles_var)
+        subtitles_check.pack(side="left")
+        self._add_tooltip(subtitles_check, "Download and embed subtitles when the source provides them.")
+        auto_subtitles_check = self._check(subtitle_row, text="Include auto-generated", variable=self.auto_subtitles_var)
+        auto_subtitles_check.pack(side="left", padx=(18, 0))
+        self._add_tooltip(auto_subtitles_check, "Also accept captions generated automatically by the source.")
+        languages_label = self._label(subtitle_row, text="Languages:", bg=BG_PANEL)
+        languages_label.pack(side="left", padx=(18, 0))
+        self._add_tooltip(languages_label, "Enter language codes separated by commas, for example en.*,hi.")
+        languages_entry = self._entry(subtitle_row, textvariable=self.subtitle_langs_var, width=18)
+        languages_entry.pack(side="left", padx=(8, 0), ipady=4)
+        self._add_tooltip(languages_entry, "Choose subtitle languages using codes such as en.*, hi, or all.")
+        metadata_check = self._check(subtitle_row, text="Embed metadata", variable=self.embed_metadata_var)
+        metadata_check.pack(side="left", padx=(18, 0))
+        self._add_tooltip(metadata_check, "Add the title, artist, and other available information to the media file.")
+        thumbnail_check = self._check(subtitle_row, text="Embed thumbnail", variable=self.embed_thumbnail_var)
+        thumbnail_check.pack(side="left", padx=(18, 0))
+        self._add_tooltip(thumbnail_check, "Use the source thumbnail as the media cover image when supported.")
+        live_check = self._check(subtitle_row, text="Live: start from beginning", variable=self.live_from_start_var)
+        live_check.pack(side="left", padx=(18, 0))
+        self._add_tooltip(live_check, "For supported live streams, ask yt-dlp to capture from the beginning.")
 
         format_row = self._frame(options_frame, bg=BG_PANEL)
         format_row.pack(fill="x")
-        self._label(format_row, text="Exact format ID(s) (optional):", bg=BG_PANEL).pack(side="left")
-        self._entry(format_row, textvariable=self.format_id_var).pack(side="left", fill="x", expand=True,
-                                                                       padx=(10, 10), ipady=4)
-        self._button(format_row, "List formats", self._list_formats).pack(side="left")
+        format_label = self._label(format_row, text="Exact format ID(s) (optional):", bg=BG_PANEL)
+        format_label.pack(side="left")
+        self._add_tooltip(format_label, "Leave blank for automatic quality selection, or enter IDs such as 137+140.")
+        format_entry = self._entry(format_row, textvariable=self.format_id_var)
+        format_entry.pack(side="left", fill="x", expand=True, padx=(10, 10), ipady=4)
+        self._add_tooltip(format_entry, "Use List formats first, then enter the exact format ID or combination you want.")
+        list_formats_button = self._button(format_row, "List formats", self._list_formats)
+        list_formats_button.pack(side="left")
+        self._add_tooltip(list_formats_button, "Inspect the formats reported for the first URL in the link box.")
 
         # Buttons
         btn_frame = self._frame(content)
         btn_frame.pack(fill="x", **pad)
         self.download_btn = self._button(btn_frame, "Download", self._start_download, primary=True)
         self.download_btn.pack(side="left", ipadx=30, ipady=10)
+        self._add_tooltip(self.download_btn, "Start downloading all links in the box using the selected options.")
         self.cancel_btn = self._button(btn_frame, "Cancel", self._cancel_download, state="disabled")
         self.cancel_btn.pack(side="left", padx=(14, 0), ipady=6)
-        self._button(btn_frame, "Open Save Folder", self._open_output_folder).pack(side="left", padx=(14, 0), ipady=6)
+        self._add_tooltip(self.cancel_btn, "Stop after the current download operation and keep partial files for later.")
+        open_folder_button = self._button(btn_frame, "Open Save Folder", self._open_output_folder)
+        open_folder_button.pack(side="left", padx=(14, 0), ipady=6)
+        self._add_tooltip(open_folder_button, "Open the selected save folder in your system file browser.")
 
         # Progress
         prog_frame = self._frame(content)
         prog_frame.pack(fill="x", **pad)
         self.progress = ttk.Progressbar(prog_frame, orient="horizontal", mode="determinate", maximum=100)
         self.progress.pack(fill="x", ipady=4)
+        self._add_tooltip(self.progress, "Shows download progress for the current video or playlist item.")
 
         self.status_label = self._label(content, text="Ready.", fg=FG_MUTED, anchor="w")
         self.status_label.pack(fill="x", padx=24)
+        self._add_tooltip(self.status_label, "Current activity, speed, estimated time, and connection status appear here.")
 
         # Log
         log_frame = self._labelframe(content, "Log", padx=10, pady=10)
@@ -519,6 +684,7 @@ class GGUVDODApp(tk.Tk):
         self.log_box = self._scrolled_text(log_frame, BG_LOG, FG_LOG, height=12, state="disabled",
                                             font=("Consolas", 11))
         self.log_box.pack(fill="both", expand=True)
+        self._add_tooltip(log_frame, "The log records each link, playlist item, retry, conversion, and error.")
 
     def _toggle_format(self):
         if self.format_var.get() == "video":
