@@ -115,14 +115,18 @@ You can also click **Cancel** at any point - whatever's been downloaded so far i
 and clicking **Download** again later with the same link will resume it rather than
 restart it.
 
-## 4. Updating yt-dlp later
+## 4. Checking libraries for updates
 
-YouTube changes things occasionally, which can break downloads until `yt-dlp` is updated.
-Use **Check yt-dlp updates** in the app to see whether a newer version is available. If
-downloads suddenly start failing, update the development environment:
+YouTube changes things occasionally, and a stale media library can break downloads.
+Use **Check library updates** in the Advanced section to audit the installed `yt-dlp`,
+Pillow, and PyInstaller versions against PyPI. The report also shows the active Python
+runtime and detected FFmpeg version. The audit is read-only: it does not install or
+replace anything, and FFmpeg is maintained separately from PyPI.
+
+If an update is reported, update the development environment:
 ```
 venv\Scripts\activate
-pip install --upgrade yt-dlp
+pip install --upgrade yt-dlp Pillow PyInstaller
 ```
 Then rebuild with `build.bat` on Windows or `build.sh` on macOS/Linux.
 
@@ -206,6 +210,11 @@ explicit permission to save, or that's licensed for reuse (e.g. Creative Commons
 please make sure you have the right to download whatever you use it on.
 
 ## Change log
+
+- **#016 — Clean preview loading and full library audit**: loading a new link now
+  immediately clears the previous title and thumbnail so stale preview content cannot
+  ghost underneath the loader. The update action now audits yt-dlp, Pillow, PyInstaller,
+  Python, and the selected FFmpeg executable in a detailed read-only report.
 
 - **#015 — Source-labelled HQ thumbnails**: added a platform source label to previews
   and a high-quality thumbnail download action that selects the largest thumbnail offered

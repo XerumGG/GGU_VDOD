@@ -18,6 +18,10 @@ import json
 import io
 import re
 import time
+try:
+    import importlib.metadata as importlib_metadata
+except ImportError:  # pragma: no cover - compatibility for older Python builds
+    import importlib_metadata
 import queue
 import socket
 import shutil
@@ -54,6 +58,12 @@ except ImportError:
 
 
 APP_NAME = "GGU_VDOD"
+
+UPDATE_COMPONENTS = (
+    ("yt-dlp", "yt_dlp", "runtime dependency"),
+    ("Pillow", "PIL", "runtime dependency"),
+    ("PyInstaller", "PyInstaller", "build dependency"),
+)
 
 def get_config_dir():
     """Return a per-user config directory on Windows, macOS, or Linux."""
@@ -539,6 +549,7 @@ class GGUVDODApp(tk.Tk):
         self._download_settings = None
         self._playlist_seen = set()
         self._last_update_check = config.get("last_update_check", 0)
+        self._update_check_running = False
         self._tooltips = []
         self._failed_count = 0
         self.scroll_speed_var = tk.IntVar(value=clamp_scroll_speed(config.get("scroll_speed", SCROLL_SPEED_DEFAULT)))
@@ -977,9 +988,9 @@ class GGUVDODApp(tk.Tk):
                                  fg=FG_MUTED, font=("Segoe UI", 9), wraplength=220)
         proxy_hint.grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
         self._add_tooltip(proxy_hint, "The proxy address should include its protocol and port.")
-        update_button = self._button(proxy_row, "Check yt-dlp updates", self._check_for_updates)
+        update_button = self._button(proxy_row, "Check library updates", self._check_for_updates)
         update_button.grid(row=0, column=2, sticky="e", padx=(10, 0))
-        self._add_tooltip(update_button, "Check whether a newer yt-dlp version is available.")
+        self._add_tooltip(update_button, "Check every bundled Python dependency and report the detected FFmpeg version.")
 
         subtitle_row = self._frame(options_frame, bg=BG_PANEL)
         subtitle_row.pack(fill="x", pady=(0, 8))
@@ -1525,14 +1536,11 @@ class GGUVDODApp(tk.Tk):
             self.after_cancel(self._preview_after_id)
             self._preview_after_id = None
         self._preview_token += 1
-        self._preview_thumbnail_url = ""
-        self.download_thumbnail_btn.configure(state="disabled")
-        self.preview_source_var.set("Source: loading preview...")
         urls = [u.strip() for u in self.url_text.get("1.0", "end").splitlines() if u.strip()]
         if not urls:
             self._clear_preview()
             return
-        self.preview_status_var.set("Waiting for typing to finish...")
+        self._set_preview_loading()
         token = self._preview_token
         self._preview_after_id = self.after(500, self._start_preview, urls[0], token)
 
@@ -1795,14 +1803,38 @@ class GGUVDODApp(tk.Tk):
             height=PREVIEW_PLACEHOLDER_ROWS,
         )
 
+    def _set_preview_loading(self):
+        """Remove stale preview content before a new metadata request begins."""
+        self.preview_title_var.set("Loading preview...")
+        self.preview_details_var.set("Fetching public title, source, and thumbnail...")
+        self.preview_status_var.set("Waiting for typing to finish...")
+        self.preview_source_var.set("Source: loading preview...")
+        self.preview_status_label.configure(fg=FG_MUTED)
+        self._preview_photo = None
+        self._preview_thumbnail_url = ""
+        self.download_thumbnail_btn.configure(state="disabled")
+        self.preview_image_label.configure(
+            image="", text="Loading thumbnail...",
+            width=PREVIEW_PLACEHOLDER_COLUMNS,
+            height=PREVIEW_PLACEHOLDER_ROWS,
+        )
+
     def _apply_preview_error(self, token, error):
         if token != self._preview_token:
             return
+        self.preview_title_var.set("Preview unavailable")
+        self.preview_details_var.set("No public metadata could be loaded for this link.")
         self.preview_status_var.set(f"Preview unavailable: {explain_download_error(error)}")
         self.preview_source_var.set("Source: unavailable")
+        self._preview_photo = None
         self._preview_thumbnail_url = ""
         self.download_thumbnail_btn.configure(state="disabled")
         self.preview_status_label.configure(fg=ACCENT)
+        self.preview_image_label.configure(
+            image="", text="Thumbnail unavailable",
+            width=PREVIEW_PLACEHOLDER_COLUMNS,
+            height=PREVIEW_PLACEHOLDER_ROWS,
+        )
 
     def _apply_preview(self, token, preview):
         if token != self._preview_token:
@@ -2112,8 +2144,14 @@ class GGUVDODApp(tk.Tk):
             self._enqueue(self.status_label.config, {"text": "Format inspection failed."})
 
     def _check_for_updates(self):
-        self.status_label.config(text="Checking yt-dlp version...")
-        threading.Thread(target=self._update_check_worker, daemon=True).start()
+        if self._update_check_running:
+            self.status_label.config(text="Library update check already running...")
+            return
+        self._update_check_running = True
+        self.status_label.config(text="Checking installed libraries...")
+        self.log("Checking installed library versions and detected FFmpeg...")
+        ffmpeg_path = self.ffmpeg_var.get().strip() or find_ffmpeg()
+        threading.Thread(target=self._update_check_worker, args=(ffmpeg_path,), daemon=True).start()
 
     def _auto_update_check(self):
         if time.time() - self._last_update_check >= 86400:
@@ -2123,27 +2161,150 @@ class GGUVDODApp(tk.Tk):
             save_config(settings)
             self._check_for_updates()
 
-    def _update_check_worker(self):
+    def _update_check_worker(self, ffmpeg_path):
+        report = self._collect_dependency_updates(ffmpeg_path)
+        self._enqueue(self._show_update_report, report)
+
+    @staticmethod
+    def _installed_component_version(distribution, module_name):
         try:
-            current = getattr(getattr(yt_dlp, "version", None), "__version__", "unknown")
-            request = urllib.request.Request(
-                "https://pypi.org/pypi/yt-dlp/json",
-                headers={"User-Agent": f"{APP_NAME}/{current}"},
+            return importlib_metadata.version(distribution)
+        except importlib_metadata.PackageNotFoundError:
+            try:
+                module = __import__(module_name, fromlist=["__version__", "version"])
+                version_module = getattr(module, "version", None)
+                return str(
+                    getattr(module, "__version__", None)
+                    or getattr(version_module, "__version__", None)
+                    or "unknown"
+                )
+            except Exception:
+                return "not installed"
+        except Exception:
+            return "unknown"
+
+    @staticmethod
+    def _detected_ffmpeg_version(ffmpeg_path):
+        if not ffmpeg_path or not os.path.isfile(ffmpeg_path):
+            return "not found"
+        try:
+            result = subprocess.run(
+                [ffmpeg_path, "-version"],
+                capture_output=True,
+                text=True,
+                timeout=6,
+                check=False,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-            with urllib.request.urlopen(request, timeout=8) as response:
-                latest = json.load(response)["info"]["version"]
-            current_key = self._version_key(current)
-            latest_key = self._version_key(latest)
-            if current_key < latest_key:
-                message = f"yt-dlp update available: {current} -> {latest}. Rebuild the app after updating."
-            else:
-                message = f"yt-dlp is up to date ({current})."
-            self._enqueue(self.log, message)
-            self._enqueue(self.status_label.config, {"text": message})
-        except Exception as e:
-            message = f"Could not check for yt-dlp updates: {e}"
-            self._enqueue(self.log, message)
-            self._enqueue(self.status_label.config, {"text": "Update check failed."})
+            first_line = (result.stdout or result.stderr or "").splitlines()[0]
+            match = re.search(r"ffmpeg version\s+([^\s]+)", first_line, flags=re.IGNORECASE)
+            return match.group(1) if match else "unknown"
+        except Exception:
+            return "unavailable"
+
+    def _collect_dependency_updates(self, ffmpeg_path):
+        rows = []
+        for distribution, module_name, scope in UPDATE_COMPONENTS:
+            current = self._installed_component_version(distribution, module_name)
+            latest = "—"
+            status = "Not installed" if current == "not installed" else "Unknown"
+            error_text = ""
+            if current not in {"not installed", "unknown"}:
+                try:
+                    package_name = urllib.parse.quote(distribution, safe="")
+                    request = urllib.request.Request(
+                        f"https://pypi.org/pypi/{package_name}/json",
+                        headers={"User-Agent": f"{APP_NAME}/{current}"},
+                    )
+                    with urllib.request.urlopen(request, timeout=8) as response:
+                        latest = str(json.load(response)["info"]["version"])
+                    if self._version_key(current) < self._version_key(latest):
+                        status = "Update available"
+                    else:
+                        status = "Up to date"
+                except Exception as error:
+                    status = "Could not check"
+                    error_text = str(error)
+            rows.append({
+                "name": distribution,
+                "scope": scope,
+                "current": current,
+                "latest": latest,
+                "status": status,
+                "error": error_text,
+            })
+
+        rows.append({
+            "name": "Python",
+            "scope": "runtime",
+            "current": f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+            "latest": "—",
+            "status": "Detected",
+            "error": "Python is supplied by the local environment or packaged runtime.",
+        })
+        ffmpeg_version = self._detected_ffmpeg_version(ffmpeg_path)
+        rows.append({
+            "name": "FFmpeg",
+            "scope": "external media engine",
+            "current": ffmpeg_version,
+            "latest": "—",
+            "status": "Detected" if ffmpeg_version not in {"not found", "unavailable", "unknown"} else "Unavailable",
+            "error": "FFmpeg updates are external to PyPI; this audit reports the executable currently selected by the app.",
+        })
+        return {"checked_at": time.strftime("%Y-%m-%d %H:%M:%S"), "rows": rows}
+
+    def _show_update_report(self, report):
+        self._update_check_running = False
+        self._last_update_check = time.time()
+        try:
+            save_config(self._settings_from_ui())
+        except Exception:
+            pass
+
+        dialog = tk.Toplevel(self)
+        dialog.title("GGU_VDOD Library Update Report")
+        dialog.configure(bg=BG)
+        dialog.transient(self)
+        dialog.geometry("900x620")
+
+        header = self._frame(dialog)
+        header.pack(fill="x", padx=24, pady=(20, 12))
+        self._label(header, text="Library update report", font=("Segoe UI", 22, "bold")).pack(anchor="w")
+        self._label(
+            header,
+            text=f"Checked {report['checked_at']}  •  No files were changed.",
+            fg=FG_MUTED,
+            font=("Segoe UI", 10),
+        ).pack(anchor="w", pady=(4, 0))
+
+        body = self._scrolled_text(dialog, BG_LOG, FG_LOG, state="disabled", wrap="word", font=("Consolas", 10))
+        body.pack(fill="both", expand=True, padx=24, pady=(0, 14))
+        lines = [
+            "Component                         Current                 Latest                  Result",
+            "-" * 96,
+        ]
+        for row in report["rows"]:
+            lines.append(
+                f"{row['name'] + ' (' + row['scope'] + ')':<34}"
+                f"{row['current']:<24}{row['latest']:<24}{row['status']}"
+            )
+            if row.get("error"):
+                lines.append(f"  Note: {row['error']}")
+            self.log(f"{row['name']}: {row['current']} | latest: {row['latest']} | {row['status']}")
+        self._replace_text_widget(body, "\n".join(lines))
+
+        footer = self._frame(dialog)
+        footer.pack(fill="x", padx=24, pady=(0, 18))
+        self._label(
+            footer,
+            text="An update is only reported here. Install it in the development environment, then rebuild the original executable.",
+            fg=FG_MUTED,
+            font=("Segoe UI", 9),
+            wraplength=650,
+            justify="left",
+        ).pack(side="left", fill="x", expand=True)
+        self._button(footer, "Close", dialog.destroy, primary=True).pack(side="right")
+        self.status_label.config(text="Library update audit complete.")
 
     @staticmethod
     def _version_key(version):
