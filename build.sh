@@ -19,7 +19,7 @@ PYI_MODE="--onefile"
 if [[ "${GGU_BUILD_MODE:-}" == "onedir" ]]; then
   PYI_MODE="--onedir"
 fi
-"$VENV_PYTHON" -m PyInstaller "$PYI_MODE" --name GGU_VDOD app.py
+"$VENV_PYTHON" -m PyInstaller "$PYI_MODE" --collect-data ttkbootstrap --name GGU_VDOD app.py
 
 if [[ -d "ffmpeg" ]]; then
   mkdir -p dist/ffmpeg

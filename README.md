@@ -99,6 +99,8 @@ and Python standard-library networking/threading tools.
 
 ## Changelog
 
+- **#022 - Fix packaged UI assets**: the build now includes ttkbootstrap fonts and image
+  assets, preventing the packaged executable from failing at startup.
 - **#021 - Modern ttkbootstrap UI**: replaced the old flat control layer with themed ttkbootstrap
   widgets while keeping the downloader and custom color system intact.
 - **#020 - Larger intuitive controls**: enlarged buttons, added hover/press/disabled feedback,
