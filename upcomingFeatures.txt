@@ -1,30 +1,27 @@
-UI improvements(Ongoing)
+UI improvements (Ongoing)
 
-Handling multiple video title and previews while pasted multiple different links or playlist link
+Handling multiple video title and previews while pasted multiple different links or playlist link #Feat
 
-Changeable key binds
+Complete Playlist mass download #Feat
 
-Addition and improvements in UI themes --> Dark theme, fainted theme, orange theme, green-hacker theme, Custom theme with save option( expose all the parameters of UI color elements)
+Changeable key binds more zoom-in-out (Ctrl+"+"/"-") #Navigan
 
+Ghost interface of Loading : Ghosting on thumbnail loader (ghosting is not done properly) #Internal
 
+History of video links.. #Feat
 
-Ghost interface of Loading : Ghosting on thumbnail loader (ghosting is not done properly)
+Show all supported languages #Feat
 
+Font panel for changing fonts #UI
 
-
-
-
-History of video links..
-
-Show all supported languages
-
-Font panel for changing fonts
-
+Have to  bypass DRM, private access, age checks, bot checks, or regional blocks.  #ANti-Feat
 
 -----------------------------------------------------------------------------------------------------
 
-Video thumbnail download : mention the source such as youtube/x/facebook and download the thumbnail in high quality in Thumbnail Preview section (Done)
+Video thumbnail download : mention the source such as youtube/x/facebook and download the thumbnail in high quality in Thumbnail Preview section #Done
 
-Update option : Checking every library is up-to-date or not ?? (Done)
+Update option : Checking every library is up-to-date or not ?? #Done
 
-Multiple video(.mp4, .mkv, .mov and so on...) and audio(.mp3, .wav etc...) formats support and inter conversion (Done) 
+Multiple video(.mp4, .mkv, .mov and so on...) and audio(.mp3, .wav etc...) formats support and inter conversion #Done
+
+Addition and improvements in UI themes --> Dark theme, fainted theme, orange theme, green-hacker theme, Custom theme with save option( expose all the parameters of UI color elements) #Done

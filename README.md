@@ -1,21 +1,17 @@
 # GGU_VDOD
 
-Simple Windows media downloader powered by yt-dlp and FFmpeg.
+Simple Windows media downloader powered by yt-dlp and FFmpeg; created by GG Uranium
 
 ## What it does
 
-- Video downloads use **MP4 by default**.
-- You can change the video format to MKV, MOV, AVI, WebM, FLV, MPEG, TS, M4V, OGV, or 3GP.
-- Audio-only downloads support MP3, WAV, AAC, FLAC, OGG, Opus, M4A, WMA, AIFF, and ALAC.
+- **Video, Audio, Thumbnail download with all types of fine-tuned controls and quality range**.
+- Media in **single source or Multiple sources or Playlist** can be downloaded all together.
+- Supported video download formats : **MP4, MKV, MOV, AVI, WebM, FLV, MPEG, TS, M4V, OGV, or 3GP**.
+- Supported audio download formats : **MP3, WAV, AAC, FLAC, OGG, Opus, M4A, WMA, AIFF, and ALAC**.
 - Choose quality, subtitles, metadata, thumbnail embedding, cookies, proxy, and filename pattern.
-- Preview the title, source, duration, resolution, and thumbnail before downloading.
-- Downloads resume after connection loss. The footer shows speed, progress, transfer size, and ETA.
-- Help, About, Preferences, undo/redo, context menus, and a scroll-speed setting are included.
-- Themes include a pitch-black Dark default, Fainted, Orange, Green Hacker, and Custom. Custom exposes every UI color
-  and saves the palette for the next launch.
-- Modern buttons, fields, selectors, checkboxes, progress bars, and panels use ttkbootstrap.
-- Buttons and checkboxes use larger hit areas, clear hover/press feedback, and colorful selected
-  indicators that return to a blank state when unchecked.
+- Thumbnail downlaod with title, source, duration, resolution, and preview before downloading.
+- Downloads resume after connection loss.
+
 
 Use this only for media you own or are allowed to download. Follow site rules and local law.
 
@@ -95,8 +91,9 @@ content sites. Availability changes and some sites need cookies, proxy, or age v
 
 ## Credits
 
-Developed by **XerumGG** using Python, Tkinter/ttk, yt-dlp, FFmpeg, Pillow, PyInstaller,
-and Python standard-library networking/threading tools.
+Developed by **GG Uranium** .
+Tools used :  Python, Tkinter/ttk, yt-dlp, FFmpeg, Pillow, PyInstaller,
+and Python standard-library networking/threading.
 
 ## Changelog
 
@@ -120,6 +117,5 @@ and Python standard-library networking/threading tools.
 
 - **#018 — MP4 default with format choices**: restored all video format choices while
   keeping MP4 as the default. Shortened this README and added simple one-line commands.
-- **#017 — Clean video merging**: MP4 merging and matching sidecar cleanup were added.
-- **#016 — Preview loading and library audit**: stale preview ghosting was fixed and the
-  update report was expanded beyond yt-dlp.
+
+
