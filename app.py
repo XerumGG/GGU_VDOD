@@ -21,7 +21,9 @@ import time
 import queue
 import socket
 import shutil
+import html
 import subprocess
+import urllib.parse
 import urllib.request
 import traceback
 import threading
@@ -742,6 +744,7 @@ class GGUVDODApp(tk.Tk):
             preview_row, text="No preview", width=PREVIEW_PLACEHOLDER_COLUMNS,
             height=PREVIEW_PLACEHOLDER_ROWS,
             bg=BG_ENTRY, fg=FG_MUTED, relief="flat", font=("Segoe UI", 10),
+            highlightthickness=1, highlightbackground=BORDER,
             anchor="center",
         )
         self.preview_image_label.pack(side="left", padx=(0, 16))
@@ -762,6 +765,7 @@ class GGUVDODApp(tk.Tk):
                                      bg=BG_PANEL, fg=FG_MUTED, anchor="w",
                                      font=("Segoe UI", 9))
         preview_status.pack(fill="x", pady=(10, 0))
+        self.preview_status_label = preview_status
 
         # Format + quality
         fmt_frame = self._labelframe(content, "Format", padx=16, pady=12)
@@ -804,7 +808,8 @@ class GGUVDODApp(tk.Tk):
         # Keep the original single-page interface. Advanced settings are tucked
         # behind one compact tab-style toggle instead of splitting the app into
         # Basic and Advanced pages.
-        advanced_toggle = self._button(content, "Advanced  [+]", self._toggle_advanced_panel)
+        advanced_toggle = self._button(content, "Advanced  [+]", self._toggle_advanced_panel,
+                                       anchor="w", padx=14)
         advanced_toggle.pack(fill="x", padx=24, pady=(4, 4), ipady=4)
         self._advanced_toggle = advanced_toggle
         self._add_tooltip(advanced_toggle, "Show or hide ffmpeg, cookies, proxy, subtitles, metadata, thumbnails, and exact-format options.")
@@ -1393,30 +1398,29 @@ class GGUVDODApp(tk.Tk):
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=False)
         except Exception as error:
-            if browser == "None" or not _looks_like_cookie_database_error(error):
-                self._enqueue(self._apply_preview_error, token, str(error))
-                return
-            options.pop("cookiesfrombrowser", None)
-            try:
-                with yt_dlp.YoutubeDL(options) as ydl:
-                    info = ydl.extract_info(url, download=False)
-            except Exception as retry_error:
-                self._enqueue(self._apply_preview_error, token, str(retry_error))
+            final_error = error
+            if browser != "None" and _looks_like_cookie_database_error(error):
+                options.pop("cookiesfrombrowser", None)
+                try:
+                    with yt_dlp.YoutubeDL(options) as ydl:
+                        info = ydl.extract_info(url, download=False)
+                except Exception as retry_error:
+                    final_error = retry_error
+                else:
+                    final_error = None
+            if final_error is not None:
+                public_preview = self._get_public_title_preview(url)
+                if public_preview:
+                    self._enqueue(self._apply_preview, token, public_preview)
+                else:
+                    self._enqueue(self._apply_preview_error, token, str(final_error))
                 return
 
         if info.get("_type") == "playlist":
             entries = info.get("entries") or []
             info = next((entry for entry in entries if entry), info)
 
-        thumbnail_data = None
-        thumbnail_url = info.get("thumbnail")
-        if thumbnail_url:
-            try:
-                request = urllib.request.Request(thumbnail_url, headers={"User-Agent": APP_NAME})
-                with urllib.request.urlopen(request, timeout=8) as response:
-                    thumbnail_data = response.read(4 * 1024 * 1024)
-            except Exception:
-                thumbnail_data = None
+        thumbnail_data = self._download_preview_thumbnail(info.get("thumbnail"))
 
         height = info.get("height")
         abr = info.get("abr")
@@ -1436,6 +1440,77 @@ class GGUVDODApp(tk.Tk):
         self._enqueue(self._apply_preview, token, preview)
 
     @staticmethod
+    def _download_preview_thumbnail(thumbnail_url):
+        if not thumbnail_url:
+            return None
+        try:
+            request = urllib.request.Request(thumbnail_url, headers={"User-Agent": APP_NAME})
+            with urllib.request.urlopen(request, timeout=8) as response:
+                return response.read(4 * 1024 * 1024)
+        except Exception:
+            return None
+
+    @classmethod
+    def _get_public_title_preview(cls, url):
+        """Read only public page metadata; this never attempts to bypass access checks."""
+        title = ""
+        uploader = ""
+        thumbnail_url = ""
+        try:
+            host = urllib.parse.urlsplit(url).netloc.casefold().split(":")[0]
+            if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}:
+                oembed_url = "https://www.youtube.com/oembed?" + urllib.parse.urlencode({
+                    "url": url,
+                    "format": "json",
+                })
+                request = urllib.request.Request(oembed_url, headers={"User-Agent": APP_NAME})
+                with urllib.request.urlopen(request, timeout=8) as response:
+                    oembed = json.loads(response.read(512 * 1024).decode("utf-8", errors="replace"))
+                title = str(oembed.get("title") or "").strip()
+                uploader = str(oembed.get("author_name") or "").strip()
+                thumbnail_url = str(oembed.get("thumbnail_url") or "").strip()
+        except Exception:
+            pass
+
+        if not title:
+            try:
+                request = urllib.request.Request(url, headers={
+                    "User-Agent": f"Mozilla/5.0 ({APP_NAME} public title preview)",
+                    "Accept": "text/html,application/xhtml+xml",
+                })
+                with urllib.request.urlopen(request, timeout=8) as response:
+                    page = response.read(1024 * 1024).decode("utf-8", errors="replace")
+                metadata = {}
+                for tag in re.findall(r"<meta\b[^>]*>", page, flags=re.IGNORECASE):
+                    attributes = {
+                        name.casefold(): value
+                        for name, value in re.findall(r'''([:\w-]+)\s*=\s*["']([^"']*)["']''', tag)
+                    }
+                    key = (attributes.get("property") or attributes.get("name") or "").casefold()
+                    value = attributes.get("content") or ""
+                    if key and value:
+                        metadata[key] = html.unescape(value).strip()
+                title = metadata.get("og:title") or metadata.get("twitter:title") or ""
+                uploader = metadata.get("og:site_name") or ""
+                thumbnail_url = metadata.get("og:image") or metadata.get("twitter:image") or thumbnail_url
+                if not title:
+                    match = re.search(r"<title[^>]*>(.*?)</title>", page, flags=re.IGNORECASE | re.DOTALL)
+                    if match:
+                        title = html.unescape(re.sub(r"<[^>]+>", "", match.group(1))).strip()
+            except Exception:
+                return None
+
+        title = re.sub(r"\s+", " ", title).strip()
+        if not title:
+            return None
+        return {
+            "title": title,
+            "details": "  -  ".join(filter(None, [uploader, "Public page metadata only"])),
+            "thumbnail_data": cls._download_preview_thumbnail(thumbnail_url),
+            "status": "Title preview only - sign-in or age verification may be required to download.",
+        }
+
+    @staticmethod
     def _format_duration(seconds):
         if not seconds:
             return ""
@@ -1451,6 +1526,7 @@ class GGUVDODApp(tk.Tk):
         self.preview_title_var.set("Paste a link to preview it")
         self.preview_details_var.set("Title, thumbnail, duration, uploader, and platform will appear here.")
         self.preview_status_var.set("Waiting for a link")
+        self.preview_status_label.configure(fg=FG_MUTED)
         self._preview_photo = None
         self.preview_image_label.configure(
             image="", text="No preview",
@@ -1462,13 +1538,16 @@ class GGUVDODApp(tk.Tk):
         if token != self._preview_token:
             return
         self.preview_status_var.set(f"Preview unavailable: {explain_download_error(error)}")
+        self.preview_status_label.configure(fg=ACCENT)
 
     def _apply_preview(self, token, preview):
         if token != self._preview_token:
             return
         self.preview_title_var.set(preview["title"])
         self.preview_details_var.set(preview["details"])
-        self.preview_status_var.set("Preview ready")
+        preview_status = preview.get("status", "Preview ready")
+        self.preview_status_var.set(preview_status)
+        self.preview_status_label.configure(fg=WARNING if preview.get("status") else SUCCESS)
         thumbnail_data = preview.get("thumbnail_data")
         if thumbnail_data and Image is not None and ImageTk is not None:
             try:

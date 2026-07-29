@@ -156,6 +156,12 @@ After you paste the first link, GGU_VDOD fetches a lightweight preview containin
 title, thumbnail, uploader, duration, platform, and available resolution/bitrate when the
 site exposes that metadata. Preview fetching never starts a download.
 
+If a platform blocks the full preview behind sign-in or age verification, GGU_VDOD makes
+a separate best-effort attempt to show only public page metadata such as the title,
+uploader, and thumbnail. It does not bypass account, cookie, age, or regional access
+restrictions; authorized browser cookies or a `cookies.txt` file are still required for
+restricted downloads.
+
 The app uses the extractor set bundled with its installed yt-dlp version. Open
 **Help → Supported platforms** to search the complete live extractor list for that build.
 Common categories include YouTube, Vimeo, TikTok, Instagram, Facebook, X/Twitter, Reddit,
@@ -190,9 +196,10 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
-- **#013 — Preserve bundled FFmpeg**: restored FFmpeg beside the release executable,
-  added a local preserved source folder for normal builds, and excluded that binary
-  folder from Git tracking.
+- **#013 — Preserve FFmpeg and restricted previews**: restored FFmpeg beside the
+  release executable, preserved a local build-source copy outside Git, and added a
+  clearly labeled public title/uploader/thumbnail fallback when full metadata is blocked
+  by sign-in or age verification. The fallback never bypasses access restrictions.
 - **#012 — Fix preview and dialog boundaries**: corrected the About/Help/Preferences
   layout crash, constrained the preview placeholder to a real compact card, and reflowed
   Advanced controls so browse and update buttons stay visible.
