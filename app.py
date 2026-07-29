@@ -547,9 +547,11 @@ class GGUVDODApp(tk.Tk):
         self.preview_title_var = tk.StringVar(value="Paste a link to preview it")
         self.preview_details_var = tk.StringVar(value="Title, thumbnail, duration, uploader, and platform will appear here.")
         self.preview_status_var = tk.StringVar(value="Waiting for a link")
+        self.preview_source_var = tk.StringVar(value="Source: waiting for a link")
         self._preview_after_id = None
         self._preview_token = 0
         self._preview_photo = None
+        self._preview_thumbnail_url = ""
         self._supported_platform_lines = None
         self.download_status_var = tk.StringVar(value="Ready")
         self.download_rate_var = tk.StringVar(value="0 B/s")
@@ -835,11 +837,22 @@ class GGUVDODApp(tk.Tk):
                                     font=("Segoe UI", 12, "bold"))
         preview_title.pack(fill="x", pady=(4, 8))
         self._add_tooltip(preview_title, "The title and metadata are read from the first link in the box.")
+        preview_source = self._label(preview_text, textvariable=self.preview_source_var,
+                                     bg=BG_PANEL, fg=ACCENT, anchor="w",
+                                     font=("Segoe UI", 10, "bold"))
+        preview_source.pack(fill="x", pady=(0, 6))
         preview_details = self._label(preview_text, textvariable=self.preview_details_var,
                                       bg=BG_PANEL, fg=FG_MUTED, anchor="nw",
                                       justify="left", wraplength=640,
                                       font=("Segoe UI", 9))
         preview_details.pack(fill="x")
+        preview_actions = self._frame(preview_text, bg=BG_PANEL)
+        preview_actions.pack(fill="x", pady=(10, 0))
+        self.download_thumbnail_btn = self._button(
+            preview_actions, "Download thumbnail (HQ)", self._download_preview_thumbnail_file, state="disabled"
+        )
+        self.download_thumbnail_btn.pack(side="left")
+        self._add_tooltip(self.download_thumbnail_btn, "Save the highest-quality platform thumbnail available for this link.")
         preview_status = self._label(preview_text, textvariable=self.preview_status_var,
                                      bg=BG_PANEL, fg=FG_MUTED, anchor="w",
                                      font=("Segoe UI", 9))
@@ -1512,6 +1525,9 @@ class GGUVDODApp(tk.Tk):
             self.after_cancel(self._preview_after_id)
             self._preview_after_id = None
         self._preview_token += 1
+        self._preview_thumbnail_url = ""
+        self.download_thumbnail_btn.configure(state="disabled")
+        self.preview_source_var.set("Source: loading preview...")
         urls = [u.strip() for u in self.url_text.get("1.0", "end").splitlines() if u.strip()]
         if not urls:
             self._clear_preview()
@@ -1568,7 +1584,8 @@ class GGUVDODApp(tk.Tk):
             entries = info.get("entries") or []
             info = next((entry for entry in entries if entry), info)
 
-        thumbnail_data = self._download_preview_thumbnail(info.get("thumbnail"))
+        thumbnail_url = self._best_thumbnail_url(info)
+        thumbnail_data = self._download_preview_thumbnail(thumbnail_url)
 
         height = info.get("height")
         abr = info.get("abr")
@@ -1578,25 +1595,114 @@ class GGUVDODApp(tk.Tk):
         preview = {
             "title": info.get("title") or "Untitled media",
             "details": "  •  ".join(filter(None, [
-                info.get("extractor_key") or info.get("extractor"),
                 info.get("uploader") or info.get("channel"),
                 self._format_duration(info.get("duration")),
                 resolution,
             ])) or "Metadata available",
             "thumbnail_data": thumbnail_data,
+            "thumbnail_url": thumbnail_url,
+            "source": self._friendly_source_name(info.get("extractor_key") or info.get("extractor")),
         }
         self._enqueue(self._apply_preview, token, preview)
 
     @staticmethod
-    def _download_preview_thumbnail(thumbnail_url):
+    def _best_thumbnail_url(info):
+        thumbnails = [item for item in (info.get("thumbnails") or []) if item.get("url")]
+        if thumbnails:
+            def size_score(item):
+                try:
+                    width = int(item.get("width") or 0)
+                    height = int(item.get("height") or 0)
+                    preference = float(item.get("preference") or 0)
+                except (TypeError, ValueError):
+                    width = height = preference = 0
+                return width * height, width, height, preference
+            return max(thumbnails, key=size_score).get("url")
+        return info.get("thumbnail") or ""
+
+    @staticmethod
+    def _download_preview_thumbnail(thumbnail_url, max_bytes=12 * 1024 * 1024):
         if not thumbnail_url:
             return None
         try:
             request = urllib.request.Request(thumbnail_url, headers={"User-Agent": APP_NAME})
             with urllib.request.urlopen(request, timeout=8) as response:
-                return response.read(4 * 1024 * 1024)
+                return response.read(max_bytes)
         except Exception:
             return None
+
+    @staticmethod
+    def _friendly_source_name(source):
+        normalized = (source or "").casefold()
+        source_names = {
+            "youtube": "YouTube", "twitter": "X (Twitter)", "facebook": "Facebook",
+            "instagram": "Instagram", "tiktok": "TikTok", "vimeo": "Vimeo", "twitch": "Twitch",
+            "reddit": "Reddit", "dailymotion": "Dailymotion", "soundcloud": "SoundCloud",
+        }
+        for key, label in source_names.items():
+            if key in normalized:
+                return label
+        return re.sub(r"[_-]+", " ", source or "Unknown source").strip().title()
+
+    def _download_preview_thumbnail_file(self):
+        thumbnail_url = self._preview_thumbnail_url
+        if not thumbnail_url:
+            messagebox.showwarning("No thumbnail", "A downloadable high-quality thumbnail is not available for this link.")
+            return
+        url_path = urllib.parse.urlsplit(thumbnail_url).path
+        extension = os.path.splitext(url_path)[1].lower()
+        if extension not in {".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp"}:
+            extension = ".jpg"
+        safe_title = re.sub(r'[<>:"/\\|?*]+', "_", self.preview_title_var.get()).strip(" .") or "thumbnail"
+        destination = filedialog.asksaveasfilename(
+            title="Save high-quality thumbnail",
+            initialdir=self.output_var.get().strip() or get_default_output_dir(),
+            initialfile=f"{safe_title} [thumbnail]{extension}",
+            defaultextension=extension,
+            filetypes=[("Image files", "*.jpg *.jpeg *.png *.webp *.gif *.avif *.bmp"), ("All files", "*.*")],
+        )
+        if not destination:
+            return
+        self.download_thumbnail_btn.configure(state="disabled")
+        self.preview_status_var.set("Downloading high-quality thumbnail...")
+        self.preview_status_label.configure(fg=FG_MUTED)
+        threading.Thread(
+            target=self._thumbnail_download_worker,
+            args=(thumbnail_url, destination),
+            daemon=True,
+        ).start()
+
+    def _thumbnail_download_worker(self, thumbnail_url, destination):
+        partial_path = destination + ".part"
+        try:
+            request = urllib.request.Request(thumbnail_url, headers={"User-Agent": APP_NAME})
+            with urllib.request.urlopen(request, timeout=20) as response, open(partial_path, "wb") as output:
+                while True:
+                    chunk = response.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+            os.replace(partial_path, destination)
+        except Exception as error:
+            try:
+                if os.path.isfile(partial_path):
+                    os.remove(partial_path)
+            except OSError:
+                pass
+            self._enqueue(self._thumbnail_download_failed, str(error))
+            return
+        self._enqueue(self._thumbnail_download_complete, destination)
+
+    def _thumbnail_download_complete(self, destination):
+        self.preview_status_var.set(f"High-quality thumbnail saved: {os.path.basename(destination)}")
+        self.preview_status_label.configure(fg=SUCCESS)
+        self.download_thumbnail_btn.configure(state="normal" if self._preview_thumbnail_url else "disabled")
+        self.log(f"High-quality thumbnail saved: {destination}")
+
+    def _thumbnail_download_failed(self, error):
+        self.preview_status_var.set(f"Thumbnail download failed: {error}")
+        self.preview_status_label.configure(fg=ACCENT)
+        self.download_thumbnail_btn.configure(state="normal" if self._preview_thumbnail_url else "disabled")
 
     @classmethod
     def _get_public_title_preview(cls, url):
@@ -1604,8 +1710,10 @@ class GGUVDODApp(tk.Tk):
         title = ""
         uploader = ""
         thumbnail_url = ""
+        source = ""
         try:
             host = urllib.parse.urlsplit(url).netloc.casefold().split(":")[0]
+            source = host.removeprefix("www.")
             if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}:
                 oembed_url = "https://www.youtube.com/oembed?" + urllib.parse.urlencode({
                     "url": url,
@@ -1655,6 +1763,8 @@ class GGUVDODApp(tk.Tk):
             "title": title,
             "details": "  -  ".join(filter(None, [uploader, "Public page metadata only"])),
             "thumbnail_data": cls._download_preview_thumbnail(thumbnail_url),
+            "thumbnail_url": thumbnail_url,
+            "source": cls._friendly_source_name(source),
             "status": "Title preview only - sign-in or age verification may be required to download.",
         }
 
@@ -1674,8 +1784,11 @@ class GGUVDODApp(tk.Tk):
         self.preview_title_var.set("Paste a link to preview it")
         self.preview_details_var.set("Title, thumbnail, duration, uploader, and platform will appear here.")
         self.preview_status_var.set("Waiting for a link")
+        self.preview_source_var.set("Source: waiting for a link")
         self.preview_status_label.configure(fg=FG_MUTED)
         self._preview_photo = None
+        self._preview_thumbnail_url = ""
+        self.download_thumbnail_btn.configure(state="disabled")
         self.preview_image_label.configure(
             image="", text="No preview",
             width=PREVIEW_PLACEHOLDER_COLUMNS,
@@ -1686,6 +1799,9 @@ class GGUVDODApp(tk.Tk):
         if token != self._preview_token:
             return
         self.preview_status_var.set(f"Preview unavailable: {explain_download_error(error)}")
+        self.preview_source_var.set("Source: unavailable")
+        self._preview_thumbnail_url = ""
+        self.download_thumbnail_btn.configure(state="disabled")
         self.preview_status_label.configure(fg=ACCENT)
 
     def _apply_preview(self, token, preview):
@@ -1693,9 +1809,12 @@ class GGUVDODApp(tk.Tk):
             return
         self.preview_title_var.set(preview["title"])
         self.preview_details_var.set(preview["details"])
+        self.preview_source_var.set(f"Source: {preview.get('source') or 'Unknown source'}")
         preview_status = preview.get("status", "Preview ready")
         self.preview_status_var.set(preview_status)
         self.preview_status_label.configure(fg=WARNING if preview.get("status") else SUCCESS)
+        self._preview_thumbnail_url = preview.get("thumbnail_url") or ""
+        self.download_thumbnail_btn.configure(state="normal" if self._preview_thumbnail_url else "disabled")
         thumbnail_data = preview.get("thumbnail_data")
         if thumbnail_data and Image is not None and ImageTk is not None:
             try:

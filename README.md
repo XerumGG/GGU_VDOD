@@ -163,6 +163,10 @@ After you paste the first link, GGU_VDOD fetches a lightweight preview containin
 title, thumbnail, uploader, duration, platform, and available resolution/bitrate when the
 site exposes that metadata. Preview fetching never starts a download.
 
+The preview names the source clearly (for example, **YouTube**, **X**, or **Facebook**).
+Use **Download thumbnail (HQ)** to save the largest platform-provided thumbnail; the
+small preview card stays lightweight while the saved image keeps its original quality.
+
 If a platform blocks the full preview behind sign-in or age verification, GGU_VDOD makes
 a separate best-effort attempt to show only public page metadata such as the title,
 uploader, and thumbnail. It does not bypass account, cookie, age, or regional access
@@ -203,6 +207,9 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
+- **#015 — Source-labelled HQ thumbnails**: added a platform source label to previews
+  and a high-quality thumbnail download action that selects the largest thumbnail offered
+  by the source.
 - **#014 — Comprehensive local media conversion**: added broad video and audio output
   formats, local FFmpeg video-to-video/audio-to-audio/video-to-audio conversion, and
   Advanced controls for codec, bitrate, resolution, frame rate, audio, compression,
