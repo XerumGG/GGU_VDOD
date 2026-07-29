@@ -149,10 +149,10 @@ Then rebuild with `build.bat` on Windows or `build.sh` on macOS/Linux.
   content the user is authorized to access.
 - **Subtitles and media metadata**: subtitle downloads/embedding plus optional metadata
   and thumbnail embedding are available.
-- **Comprehensive local media conversion**: choose MP4, MKV, MOV, AVI, WebM, FLV,
-  MPEG, TS, M4V, OGV, or 3GP for video; or MP3, WAV, AAC, FLAC, OGG, Opus, M4A,
-  WMA, AIFF, or ALAC for audio. FFmpeg converts locally after download, supporting
-  video-to-video, audio-to-audio, and video-to-audio workflows.
+- **Clean MP4 video output**: video downloads merge and finish as one MP4 file. If
+  subtitles or thumbnails are enabled, temporary `.vtt`, image, and intermediate media
+  files are cleaned after successful processing. Audio-only mode still supports MP3, WAV,
+  AAC, FLAC, OGG, Opus, M4A, WMA, AIFF, and ALAC through local FFmpeg conversion.
 - **Advanced conversion controls**: the Advanced panel exposes video codec, video
   bitrate, output resolution, frame rate, sample rate, channel count, compression level,
   subtitle/metadata options, and a custom yt-dlp filename pattern.
@@ -210,6 +210,10 @@ explicit permission to save, or that's licensed for reuse (e.g. Creative Commons
 please make sure you have the right to download whatever you use it on.
 
 ## Change log
+
+- **#017 — MP4-only video output**: video downloads now merge directly to MP4 and clean
+  matching MKV/intermediate and subtitle sidecar files after success, leaving the final
+  MP4 as the only video file from that download.
 
 - **#016 — Clean preview loading and full library audit**: loading a new link now
   immediately clears the previous title and thumbnail so stale preview content cannot

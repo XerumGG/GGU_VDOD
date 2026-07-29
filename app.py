@@ -89,8 +89,15 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 VIDEO_QUALITIES = ["Best available", "2160p (4K)", "1440p (2K)", "1080p", "720p", "480p", "360p"]
 AUDIO_QUALITIES = ["320 kbps (Best)", "256 kbps", "192 kbps", "128 kbps"]
-VIDEO_OUTPUT_FORMATS = ["MP4", "MKV", "MOV", "AVI", "WebM", "FLV", "MPEG", "TS", "M4V", "OGV", "3GP"]
+# Video downloads intentionally finish as one MP4 file. Audio-only downloads
+# still expose their separate audio format choices below.
+VIDEO_OUTPUT_FORMATS = ["MP4"]
 AUDIO_OUTPUT_FORMATS = ["MP3", "WAV", "AAC", "FLAC", "OGG", "Opus", "M4A", "WMA", "AIFF", "ALAC"]
+VIDEO_SIDECAR_EXTENSIONS = {
+    ".mkv", ".webm", ".flv", ".ts", ".m4v", ".ogv", ".3gp",
+    ".vtt", ".srt", ".ass", ".lrc", ".json", ".description", ".txt",
+    ".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".part",
+}
 VIDEO_FORMAT_EXTENSIONS = {
     "MP4": "mp4", "MKV": "mkv", "MOV": "mov", "AVI": "avi", "WebM": "webm",
     "FLV": "flv", "MPEG": "mpeg", "TS": "ts", "M4V": "m4v", "OGV": "ogv", "3GP": "3gp",
@@ -896,14 +903,14 @@ class GGUVDODApp(tk.Tk):
 
         output_format_label = self._label(fmt_frame, text="Save as:", bg=BG_PANEL)
         output_format_label.grid(row=2, column=0, sticky="w", pady=(12, 0))
-        self._add_tooltip(output_format_label, "Choose the final video container or audio codec. FFmpeg performs the conversion after downloading.")
+        self._add_tooltip(output_format_label, "Video downloads finish as one MP4 file. Audio-only downloads can use the audio formats listed here.")
         initial_output_formats = VIDEO_OUTPUT_FORMATS if self.format_var.get() == "video" else AUDIO_OUTPUT_FORMATS
         self.output_format_combo = ttk.Combobox(
             fmt_frame, textvariable=self.output_format_var, values=initial_output_formats,
             state="readonly", width=22, font=("Segoe UI", 11),
         )
         self.output_format_combo.grid(row=2, column=1, sticky="w", pady=(12, 0))
-        self._add_tooltip(self.output_format_combo, "Video: MP4, MKV, MOV, WebM, or AVI. Audio: MP3, WAV, FLAC, M4A, AAC, or Opus.")
+        self._add_tooltip(self.output_format_combo, "Video: MP4 only. Audio-only mode supports MP3, WAV, FLAC, M4A, AAC, Opus, and other audio formats.")
 
         playlist_check = self._check(fmt_frame, text="Only download this video (ignore playlist)",
                                      variable=self.playlist_var)
@@ -1992,6 +1999,43 @@ class GGUVDODApp(tk.Tk):
         return args
 
     @staticmethod
+    def _clean_video_sidecars(output_dir, started_at):
+        """Keep the finished MP4 and remove artifacts created for that video."""
+        try:
+            names = os.listdir(output_dir)
+        except OSError:
+            return 0
+
+        finished_mp4s = []
+        for name in names:
+            path = os.path.join(output_dir, name)
+            if not os.path.isfile(path) or not name.casefold().endswith(".mp4"):
+                continue
+            try:
+                if os.path.getmtime(path) >= started_at - 2:
+                    finished_mp4s.append(name)
+            except OSError:
+                continue
+
+        removed = 0
+        for final_name in finished_mp4s:
+            stem = os.path.splitext(final_name)[0]
+            prefix = stem + "."
+            for name in names:
+                if name == final_name or not name.startswith(prefix):
+                    continue
+                extension = os.path.splitext(name)[1].casefold()
+                if extension not in VIDEO_SIDECAR_EXTENSIONS:
+                    continue
+                path = os.path.join(output_dir, name)
+                try:
+                    os.remove(path)
+                    removed += 1
+                except OSError:
+                    pass
+        return removed
+
+    @staticmethod
     def _output_template(settings, output_dir, target_ext):
         pattern = settings.get("filename_pattern", "").strip()
         if not pattern:
@@ -2542,9 +2586,9 @@ class GGUVDODApp(tk.Tk):
             else:
                 ydl_opts["format"] = "bestvideo+bestaudio/best"
         if fmt == "video" and detected_ffmpeg:
-            # MKV is a reliable temporary merge container; the local post-processor
-            # then produces the exact requested final format.
-            ydl_opts["merge_output_format"] = "mkv"
+            # Merge directly into MP4 so the download never leaves an MKV
+            # intermediate beside the final file.
+            ydl_opts["merge_output_format"] = "mp4"
         elif fmt == "audio":
             if not settings["format_id"]:
                 ydl_opts["format"] = "bestaudio/best"
@@ -2553,6 +2597,7 @@ class GGUVDODApp(tk.Tk):
         if not is_internet_up():
             raise _ConnectionLostError("No internet connection")
 
+        download_started_at = time.time()
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             if detected_ffmpeg and fmt == "video":
                 ydl.add_post_processor(LocalMediaConvertorPP(
@@ -2569,6 +2614,10 @@ class GGUVDODApp(tk.Tk):
                     fallback_args=self._audio_fallback_args(target_ext),
                 ))
             ydl.download([url])
+        if fmt == "video":
+            removed = self._clean_video_sidecars(output_dir, download_started_at)
+            if removed:
+                self._enqueue(self.log, f"Removed {removed} temporary/subtitle sidecar file(s); kept the MP4 only.")
 
     def _on_progress(self, d, idx, total):
         status = d.get("status")
