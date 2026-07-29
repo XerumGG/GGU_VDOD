@@ -12,4 +12,4 @@ Ghost interface of Loading : Ghosting on thumbnail loader
 
 Update option : Checking every library is up-to-date or not ??
 
-Video thumbnail download : mention the source such as youtube/x/facebook and download the thumbnail in high quality
+Video thumbnail download : mention the source such as youtube/x/facebook and download the thumbnail in high quality in Thumbnail Preview section 
