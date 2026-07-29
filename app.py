@@ -32,7 +32,7 @@ import urllib.request
 import traceback
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
+from tkinter import ttk, filedialog, messagebox, scrolledtext, colorchooser
 
 try:
     import yt_dlp
@@ -144,7 +144,7 @@ CONNECTIVITY_ENDPOINTS = (
     ("www.youtube.com", 443),
 )
 
-# ---------------------------------------------------------- Dark theme -----
+# -------------------------------------------------------------- themes -----
 BG = "#1e1e1e"
 BG_PANEL = "#252526"
 BG_ENTRY = "#2d2d2e"
@@ -157,6 +157,80 @@ ACCENT = "#e5484d"
 ACCENT_ACTIVE = "#c53f43"
 SUCCESS = "#57c26a"
 WARNING = "#e5b84d"
+STATUS_BAR_BG = "#171717"
+STATUS_BAR_FG = "#e6e6e6"
+BUTTON_FG = "#ffffff"
+TOOLTIP_BG = "#101010"
+TOOLTIP_FG = "#f4f4f4"
+TOOLTIP_BORDER = "#555555"
+SELECTION_BG = ACCENT
+
+THEME_COLOR_FIELDS = (
+    ("window_bg", "Window background"),
+    ("panel_bg", "Panel background"),
+    ("entry_bg", "Input background"),
+    ("log_bg", "Log background"),
+    ("text_fg", "Main text"),
+    ("muted_fg", "Muted text"),
+    ("log_fg", "Log text"),
+    ("border", "Borders"),
+    ("accent", "Accent"),
+    ("accent_active", "Accent hover"),
+    ("success", "Success text"),
+    ("warning", "Warning text"),
+    ("status_bar_bg", "Status bar background"),
+    ("status_bar_fg", "Status bar text"),
+    ("button_fg", "Button text"),
+    ("tooltip_bg", "Tooltip background"),
+    ("tooltip_fg", "Tooltip text"),
+    ("tooltip_border", "Tooltip border"),
+    ("selection_bg", "Selection highlight"),
+)
+
+THEME_PRESETS = {
+    "Dark": {
+        "window_bg": "#1e1e1e", "panel_bg": "#252526", "entry_bg": "#2d2d2e", "log_bg": "#121212",
+        "text_fg": "#e6e6e6", "muted_fg": "#9a9a9a", "log_fg": "#d4d4d4", "border": "#3c3c3c",
+        "accent": "#e5484d", "accent_active": "#c53f43", "success": "#57c26a", "warning": "#e5b84d",
+        "status_bar_bg": "#171717", "status_bar_fg": "#e6e6e6", "button_fg": "#ffffff",
+        "tooltip_bg": "#101010", "tooltip_fg": "#f4f4f4", "tooltip_border": "#555555", "selection_bg": "#e5484d",
+    },
+    "Fainted": {
+        "window_bg": "#303236", "panel_bg": "#383b40", "entry_bg": "#41454b", "log_bg": "#26282c",
+        "text_fg": "#e9ebee", "muted_fg": "#aeb4bc", "log_fg": "#d8dde3", "border": "#555b63",
+        "accent": "#7f9bbd", "accent_active": "#6d87a8", "success": "#7dbb8a", "warning": "#d6b474",
+        "status_bar_bg": "#26282c", "status_bar_fg": "#d8dde3", "button_fg": "#ffffff",
+        "tooltip_bg": "#42464c", "tooltip_fg": "#f1f3f5", "tooltip_border": "#737a84", "selection_bg": "#6d87a8",
+    },
+    "Orange": {
+        "window_bg": "#211b17", "panel_bg": "#2d231c", "entry_bg": "#392a20", "log_bg": "#17110d",
+        "text_fg": "#fff1e4", "muted_fg": "#c8a990", "log_fg": "#f0d5bd", "border": "#604531",
+        "accent": "#f28c28", "accent_active": "#d66f16", "success": "#8dcc68", "warning": "#f4c15d",
+        "status_bar_bg": "#18110d", "status_bar_fg": "#ffe1c5", "button_fg": "#211b17",
+        "tooltip_bg": "#3b281b", "tooltip_fg": "#fff1e4", "tooltip_border": "#8c5a32", "selection_bg": "#d66f16",
+    },
+    "Green Hacker": {
+        "window_bg": "#07110b", "panel_bg": "#0c1c12", "entry_bg": "#102719", "log_bg": "#030804",
+        "text_fg": "#c9ffd7", "muted_fg": "#70aa7d", "log_fg": "#a8eeb8", "border": "#1e5830",
+        "accent": "#24d66b", "accent_active": "#16a94f", "success": "#5df28a", "warning": "#e4d65c",
+        "status_bar_bg": "#040b06", "status_bar_fg": "#baf5c8", "button_fg": "#031008",
+        "tooltip_bg": "#10351d", "tooltip_fg": "#d5ffe0", "tooltip_border": "#2c8d4a", "selection_bg": "#168e43",
+    },
+}
+
+
+def _set_theme_globals(colors):
+    """Update the module palette used by every newly created widget."""
+    globals().update({
+        "BG": colors["window_bg"], "BG_PANEL": colors["panel_bg"], "BG_ENTRY": colors["entry_bg"],
+        "BG_LOG": colors["log_bg"], "FG": colors["text_fg"], "FG_MUTED": colors["muted_fg"],
+        "FG_LOG": colors["log_fg"], "BORDER": colors["border"], "ACCENT": colors["accent"],
+        "ACCENT_ACTIVE": colors["accent_active"], "SUCCESS": colors["success"],
+        "WARNING": colors["warning"], "STATUS_BAR_BG": colors["status_bar_bg"],
+        "STATUS_BAR_FG": colors["status_bar_fg"], "BUTTON_FG": colors["button_fg"],
+        "TOOLTIP_BG": colors["tooltip_bg"], "TOOLTIP_FG": colors["tooltip_fg"],
+        "TOOLTIP_BORDER": colors["tooltip_border"], "SELECTION_BG": colors["selection_bg"],
+    })
 SCROLL_SPEED_MIN = 1
 SCROLL_SPEED_MAX = 6
 SCROLL_SPEED_DEFAULT = 1
@@ -292,12 +366,12 @@ class Tooltip:
             window = tk.Toplevel(self.widget)
             window.overrideredirect(True)
             window.attributes("-topmost", True)
-            window.configure(bg="#101010")
+            window.configure(bg=TOOLTIP_BG)
             label = tk.Label(
                 window, text=self.text, justify="left", wraplength=360,
-                bg="#101010", fg="#f4f4f4", padx=12, pady=8,
+                bg=TOOLTIP_BG, fg=TOOLTIP_FG, padx=12, pady=8,
                 relief="solid", bd=1, highlightthickness=1,
-                highlightbackground="#555555", font=("Segoe UI", 10),
+                highlightbackground=TOOLTIP_BORDER, font=("Segoe UI", 10),
             )
             label.pack()
             window.update_idletasks()
@@ -520,6 +594,18 @@ class GGUVDODApp(tk.Tk):
 
         config = load_config()
 
+        self.theme_name = config.get("theme", "Dark")
+        if self.theme_name not in THEME_PRESETS and self.theme_name != "Custom":
+            self.theme_name = "Dark"
+        self.theme_colors = dict(THEME_PRESETS.get(self.theme_name, THEME_PRESETS["Dark"]))
+        if self.theme_name == "Custom":
+            saved_theme_colors = config.get("theme_colors") or {}
+            self.theme_colors.update({
+                key: value for key, value in saved_theme_colors.items()
+                if key in dict(THEME_COLOR_FIELDS) and self._valid_theme_color(value)
+            })
+        _set_theme_globals(self.theme_colors)
+
         self.format_var = tk.StringVar(value=config.get("format", "video"))
         if self.format_var.get() not in {"video", "audio"}:
             self.format_var.set("video")
@@ -607,11 +693,11 @@ class GGUVDODApp(tk.Tk):
         style.configure("TCombobox",
                          fieldbackground=BG_ENTRY, background=BG_PANEL, foreground=FG,
                          arrowcolor=FG, bordercolor=BORDER, lightcolor=BG_ENTRY, darkcolor=BG_ENTRY,
-                         selectbackground=BG_ENTRY, selectforeground=FG)
+                         selectbackground=SELECTION_BG, selectforeground=BUTTON_FG)
         style.map("TCombobox",
                   fieldbackground=[("readonly", BG_ENTRY)],
-                  selectbackground=[("readonly", BG_ENTRY)],
-                  selectforeground=[("readonly", FG)],
+                  selectbackground=[("readonly", SELECTION_BG)],
+                  selectforeground=[("readonly", BUTTON_FG)],
                   foreground=[("readonly", FG)])
 
         style.configure("TProgressbar",
@@ -623,13 +709,13 @@ class GGUVDODApp(tk.Tk):
                         padding=(16, 8), borderwidth=0)
         style.map("TNotebook.Tab",
                   background=[("selected", ACCENT), ("active", BORDER)],
-                  foreground=[("selected", "#ffffff"), ("active", FG)])
+                  foreground=[("selected", BUTTON_FG), ("active", FG)])
 
         # Dropdown listbox popup isn't a ttk widget - themed via option database.
         self.option_add("*TCombobox*Listbox.background", BG_ENTRY)
         self.option_add("*TCombobox*Listbox.foreground", FG)
-        self.option_add("*TCombobox*Listbox.selectBackground", ACCENT)
-        self.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
+        self.option_add("*TCombobox*Listbox.selectBackground", SELECTION_BG)
+        self.option_add("*TCombobox*Listbox.selectForeground", BUTTON_FG)
 
     def _apply_windows_dark_titlebar(self):
         if sys.platform != "win32":
@@ -677,7 +763,7 @@ class GGUVDODApp(tk.Tk):
     def _show_context_menu(self, event):
         widget = event.widget
         menu = tk.Menu(self, tearoff=False, bg=BG_PANEL, fg=FG,
-                       activebackground=ACCENT, activeforeground="#ffffff")
+                       activebackground=ACCENT, activeforeground=BUTTON_FG)
         menu.add_command(label="Undo", accelerator="Ctrl+Z",
                          command=lambda: self._edit_action_for_widget(widget, "undo"))
         menu.add_command(label="Redo", accelerator="Ctrl+Y",
@@ -732,8 +818,8 @@ class GGUVDODApp(tk.Tk):
         if primary:
             kwargs.setdefault("bg", ACCENT)
             kwargs.setdefault("activebackground", ACCENT_ACTIVE)
-            kwargs.setdefault("fg", "#ffffff")
-            kwargs.setdefault("activeforeground", "#ffffff")
+            kwargs.setdefault("fg", BUTTON_FG)
+            kwargs.setdefault("activeforeground", BUTTON_FG)
             kwargs.setdefault("font", ("Segoe UI", 13, "bold"))
         else:
             kwargs.setdefault("bg", BG_ENTRY)
@@ -751,7 +837,7 @@ class GGUVDODApp(tk.Tk):
     def _radio(self, parent, **kwargs):
         kwargs.setdefault("bg", parent.cget("bg"))
         kwargs.setdefault("fg", FG)
-        kwargs.setdefault("selectcolor", BG_ENTRY)
+        kwargs.setdefault("selectcolor", SELECTION_BG)
         kwargs.setdefault("activebackground", parent.cget("bg"))
         kwargs.setdefault("activeforeground", FG)
         kwargs.setdefault("font", ("Segoe UI", 11))
@@ -761,7 +847,7 @@ class GGUVDODApp(tk.Tk):
     def _check(self, parent, **kwargs):
         kwargs.setdefault("bg", parent.cget("bg"))
         kwargs.setdefault("fg", FG)
-        kwargs.setdefault("selectcolor", BG_ENTRY)
+        kwargs.setdefault("selectcolor", SELECTION_BG)
         kwargs.setdefault("activebackground", parent.cget("bg"))
         kwargs.setdefault("activeforeground", FG)
         kwargs.setdefault("font", ("Segoe UI", 11))
@@ -1136,16 +1222,23 @@ class GGUVDODApp(tk.Tk):
         self.after_idle(lambda: self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all")))
 
     def _build_menu_bar(self):
-        menu_bar = tk.Menu(self)
+        menu_options = {
+            "tearoff": False,
+            "bg": BG_PANEL,
+            "fg": FG,
+            "activebackground": ACCENT,
+            "activeforeground": BUTTON_FG,
+        }
+        menu_bar = tk.Menu(self, **menu_options)
 
-        file_menu = tk.Menu(menu_bar, tearoff=False)
+        file_menu = tk.Menu(menu_bar, **menu_options)
         file_menu.add_command(label="New link list", accelerator="Ctrl+N", command=self._new_link_list)
         file_menu.add_command(label="Open save folder", command=self._open_output_folder)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", accelerator="Alt+F4", command=self._on_close)
         menu_bar.add_cascade(label="File", menu=file_menu)
 
-        edit_menu = tk.Menu(menu_bar, tearoff=False)
+        edit_menu = tk.Menu(menu_bar, **menu_options)
         edit_menu.add_command(label="Undo", accelerator="Ctrl+Z", command=lambda: self._edit_focused("undo"))
         edit_menu.add_command(label="Redo", accelerator="Ctrl+Y", command=lambda: self._edit_focused("redo"))
         edit_menu.add_separator()
@@ -1153,26 +1246,28 @@ class GGUVDODApp(tk.Tk):
         edit_menu.add_command(label="Copy", accelerator="Ctrl+C", command=lambda: self._edit_focused("copy"))
         edit_menu.add_command(label="Paste", accelerator="Ctrl+V", command=lambda: self._edit_focused("paste"))
         edit_menu.add_command(label="Select all", accelerator="Ctrl+A", command=lambda: self._edit_focused("select_all"))
-        preferences_menu = tk.Menu(edit_menu, tearoff=False)
+        preferences_menu = tk.Menu(edit_menu, **menu_options)
         preferences_menu.add_command(label="Key bindings and scroll speed...",
                                      command=self._show_key_bindings_preferences)
+        preferences_menu.add_command(label="Themes and colors...",
+                                     command=self._show_theme_preferences)
         edit_menu.add_cascade(label="Preferences", menu=preferences_menu)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
 
-        view_menu = tk.Menu(menu_bar, tearoff=False)
+        view_menu = tk.Menu(menu_bar, **menu_options)
         view_menu.add_command(label="Scroll to top", command=lambda: self._set_scroll_position(0.0))
         view_menu.add_command(label="Scroll to bottom", command=lambda: self._set_scroll_position(1.0))
         view_menu.add_separator()
         view_menu.add_command(label="Reset scroll speed", command=self._reset_scroll_speed)
         menu_bar.add_cascade(label="View", menu=view_menu)
 
-        window_menu = tk.Menu(menu_bar, tearoff=False)
+        window_menu = tk.Menu(menu_bar, **menu_options)
         window_menu.add_command(label="Minimize", command=lambda: self.state("iconic"))
         window_menu.add_command(label="Maximize", command=self._maximize_window)
         window_menu.add_command(label="Restore", command=lambda: self.state("normal"))
         menu_bar.add_cascade(label="Window", menu=window_menu)
 
-        help_menu = tk.Menu(menu_bar, tearoff=False)
+        help_menu = tk.Menu(menu_bar, **menu_options)
         help_menu.add_command(label="Help center", command=self._show_help_page)
         help_menu.add_command(label="Keyboard shortcuts", command=lambda: self._show_help_page("shortcuts"))
         help_menu.add_command(label="Supported platforms", command=lambda: self._show_help_page("platforms"))
@@ -1180,7 +1275,7 @@ class GGUVDODApp(tk.Tk):
         help_menu.add_command(label="Check for yt-dlp updates", command=self._check_for_updates)
         menu_bar.add_cascade(label="Help", menu=help_menu)
 
-        about_menu = tk.Menu(menu_bar, tearoff=False)
+        about_menu = tk.Menu(menu_bar, **menu_options)
         about_menu.add_command(label="About GGU_VDOD", command=self._show_about)
         menu_bar.add_cascade(label="About", menu=about_menu)
         self.config(menu=menu_bar)
@@ -1273,6 +1368,133 @@ class GGUVDODApp(tk.Tk):
             dialog.destroy()
 
         self._button(button_row, "Apply", apply_preferences, primary=True).pack(side="right", padx=(0, 10))
+
+    @staticmethod
+    def _valid_theme_color(value):
+        return bool(re.fullmatch(r"#[0-9a-fA-F]{6}", str(value or "").strip()))
+
+    def _recolor_widget_tree(self, old_colors):
+        old_to_new = {}
+        for key, _label in THEME_COLOR_FIELDS:
+            old_value = old_colors.get(key)
+            new_value = self.theme_colors.get(key)
+            if old_value and new_value and old_value != new_value:
+                old_to_new[old_value] = new_value
+
+        color_options = (
+            "background", "foreground", "insertbackground", "highlightbackground",
+            "highlightcolor", "selectbackground", "selectforeground", "activebackground",
+            "activeforeground", "disabledforeground", "selectcolor", "troughcolor",
+        )
+
+        def recolor(widget):
+            for option in color_options:
+                try:
+                    current = str(widget.cget(option))
+                except (tk.TclError, TypeError):
+                    continue
+                replacement = old_to_new.get(current)
+                if replacement:
+                    try:
+                        widget.configure(**{option: replacement})
+                    except tk.TclError:
+                        pass
+            for child in widget.winfo_children():
+                recolor(child)
+
+        recolor(self)
+
+    def _apply_theme(self, theme_name, colors):
+        old_colors = dict(self.theme_colors)
+        self.theme_name = theme_name if theme_name in THEME_PRESETS or theme_name == "Custom" else "Dark"
+        self.theme_colors = dict(colors)
+        _set_theme_globals(self.theme_colors)
+        self.configure(bg=BG)
+        self._setup_style()
+        self._recolor_widget_tree(old_colors)
+        self._build_menu_bar()
+        self._update_ffmpeg_status()
+        save_config(self._settings_from_ui())
+
+    def _show_theme_preferences(self):
+        dialog = tk.Toplevel(self)
+        dialog.title("Preferences - Themes and colors")
+        dialog.configure(bg=BG)
+        dialog.transient(self)
+        dialog.geometry("760x760")
+
+        body = self._frame(dialog)
+        body.pack(fill="both", expand=True, padx=20, pady=16)
+        self._label(body, text="Themes and colors", font=("Segoe UI", 16, "bold")).pack(anchor="w")
+        self._label(
+            body,
+            text="Pick a preset, or choose Custom and edit every exposed color as #RRGGBB.",
+            fg=FG_MUTED,
+            font=("Segoe UI", 10),
+        ).pack(anchor="w", pady=(4, 12))
+
+        preset_row = self._frame(body)
+        preset_row.pack(fill="x", pady=(0, 10))
+        self._label(preset_row, text="Theme:").pack(side="left")
+        theme_var = tk.StringVar(value=self.theme_name)
+        theme_combo = ttk.Combobox(
+            preset_row,
+            textvariable=theme_var,
+            values=list(THEME_PRESETS) + ["Custom"],
+            state="readonly",
+            width=22,
+        )
+        theme_combo.pack(side="left", padx=(12, 0))
+
+        color_vars = {}
+        color_rows = self._frame(body)
+        color_rows.pack(fill="both", expand=True)
+        color_rows.grid_columnconfigure(1, weight=1)
+        draft = dict(self.theme_colors)
+
+        for row_index, (key, label_text) in enumerate(THEME_COLOR_FIELDS):
+            self._label(color_rows, text=label_text + ":", anchor="w").grid(
+                row=row_index, column=0, sticky="w", padx=(0, 12), pady=3
+            )
+            value_var = tk.StringVar(value=draft[key])
+            color_vars[key] = value_var
+            value_entry = self._entry(color_rows, textvariable=value_var, width=12)
+            value_entry.grid(row=row_index, column=1, sticky="w", pady=3)
+            swatch = self._button(color_rows, "Choose", lambda field=key: choose_color(field))
+            swatch.grid(row=row_index, column=2, sticky="w", padx=(8, 0), pady=3)
+
+        def load_preset(_event=None):
+            selected = theme_var.get()
+            if selected not in THEME_PRESETS:
+                return
+            draft.update(THEME_PRESETS[selected])
+            for key, _label_text in THEME_COLOR_FIELDS:
+                color_vars[key].set(draft[key])
+
+        def choose_color(field):
+            chosen = colorchooser.askcolor(color=color_vars[field].get(), title=f"Choose {field}", parent=dialog)
+            if chosen and chosen[1]:
+                color_vars[field].set(chosen[1])
+                theme_var.set("Custom")
+
+        theme_combo.bind("<<ComboboxSelected>>", load_preset)
+
+        button_row = self._frame(body)
+        button_row.pack(fill="x", pady=(14, 0))
+        self._button(button_row, "Cancel", dialog.destroy).pack(side="right")
+
+        def apply_theme():
+            colors = {}
+            for key, label_text in THEME_COLOR_FIELDS:
+                value = color_vars[key].get().strip()
+                if not self._valid_theme_color(value):
+                    messagebox.showwarning("Invalid color", f"{label_text} must be a hex color such as #RRGGBB.", parent=dialog)
+                    return
+                colors[key] = value.lower()
+            self._apply_theme(theme_var.get(), colors)
+            dialog.destroy()
+
+        self._button(button_row, "Apply and save", apply_theme, primary=True).pack(side="right", padx=(0, 10))
 
     def _show_shortcuts(self):
         self._show_help_page("shortcuts")
@@ -1502,19 +1724,19 @@ class GGUVDODApp(tk.Tk):
         self._button(footer, "Close", dialog.destroy, primary=True).pack(side="right")
 
     def _build_status_bar(self):
-        status_bar = tk.Frame(self, bg="#171717", height=38, bd=0,
+        status_bar = tk.Frame(self, bg=STATUS_BAR_BG, height=38, bd=0,
                               highlightthickness=1, highlightbackground=BORDER)
         status_bar.pack(side="bottom", fill="x")
         status_bar.pack_propagate(False)
 
         def add_cell(caption, variable, width, tooltip):
-            cell = tk.Frame(status_bar, bg="#171717", width=width)
+            cell = tk.Frame(status_bar, bg=STATUS_BAR_BG, width=width)
             cell.pack(side="left", fill="y", padx=(10, 0))
             cell.pack_propagate(False)
-            label = tk.Label(cell, text=caption, bg="#171717", fg=FG_MUTED,
+            label = tk.Label(cell, text=caption, bg=STATUS_BAR_BG, fg=FG_MUTED,
                              font=("Segoe UI", 9, "bold"), anchor="w")
             label.pack(side="left")
-            value = tk.Label(cell, textvariable=variable, bg="#171717", fg=FG,
+            value = tk.Label(cell, textvariable=variable, bg=STATUS_BAR_BG, fg=STATUS_BAR_FG,
                              font=("Segoe UI", 9), anchor="w")
             value.pack(side="left", padx=(5, 0))
             self._add_tooltip(cell, tooltip)
@@ -2119,6 +2341,8 @@ class GGUVDODApp(tk.Tk):
 
     def _settings_from_ui(self):
         return {
+            "theme": self.theme_name,
+            "theme_colors": dict(self.theme_colors),
             "format": self.format_var.get(),
             "quality": self.quality_var.get(),
             "output_format": self.output_format_var.get(),

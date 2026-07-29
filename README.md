@@ -11,6 +11,8 @@ Simple Windows media downloader powered by yt-dlp and FFmpeg.
 - Preview the title, source, duration, resolution, and thumbnail before downloading.
 - Downloads resume after connection loss. The footer shows speed, progress, transfer size, and ETA.
 - Help, About, Preferences, undo/redo, context menus, and a scroll-speed setting are included.
+- Themes include Dark, Fainted, Orange, Green Hacker, and Custom. Custom exposes every UI color
+  and saves the palette for the next launch.
 
 Use this only for media you own or are allowed to download. Follow site rules and local law.
 
@@ -40,6 +42,9 @@ venv\Scripts\python.exe app.py
 3. Choose a folder and click **Download**.
 4. Open **Advanced** for cookies, subtitles, metadata, FFmpeg, proxy, exact format IDs,
    and conversion controls.
+
+Change themes with **Edit > Preferences > Themes and colors**. Pick a preset or choose
+**Custom**, edit the hex colors, and click **Apply and save**.
 
 If a link needs sign-in, select an authorized browser cookie source or a `cookies.txt` file.
 The app does not bypass DRM, private access, age checks, bot checks, or regional blocks.
@@ -90,6 +95,10 @@ Developed by **XerumGG** using Python, Tkinter/ttk, yt-dlp, FFmpeg, Pillow, PyIn
 and Python standard-library networking/threading tools.
 
 ## Changelog
+
+- **#019 - UI themes and custom colors**: added four presets plus a saved Custom palette
+  with editable window, panel, input, log, text, border, accent, status, tooltip, and
+  selection colors.
 
 - **#018 — MP4 default with format choices**: restored all video format choices while
   keeping MP4 as the default. Shortened this README and added simple one-line commands.
