@@ -662,8 +662,6 @@ class GGUVDODApp(tk.Tk):
         self._tooltips = []
         self._failed_count = 0
         self.scroll_speed_var = tk.IntVar(value=clamp_scroll_speed(config.get("scroll_speed", SCROLL_SPEED_DEFAULT)))
-        self._scroll_target = None
-        self._scroll_animation_id = None
         self.preview_title_var = tk.StringVar(value="Paste a link to preview it")
         self.preview_details_var = tk.StringVar(value="Title, thumbnail, duration, uploader, and platform will appear here.")
         self.preview_status_var = tk.StringVar(value="Waiting for a link")
@@ -994,8 +992,7 @@ class GGUVDODApp(tk.Tk):
 
         scroll_area = self._frame(self)
         scroll_area.pack(fill="both", expand=True)
-        self.main_canvas = tk.Canvas(scroll_area, bg=BG, highlightthickness=0,
-                                     yscrollincrement=1)
+        self.main_canvas = tk.Canvas(scroll_area, bg=BG, highlightthickness=0)
         main_scrollbar = ttk.Scrollbar(scroll_area, orient="vertical", command=self.main_canvas.yview)
         self.main_canvas.configure(yscrollcommand=main_scrollbar.set)
         self.main_canvas.pack(side="left", fill="both", expand=True)
@@ -1008,9 +1005,12 @@ class GGUVDODApp(tk.Tk):
             scrollregion=self.main_canvas.bbox("all")))
         self.main_canvas.bind("<Configure>", lambda event: self.main_canvas.itemconfigure(
             canvas_window, width=max(event.width, CONTENT_MIN_WIDTH)))
-        self.main_canvas.bind_all("<MouseWheel>", self._scroll_main, add="+")
-        self.main_canvas.bind_all("<Button-4>", self._scroll_main, add="+")
-        self.main_canvas.bind_all("<Button-5>", self._scroll_main, add="+")
+        # Bind only within the main application window. A global bind_all made
+        # every wheel event in Help/Preferences and every child widget traverse
+        # the main canvas, which caused visible lag and popup interference.
+        self.bind("<MouseWheel>", self._scroll_main, add="+")
+        self.bind("<Button-4>", self._scroll_main, add="+")
+        self.bind("<Button-5>", self._scroll_main, add="+")
 
         container.grid_columnconfigure(0, weight=1)
         container.grid_columnconfigure(1, weight=0, minsize=CONTENT_MIN_WIDTH)
@@ -1420,7 +1420,6 @@ class GGUVDODApp(tk.Tk):
         self.status_label.config(text="New link list ready.")
 
     def _set_scroll_position(self, position):
-        self._scroll_target = position
         self.main_canvas.yview_moveto(position)
 
     def _reset_scroll_speed(self):
@@ -1437,7 +1436,6 @@ class GGUVDODApp(tk.Tk):
         dialog = tk.Toplevel(self)
         dialog.title("Preferences - Key Bindings")
         dialog.configure(bg=BG)
-        dialog.transient(self)
         self._configure_landing_dialog(dialog, "620x460", (520, 380))
 
         body = self._frame(dialog)
@@ -1543,7 +1541,6 @@ class GGUVDODApp(tk.Tk):
         dialog = tk.Toplevel(self)
         dialog.title("Preferences - Themes and colors")
         dialog.configure(bg=BG)
-        dialog.transient(self)
         self._configure_landing_dialog(dialog, "760x720", (560, 460))
 
         header = self._frame(dialog)
@@ -1644,7 +1641,6 @@ class GGUVDODApp(tk.Tk):
         dialog = tk.Toplevel(self)
         dialog.title("GGU_VDOD Help Center")
         dialog.configure(bg=BG)
-        dialog.transient(self)
         self._configure_landing_dialog(dialog, "900x700", (640, 480))
 
         header = self._frame(dialog)
@@ -1737,7 +1733,6 @@ class GGUVDODApp(tk.Tk):
         dialog = tk.Toplevel(self)
         dialog.title("Supported platforms and extractors")
         dialog.configure(bg=BG)
-        dialog.transient(self)
         self._configure_landing_dialog(dialog, "820x620", (600, 420))
 
         header = self._frame(dialog)
@@ -1831,7 +1826,6 @@ class GGUVDODApp(tk.Tk):
         dialog = tk.Toplevel(self)
         dialog.title("About GGU_VDOD")
         dialog.configure(bg=BG)
-        dialog.transient(self)
         self._configure_landing_dialog(dialog, "820x680", (600, 440))
 
         header = self._frame(dialog)
@@ -2294,7 +2288,7 @@ class GGUVDODApp(tk.Tk):
         )
 
     def _scroll_main(self, event):
-        """Animate the outer panel without stealing the wheel from text editors."""
+        """Scroll the outer panel in responsive, speed-controlled wheel steps."""
         if isinstance(event.widget, tk.Text):
             return
         if getattr(event, "num", None) == 4:
@@ -2306,33 +2300,8 @@ class GGUVDODApp(tk.Tk):
         else:
             return
 
-        current_top, current_bottom = self.main_canvas.yview()
-        if current_bottom - current_top >= 0.999:
-            return
-        if self._scroll_target is None:
-            self._scroll_target = current_top
-        step = 0.025 * clamp_scroll_speed(self.scroll_speed_var.get())
-        max_top = max(0.0, 1.0 - (current_bottom - current_top))
-        self._scroll_target = max(0.0, min(max_top, self._scroll_target + direction * step))
-        self._animate_main_scroll()
-
-    def _animate_main_scroll(self):
-        if self._scroll_animation_id is not None:
-            return
-        self._scroll_animation_id = self.after(10, self._step_main_scroll)
-
-    def _step_main_scroll(self):
-        self._scroll_animation_id = None
-        if self._scroll_target is None:
-            return
-        current_top, _current_bottom = self.main_canvas.yview()
-        distance = self._scroll_target - current_top
-        if abs(distance) < 0.001:
-            self.main_canvas.yview_moveto(self._scroll_target)
-            self._scroll_target = None
-            return
-        self.main_canvas.yview_moveto(current_top + distance * 0.30)
-        self._scroll_animation_id = self.after(10, self._step_main_scroll)
+        speed = clamp_scroll_speed(self.scroll_speed_var.get())
+        self.main_canvas.yview_scroll(direction * speed, "units")
 
     def _toggle_format(self):
         if self.format_var.get() == "video":
@@ -2742,7 +2711,6 @@ class GGUVDODApp(tk.Tk):
         dialog = tk.Toplevel(self)
         dialog.title("GGU_VDOD Library Update Report")
         dialog.configure(bg=BG)
-        dialog.transient(self)
         self._configure_landing_dialog(dialog, "900x620", (640, 440))
 
         header = self._frame(dialog)

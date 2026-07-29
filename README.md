@@ -100,6 +100,9 @@ and Python standard-library networking/threading tools.
 
 ## Changelog
 
+- **#024 - Responsive windows and scrolling**: landing pages now keep normal Windows
+  minimize, maximize, and close controls, and main-page wheel scrolling no longer uses a
+  laggy global animation handler.
 - **#023 - UI stability and preview fixes**: made preferences and landing pages resizable,
   scrollable, and easy to close; set Dark to a pitch-black default; removed slow full-window
   theme repainting; made YouTube watch links with playlist context preview the selected video;
