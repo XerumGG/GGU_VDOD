@@ -13,6 +13,8 @@ Simple Windows media downloader powered by yt-dlp and FFmpeg.
 - Help, About, Preferences, undo/redo, context menus, and a scroll-speed setting are included.
 - Themes include Dark, Fainted, Orange, Green Hacker, and Custom. Custom exposes every UI color
   and saves the palette for the next launch.
+- Buttons and checkboxes use larger hit areas, clear hover/press feedback, and colorful selected
+  indicators that return to a blank state when unchecked.
 
 Use this only for media you own or are allowed to download. Follow site rules and local law.
 
@@ -95,6 +97,9 @@ Developed by **XerumGG** using Python, Tkinter/ttk, yt-dlp, FFmpeg, Pillow, PyIn
 and Python standard-library networking/threading tools.
 
 ## Changelog
+
+- **#020 - Larger intuitive controls**: enlarged buttons, added hover/press/disabled feedback,
+  and improved checkbox/radio indicators with accent-colored selected states.
 
 - **#019 - UI themes and custom colors**: added four presets plus a saved Custom palette
   with editable window, panel, input, log, text, border, accent, status, tooltip, and

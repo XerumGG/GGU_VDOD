@@ -829,29 +829,59 @@ class GGUVDODApp(tk.Tk):
             kwargs.setdefault("font", ("Segoe UI", 10))
         kwargs.setdefault("relief", "flat")
         kwargs.setdefault("bd", 0)
-        kwargs.setdefault("highlightthickness", 0)
+        kwargs.setdefault("highlightthickness", 1)
+        kwargs.setdefault("highlightbackground", BORDER)
+        kwargs.setdefault("highlightcolor", ACCENT)
+        kwargs.setdefault("padx", 14)
+        kwargs.setdefault("pady", 7)
         kwargs.setdefault("cursor", "hand2")
         kwargs.setdefault("disabledforeground", FG_MUTED)
-        return tk.Button(parent, text=text, command=command, **kwargs)
+        button = tk.Button(parent, text=text, command=command, **kwargs)
+        def set_hover(_event=None):
+            if button.cget("state") != "disabled":
+                button.configure(bg=ACCENT_ACTIVE if primary else BORDER)
+
+        def clear_hover(_event=None):
+            if button.cget("state") != "disabled":
+                button.configure(bg=ACCENT if primary else BG_ENTRY)
+
+        button.bind("<Enter>", set_hover, add="+")
+        button.bind("<Leave>", clear_hover, add="+")
+        button.bind("<ButtonPress-1>", lambda _event: button.configure(relief="sunken"), add="+")
+        button.bind("<ButtonRelease-1>", lambda _event: button.configure(relief="flat"), add="+")
+        return button
 
     def _radio(self, parent, **kwargs):
         kwargs.setdefault("bg", parent.cget("bg"))
         kwargs.setdefault("fg", FG)
-        kwargs.setdefault("selectcolor", SELECTION_BG)
+        kwargs.setdefault("selectcolor", ACCENT)
         kwargs.setdefault("activebackground", parent.cget("bg"))
         kwargs.setdefault("activeforeground", FG)
         kwargs.setdefault("font", ("Segoe UI", 11))
-        kwargs.setdefault("highlightthickness", 0)
+        kwargs.setdefault("highlightthickness", 1)
+        kwargs.setdefault("highlightbackground", BORDER)
+        kwargs.setdefault("highlightcolor", ACCENT)
+        kwargs.setdefault("padx", 8)
+        kwargs.setdefault("pady", 5)
+        kwargs.setdefault("cursor", "hand2")
         return tk.Radiobutton(parent, **kwargs)
 
     def _check(self, parent, **kwargs):
         kwargs.setdefault("bg", parent.cget("bg"))
         kwargs.setdefault("fg", FG)
-        kwargs.setdefault("selectcolor", SELECTION_BG)
+        # The selected indicator is the accent color with a visible tick;
+        # the unchecked indicator returns to the normal blank background.
+        kwargs.setdefault("selectcolor", ACCENT)
         kwargs.setdefault("activebackground", parent.cget("bg"))
         kwargs.setdefault("activeforeground", FG)
         kwargs.setdefault("font", ("Segoe UI", 11))
-        kwargs.setdefault("highlightthickness", 0)
+        kwargs.setdefault("indicatoron", True)
+        kwargs.setdefault("highlightthickness", 1)
+        kwargs.setdefault("highlightbackground", BORDER)
+        kwargs.setdefault("highlightcolor", ACCENT)
+        kwargs.setdefault("padx", 8)
+        kwargs.setdefault("pady", 5)
+        kwargs.setdefault("cursor", "hand2")
         return tk.Checkbutton(parent, **kwargs)
 
     def _scrolled_text(self, parent, bg, fg, **kwargs):
