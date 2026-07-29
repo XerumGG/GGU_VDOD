@@ -145,6 +145,13 @@ Then rebuild with `build.bat` on Windows or `build.sh` on macOS/Linux.
   content the user is authorized to access.
 - **Subtitles and media metadata**: subtitle downloads/embedding plus optional metadata
   and thumbnail embedding are available.
+- **Comprehensive local media conversion**: choose MP4, MKV, MOV, AVI, WebM, FLV,
+  MPEG, TS, M4V, OGV, or 3GP for video; or MP3, WAV, AAC, FLAC, OGG, Opus, M4A,
+  WMA, AIFF, or ALAC for audio. FFmpeg converts locally after download, supporting
+  video-to-video, audio-to-audio, and video-to-audio workflows.
+- **Advanced conversion controls**: the Advanced panel exposes video codec, video
+  bitrate, output resolution, frame rate, sample rate, channel count, compression level,
+  subtitle/metadata options, and a custom yt-dlp filename pattern.
 - **Format inspection**: use **List formats** to inspect the formats yt-dlp reports for a
   URL, then enter an exact format expression such as `137+140` when needed.
 - **Playlist visibility and proxy support**: playlist items are logged individually, and
@@ -196,6 +203,10 @@ please make sure you have the right to download whatever you use it on.
 
 ## Change log
 
+- **#014 — Comprehensive local media conversion**: added broad video and audio output
+  formats, local FFmpeg video-to-video/audio-to-audio/video-to-audio conversion, and
+  Advanced controls for codec, bitrate, resolution, frame rate, audio, compression,
+  metadata, subtitles, and filename patterns.
 - **#013 — Preserve FFmpeg and restricted previews**: restored FFmpeg beside the
   release executable, preserved a local build-source copy outside Git, and added a
   clearly labeled public title/uploader/thumbnail fallback when full metadata is blocked

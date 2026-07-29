@@ -32,6 +32,8 @@ from tkinter import ttk, filedialog, messagebox, scrolledtext
 
 try:
     import yt_dlp
+    from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
+    from yt_dlp.utils import replace_extension
 except ImportError:
     _root = tk.Tk()
     _root.withdraw()
@@ -77,6 +79,28 @@ CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
 
 VIDEO_QUALITIES = ["Best available", "2160p (4K)", "1440p (2K)", "1080p", "720p", "480p", "360p"]
 AUDIO_QUALITIES = ["320 kbps (Best)", "256 kbps", "192 kbps", "128 kbps"]
+VIDEO_OUTPUT_FORMATS = ["MP4", "MKV", "MOV", "AVI", "WebM", "FLV", "MPEG", "TS", "M4V", "OGV", "3GP"]
+AUDIO_OUTPUT_FORMATS = ["MP3", "WAV", "AAC", "FLAC", "OGG", "Opus", "M4A", "WMA", "AIFF", "ALAC"]
+VIDEO_FORMAT_EXTENSIONS = {
+    "MP4": "mp4", "MKV": "mkv", "MOV": "mov", "AVI": "avi", "WebM": "webm",
+    "FLV": "flv", "MPEG": "mpeg", "TS": "ts", "M4V": "m4v", "OGV": "ogv", "3GP": "3gp",
+}
+AUDIO_FORMAT_EXTENSIONS = {
+    "MP3": "mp3", "WAV": "wav", "AAC": "aac", "FLAC": "flac", "OGG": "ogg",
+    "Opus": "opus", "M4A": "m4a", "WMA": "wma", "AIFF": "aiff", "ALAC": "alac",
+}
+VIDEO_CODEC_OPTIONS = ["Auto", "H.264", "H.265", "VP9", "AV1"]
+VIDEO_CODEC_ARGS = {
+    "H.264": ["-c:v", "libx264"],
+    "H.265": ["-c:v", "libx265"],
+    "VP9": ["-c:v", "libvpx-vp9"],
+    "AV1": ["-c:v", "libaom-av1"],
+}
+VIDEO_RESOLUTION_OPTIONS = ["Source", "3840x2160", "2560x1440", "1920x1080", "1280x720", "854x480", "640x360"]
+FRAME_RATE_OPTIONS = ["Source", "24", "25", "30", "50", "60"]
+SAMPLE_RATE_OPTIONS = ["Source", "44100", "48000", "96000"]
+CHANNEL_OPTIONS = ["Source", "Mono", "Stereo"]
+COMPRESSION_OPTIONS = ["Auto", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
 COOKIE_BROWSERS = ["None", "Chrome", "Edge", "Firefox", "Brave", "Opera", "Vivaldi", "Safari"]
 
 HEIGHT_MAP = {
@@ -345,6 +369,45 @@ def find_ffmpeg():
     return ""
 
 
+class LocalMediaConvertorPP(FFmpegPostProcessor):
+    """Locally convert a finished file to a selected container/codec with FFmpeg."""
+
+    def __init__(self, downloader, target_ext, output_args=None, fallback_args=None):
+        super().__init__(downloader)
+        self.target_ext = target_ext.casefold()
+        self.output_args = list(output_args or [])
+        self.fallback_args = list(fallback_args or [])
+
+    def run(self, info):
+        source_path = info["filepath"]
+        source_ext = (info.get("ext") or os.path.splitext(source_path)[1][1:]).casefold()
+        requires_conversion = source_ext != self.target_ext or bool(self.output_args)
+        if not requires_conversion:
+            self.to_screen(f'Keeping existing {self.target_ext.upper()} media file: {source_path}')
+            return [], info
+
+        same_extension = source_ext == self.target_ext
+        destination = replace_extension(
+            source_path,
+            f"ggu-converted.{self.target_ext}" if same_extension else self.target_ext,
+            source_ext,
+        )
+        args = self.output_args or self.fallback_args or ["-c", "copy"]
+        self.to_screen(f'Converting {source_ext.upper()} to {self.target_ext.upper()}: {destination}')
+        self.run_ffmpeg(source_path, destination, args)
+
+        if same_extension:
+            os.replace(destination, source_path)
+            destination = source_path
+            files_to_delete = []
+        else:
+            files_to_delete = [source_path]
+
+        info["filepath"] = destination
+        info["format"] = info["ext"] = self.target_ext
+        return files_to_delete, info
+
+
 def load_config():
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
@@ -440,8 +503,24 @@ class GGUVDODApp(tk.Tk):
 
         config = load_config()
 
-        self.format_var = tk.StringVar(value="video")
-        self.quality_var = tk.StringVar(value=VIDEO_QUALITIES[0])
+        self.format_var = tk.StringVar(value=config.get("format", "video"))
+        if self.format_var.get() not in {"video", "audio"}:
+            self.format_var.set("video")
+        self.quality_var = tk.StringVar(value=config.get(
+            "quality", VIDEO_QUALITIES[0] if self.format_var.get() == "video" else AUDIO_QUALITIES[0]
+        ))
+        self.output_format_var = tk.StringVar(value=config.get("output_format", "MP4"))
+        allowed_output_formats = VIDEO_OUTPUT_FORMATS if self.format_var.get() == "video" else AUDIO_OUTPUT_FORMATS
+        if self.output_format_var.get() not in allowed_output_formats:
+            self.output_format_var.set("MP4" if self.format_var.get() == "video" else "MP3")
+        self.video_codec_var = tk.StringVar(value=config.get("video_codec", "Auto"))
+        self.video_bitrate_var = tk.StringVar(value=config.get("video_bitrate", ""))
+        self.resolution_var = tk.StringVar(value=config.get("conversion_resolution", "Source"))
+        self.frame_rate_var = tk.StringVar(value=config.get("frame_rate", "Source"))
+        self.sample_rate_var = tk.StringVar(value=config.get("sample_rate", "Source"))
+        self.channels_var = tk.StringVar(value=config.get("channels", "Source"))
+        self.compression_var = tk.StringVar(value=config.get("compression_level", "Auto"))
+        self.filename_pattern_var = tk.StringVar(value=config.get("filename_pattern", ""))
         self.output_var = tk.StringVar(value=config.get("output_dir") or get_default_output_dir())
         self.ffmpeg_var = tk.StringVar(value=config.get("ffmpeg_path") or find_ffmpeg())
         self.playlist_var = tk.BooleanVar(value=True)  # True = only download this video, not the whole playlist
@@ -771,26 +850,40 @@ class GGUVDODApp(tk.Tk):
         fmt_frame = self._labelframe(content, "Format", padx=16, pady=12)
         fmt_frame.pack(fill="x", **pad)
 
-        video_radio = self._radio(fmt_frame, text="Video (MP4)", variable=self.format_var, value="video",
+        video_radio = self._radio(fmt_frame, text="Video", variable=self.format_var, value="video",
                                   command=self._toggle_format)
         video_radio.grid(row=0, column=0, sticky="w", padx=(0, 30))
-        self._add_tooltip(video_radio, "Download video and save it as an MP4 when the available formats allow it.")
-        audio_radio = self._radio(fmt_frame, text="Audio only (MP3)", variable=self.format_var, value="audio",
+        self._add_tooltip(video_radio, "Download video in the container selected below. FFmpeg converts or remuxes it when needed.")
+        audio_radio = self._radio(fmt_frame, text="Audio only", variable=self.format_var, value="audio",
                                   command=self._toggle_format)
         audio_radio.grid(row=0, column=1, sticky="w")
-        self._add_tooltip(audio_radio, "Extract the audio and convert it to an MP3 file using ffmpeg.")
+        self._add_tooltip(audio_radio, "Extract audio and convert it to the selected audio format using ffmpeg.")
 
         quality_label = self._label(fmt_frame, text="Quality:", bg=BG_PANEL)
         quality_label.grid(row=1, column=0, sticky="w", pady=(12, 0))
         self._add_tooltip(quality_label, "Choose the highest quality the app should try to use.")
-        self.quality_combo = ttk.Combobox(fmt_frame, textvariable=self.quality_var, values=VIDEO_QUALITIES,
+        initial_qualities = VIDEO_QUALITIES if self.format_var.get() == "video" else AUDIO_QUALITIES
+        if self.quality_var.get() not in initial_qualities:
+            self.quality_var.set(initial_qualities[0])
+        self.quality_combo = ttk.Combobox(fmt_frame, textvariable=self.quality_var, values=initial_qualities,
                                            state="readonly", width=22, font=("Segoe UI", 11))
         self.quality_combo.grid(row=1, column=1, sticky="w", pady=(12, 0))
         self._add_tooltip(self.quality_combo, "The final choice depends on the formats available for that specific link.")
 
+        output_format_label = self._label(fmt_frame, text="Save as:", bg=BG_PANEL)
+        output_format_label.grid(row=2, column=0, sticky="w", pady=(12, 0))
+        self._add_tooltip(output_format_label, "Choose the final video container or audio codec. FFmpeg performs the conversion after downloading.")
+        initial_output_formats = VIDEO_OUTPUT_FORMATS if self.format_var.get() == "video" else AUDIO_OUTPUT_FORMATS
+        self.output_format_combo = ttk.Combobox(
+            fmt_frame, textvariable=self.output_format_var, values=initial_output_formats,
+            state="readonly", width=22, font=("Segoe UI", 11),
+        )
+        self.output_format_combo.grid(row=2, column=1, sticky="w", pady=(12, 0))
+        self._add_tooltip(self.output_format_combo, "Video: MP4, MKV, MOV, WebM, or AVI. Audio: MP3, WAV, FLAC, M4A, AAC, or Opus.")
+
         playlist_check = self._check(fmt_frame, text="Only download this video (ignore playlist)",
                                      variable=self.playlist_var)
-        playlist_check.grid(row=2, column=0, columnspan=2, sticky="w", pady=(12, 0))
+        playlist_check.grid(row=3, column=0, columnspan=2, sticky="w", pady=(12, 0))
         self._add_tooltip(playlist_check, "When enabled, a playlist URL downloads only the selected video.")
 
         # Output folder
@@ -840,22 +933,22 @@ class GGUVDODApp(tk.Tk):
 
         auth_row = self._frame(options_frame, bg=BG_PANEL)
         auth_row.pack(fill="x", pady=(0, 8))
-        auth_row.grid_columnconfigure(3, weight=1)
+        auth_row.grid_columnconfigure(1, weight=1)
         browser_label = self._label(auth_row, text="Browser cookies:", bg=BG_PANEL)
         browser_label.grid(row=0, column=0, sticky="w")
         self._add_tooltip(browser_label, "Use cookies from a browser where you are already signed in.")
         browser_combo = ttk.Combobox(auth_row, textvariable=self.browser_var, values=COOKIE_BROWSERS,
                                      state="readonly", width=14, font=("Segoe UI", 11))
-        browser_combo.grid(row=0, column=1, sticky="w", padx=(10, 20))
+        browser_combo.grid(row=0, column=1, sticky="w", padx=(10, 0))
         self._add_tooltip(browser_combo, "Choose the browser whose active login should be used by yt-dlp.")
         cookies_label = self._label(auth_row, text="Cookies file:", bg=BG_PANEL)
-        cookies_label.grid(row=0, column=2, sticky="w")
+        cookies_label.grid(row=1, column=0, sticky="w", pady=(8, 0))
         self._add_tooltip(cookies_label, "Use a Netscape-format cookies.txt file when browser cookies are not enough.")
         cookies_entry = self._entry(auth_row, textvariable=self.cookies_file_var)
-        cookies_entry.grid(row=0, column=3, sticky="ew", padx=(10, 0), ipady=4)
+        cookies_entry.grid(row=1, column=1, sticky="ew", padx=(10, 0), pady=(8, 0), ipady=4)
         self._add_tooltip(cookies_entry, "Optional path to a cookies.txt file.")
         cookies_browse = self._button(auth_row, "Browse...", self._browse_cookies)
-        cookies_browse.grid(row=0, column=4, sticky="e", padx=(10, 0))
+        cookies_browse.grid(row=1, column=2, sticky="e", padx=(10, 0), pady=(8, 0))
         self._add_tooltip(cookies_browse, "Choose a cookies.txt file.")
 
         proxy_row = self._frame(options_frame, bg=BG_PANEL)
@@ -869,10 +962,10 @@ class GGUVDODApp(tk.Tk):
         self._add_tooltip(proxy_entry, "Enter a proxy such as http://user:pass@host:port or socks5://host:port.")
         proxy_hint = self._label(proxy_row, text="Example: http://user:pass@host:port", bg=BG_PANEL,
                                  fg=FG_MUTED, font=("Segoe UI", 9), wraplength=220)
-        proxy_hint.grid(row=0, column=2, sticky="w")
+        proxy_hint.grid(row=1, column=1, sticky="w", padx=(10, 0), pady=(5, 0))
         self._add_tooltip(proxy_hint, "The proxy address should include its protocol and port.")
         update_button = self._button(proxy_row, "Check yt-dlp updates", self._check_for_updates)
-        update_button.grid(row=0, column=3, sticky="e", padx=(10, 0))
+        update_button.grid(row=0, column=2, sticky="e", padx=(10, 0))
         self._add_tooltip(update_button, "Check whether a newer yt-dlp version is available.")
 
         subtitle_row = self._frame(options_frame, bg=BG_PANEL)
@@ -911,8 +1004,63 @@ class GGUVDODApp(tk.Tk):
         format_entry.grid(row=0, column=1, sticky="ew", padx=(10, 10), ipady=4)
         self._add_tooltip(format_entry, "Use List formats first, then enter the exact format ID or combination you want.")
         list_formats_button = self._button(format_row, "List formats", self._list_formats)
-        list_formats_button.grid(row=0, column=2, sticky="e")
+        list_formats_button.grid(row=1, column=1, sticky="e", pady=(8, 0))
         self._add_tooltip(list_formats_button, "Inspect the formats reported for the first URL in the link box.")
+
+        conversion_frame = self._labelframe(advanced_page, "Local conversion settings", padx=16, pady=12)
+        conversion_frame.pack(fill="x", padx=0, pady=(10, 4))
+        self._add_tooltip(conversion_frame, "These FFmpeg settings are applied locally after download. They do not upload media anywhere.")
+
+        video_conversion_row = self._frame(conversion_frame, bg=BG_PANEL)
+        video_conversion_row.pack(fill="x", pady=(0, 8))
+        self._label(video_conversion_row, text="Video codec:", bg=BG_PANEL).pack(side="left")
+        video_codec_combo = ttk.Combobox(video_conversion_row, textvariable=self.video_codec_var,
+                                         values=VIDEO_CODEC_OPTIONS, state="readonly", width=14)
+        video_codec_combo.pack(side="left", padx=(8, 18))
+        self._add_tooltip(video_codec_combo, "Auto keeps compatible streams when possible. Selecting a codec forces local video re-encoding.")
+        self._label(video_conversion_row, text="Video bitrate:", bg=BG_PANEL).pack(side="left")
+        video_bitrate_entry = self._entry(video_conversion_row, textvariable=self.video_bitrate_var, width=12)
+        video_bitrate_entry.pack(side="left", padx=(8, 18), ipady=4)
+        self._add_tooltip(video_bitrate_entry, "Optional target video bitrate, for example 8M or 2500k. Leave blank to let FFmpeg choose.")
+
+        video_timing_row = self._frame(conversion_frame, bg=BG_PANEL)
+        video_timing_row.pack(fill="x", pady=(0, 8))
+        self._label(video_timing_row, text="Resolution:", bg=BG_PANEL).pack(side="left")
+        resolution_combo = ttk.Combobox(video_timing_row, textvariable=self.resolution_var,
+                                        values=VIDEO_RESOLUTION_OPTIONS, state="readonly", width=13)
+        resolution_combo.pack(side="left", padx=(8, 18))
+        self._add_tooltip(resolution_combo, "Source keeps the downloaded size. A selected size scales down locally while preserving aspect ratio.")
+        self._label(video_timing_row, text="FPS:", bg=BG_PANEL).pack(side="left")
+        fps_combo = ttk.Combobox(video_timing_row, textvariable=self.frame_rate_var,
+                                 values=FRAME_RATE_OPTIONS, state="readonly", width=8)
+        fps_combo.pack(side="left", padx=(8, 0))
+        self._add_tooltip(fps_combo, "Source keeps the original frame rate. Selecting a value converts the frame rate locally.")
+
+        audio_conversion_row = self._frame(conversion_frame, bg=BG_PANEL)
+        audio_conversion_row.pack(fill="x", pady=(0, 8))
+        self._label(audio_conversion_row, text="Sample rate:", bg=BG_PANEL).pack(side="left")
+        sample_rate_combo = ttk.Combobox(audio_conversion_row, textvariable=self.sample_rate_var,
+                                         values=SAMPLE_RATE_OPTIONS, state="readonly", width=10)
+        sample_rate_combo.pack(side="left", padx=(8, 18))
+        self._add_tooltip(sample_rate_combo, "Source keeps the original sample rate. This applies when audio is converted.")
+        self._label(audio_conversion_row, text="Channels:", bg=BG_PANEL).pack(side="left")
+        channels_combo = ttk.Combobox(audio_conversion_row, textvariable=self.channels_var,
+                                      values=CHANNEL_OPTIONS, state="readonly", width=10)
+        channels_combo.pack(side="left", padx=(8, 18))
+        self._add_tooltip(channels_combo, "Choose mono or stereo for converted audio, or leave Source unchanged.")
+        self._label(audio_conversion_row, text="Compression:", bg=BG_PANEL).pack(side="left")
+        compression_combo = ttk.Combobox(audio_conversion_row, textvariable=self.compression_var,
+                                         values=COMPRESSION_OPTIONS, state="readonly", width=8)
+        compression_combo.pack(side="left", padx=(8, 0))
+        self._add_tooltip(compression_combo, "Optional FFmpeg compression level. It is most useful for FLAC, Opus, and other supported codecs.")
+
+        naming_row = self._frame(conversion_frame, bg=BG_PANEL)
+        naming_row.pack(fill="x")
+        naming_label = self._label(naming_row, text="Filename pattern (optional):", bg=BG_PANEL)
+        naming_label.pack(side="left")
+        filename_pattern_entry = self._entry(naming_row, textvariable=self.filename_pattern_var)
+        filename_pattern_entry.pack(side="left", fill="x", expand=True, padx=(10, 0), ipady=4)
+        self._add_tooltip(filename_pattern_entry, "Use yt-dlp placeholders such as %(title)s [%(height)sp]. Leave blank for the app's quality-labelled filename.")
 
         # Buttons
         btn_frame = self._frame(content)
@@ -1615,9 +1763,94 @@ class GGUVDODApp(tk.Tk):
         if self.format_var.get() == "video":
             self.quality_combo["values"] = VIDEO_QUALITIES
             self.quality_var.set(VIDEO_QUALITIES[0])
+            self.output_format_combo["values"] = VIDEO_OUTPUT_FORMATS
+            if self.output_format_var.get() not in VIDEO_OUTPUT_FORMATS:
+                self.output_format_var.set("MP4")
         else:
             self.quality_combo["values"] = AUDIO_QUALITIES
             self.quality_var.set(AUDIO_QUALITIES[0])
+            self.output_format_combo["values"] = AUDIO_OUTPUT_FORMATS
+            if self.output_format_var.get() not in AUDIO_OUTPUT_FORMATS:
+                self.output_format_var.set("MP3")
+
+    @staticmethod
+    def _valid_bitrate(value):
+        value = (value or "").strip()
+        return value if re.fullmatch(r"\d+(?:\.\d+)?[kKmMgG]?", value) else ""
+
+    @staticmethod
+    def _video_fallback_args(target_ext):
+        return {
+            "mp4": ["-c:v", "libx264", "-c:a", "aac"],
+            "mkv": ["-c:v", "libx264", "-c:a", "aac"],
+            "mov": ["-c:v", "libx264", "-c:a", "aac"],
+            "m4v": ["-c:v", "libx264", "-c:a", "aac"],
+            "webm": ["-c:v", "libvpx-vp9", "-c:a", "libopus"],
+            "avi": ["-c:v", "libxvid", "-c:a", "libmp3lame"],
+            "flv": ["-c:v", "libx264", "-c:a", "aac"],
+            "mpeg": ["-c:v", "mpeg2video", "-c:a", "mp2"],
+            "ts": ["-c:v", "libx264", "-c:a", "aac"],
+            "ogv": ["-c:v", "libtheora", "-c:a", "libvorbis"],
+            "3gp": ["-c:v", "libx264", "-c:a", "aac"],
+        }.get(target_ext, ["-c:v", "libx264", "-c:a", "aac"])
+
+    @staticmethod
+    def _audio_fallback_args(target_ext):
+        codecs = {
+            "mp3": "libmp3lame", "wav": "pcm_s16le", "aac": "aac", "flac": "flac",
+            "ogg": "libvorbis", "opus": "libopus", "m4a": "aac", "wma": "wmav2",
+            "aiff": "pcm_s16be", "alac": "alac",
+        }
+        return ["-vn", "-c:a", codecs[target_ext]]
+
+    def _video_conversion_args(self, settings, target_ext):
+        selected_codec_args = list(VIDEO_CODEC_ARGS.get(settings.get("video_codec"), []))
+        resolution = settings.get("conversion_resolution", "Source")
+        frame_rate = settings.get("frame_rate", "Source")
+        bitrate = self._valid_bitrate(settings.get("video_bitrate"))
+        needs_reencode = bool(selected_codec_args) or resolution != "Source" or frame_rate != "Source" or bool(bitrate)
+        if not needs_reencode:
+            return []
+        fallback_args = self._video_fallback_args(target_ext)
+        args = selected_codec_args or fallback_args[:2]
+        args += fallback_args[2:]
+        if resolution in VIDEO_RESOLUTION_OPTIONS and resolution != "Source":
+            width, height = resolution.split("x", 1)
+            args += ["-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease"]
+        if frame_rate in FRAME_RATE_OPTIONS and frame_rate != "Source":
+            args += ["-r", frame_rate]
+        if bitrate:
+            args += ["-b:v", bitrate]
+        return args
+
+    def _audio_conversion_args(self, settings, target_ext):
+        args = list(self._audio_fallback_args(target_ext))
+        if target_ext not in {"wav", "flac", "aiff", "alac"}:
+            args += ["-b:a", BITRATE_MAP.get(settings["quality"], "192") + "k"]
+        sample_rate = settings.get("sample_rate", "Source")
+        if sample_rate in SAMPLE_RATE_OPTIONS and sample_rate != "Source":
+            args += ["-ar", sample_rate]
+        channels = settings.get("channels", "Source")
+        if channels == "Mono":
+            args += ["-ac", "1"]
+        elif channels == "Stereo":
+            args += ["-ac", "2"]
+        compression = settings.get("compression_level", "Auto")
+        if compression in COMPRESSION_OPTIONS and compression != "Auto" and target_ext in {"flac", "opus"}:
+            args += ["-compression_level", compression]
+        return args
+
+    @staticmethod
+    def _output_template(settings, output_dir, target_ext):
+        pattern = settings.get("filename_pattern", "").strip()
+        if not pattern:
+            if settings["format"] == "video":
+                pattern = "%(title)s [%(height)sp]"
+            else:
+                pattern = f"%(title)s [{BITRATE_MAP.get(settings['quality'], '192')}kbps]"
+        if "%(ext)" not in pattern:
+            pattern += ".%(ext)s"
+        return os.path.join(output_dir, pattern)
 
     # ------------------------------------------------------------ helpers --
     def _browse_output(self):
@@ -1693,6 +1926,15 @@ class GGUVDODApp(tk.Tk):
         return {
             "format": self.format_var.get(),
             "quality": self.quality_var.get(),
+            "output_format": self.output_format_var.get(),
+            "video_codec": self.video_codec_var.get(),
+            "video_bitrate": self.video_bitrate_var.get().strip(),
+            "conversion_resolution": self.resolution_var.get(),
+            "frame_rate": self.frame_rate_var.get(),
+            "sample_rate": self.sample_rate_var.get(),
+            "channels": self.channels_var.get(),
+            "compression_level": self.compression_var.get(),
+            "filename_pattern": self.filename_pattern_var.get().strip(),
             "only_this_video": self.playlist_var.get(),
             "output_dir": self.output_var.get().strip(),
             "ffmpeg_path": self.ffmpeg_var.get().strip(),
@@ -1936,11 +2178,16 @@ class GGUVDODApp(tk.Tk):
         output_dir = settings["output_dir"]
         ffmpeg_path = settings["ffmpeg_path"]
         only_this_video = settings["only_this_video"]
+        output_format = settings.get("output_format", "MP4")
+        format_map = VIDEO_FORMAT_EXTENSIONS if fmt == "video" else AUDIO_FORMAT_EXTENSIONS
+        target_ext = format_map.get(output_format)
+        if not target_ext:
+            raise yt_dlp.utils.DownloadError("Choose a valid output format before downloading.")
         detected_ffmpeg = ffmpeg_path if ffmpeg_path and os.path.isfile(ffmpeg_path) else find_ffmpeg()
 
-        if fmt == "audio" and not detected_ffmpeg:
+        if (fmt == "audio" or target_ext != "mp4") and not detected_ffmpeg:
             raise yt_dlp.utils.DownloadError(
-                "MP3 conversion requires ffmpeg. Install ffmpeg or place it beside the app."
+                f"{output_format} conversion requires ffmpeg. Install ffmpeg or place it beside the app."
             )
 
         def hook(d):
@@ -1959,13 +2206,7 @@ class GGUVDODApp(tk.Tk):
                 raise _ConnectionLostError("Internet connection lost during download")
             self._enqueue(self._on_progress, d, idx, total)
 
-        if fmt == "video":
-            # height is resolved from the actual selected video format, so the suffix
-            # remains truthful when a requested ceiling is unavailable.
-            output_template = os.path.join(output_dir, "%(title)s [%(height)sp].%(ext)s")
-        else:
-            bitrate = BITRATE_MAP.get(quality, "192")
-            output_template = os.path.join(output_dir, f"%(title)s [{bitrate}kbps].%(ext)s")
+        output_template = self._output_template(settings, output_dir, target_ext)
 
         ydl_opts = {
             "outtmpl": output_template,
@@ -2017,29 +2258,36 @@ class GGUVDODApp(tk.Tk):
                 else:
                     ydl_opts["format"] = "best[ext=mp4]/best"
             elif h:
-                ydl_opts["format"] = (
-                    f"bestvideo[height<={h}][ext=mp4]+bestaudio[ext=m4a]/"
-                    f"best[height<={h}][ext=mp4]/best[height<={h}]"
-                )
+                ydl_opts["format"] = f"bestvideo[height<={h}]+bestaudio/best[height<={h}]/best"
             else:
-                ydl_opts["format"] = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+                ydl_opts["format"] = "bestvideo+bestaudio/best"
         if fmt == "video" and detected_ffmpeg:
-            ydl_opts["merge_output_format"] = "mp4"
-        elif not settings["format_id"] or fmt == "audio":
-            bitrate = BITRATE_MAP.get(quality, "192")
+            # MKV is a reliable temporary merge container; the local post-processor
+            # then produces the exact requested final format.
+            ydl_opts["merge_output_format"] = "mkv"
+        elif fmt == "audio":
             if not settings["format_id"]:
                 ydl_opts["format"] = "bestaudio/best"
-            ydl_opts["postprocessors"] = [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": bitrate,
-            }]
 
         # Before even starting, if there's no internet, wait rather than fail immediately.
         if not is_internet_up():
             raise _ConnectionLostError("No internet connection")
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            if detected_ffmpeg and fmt == "video":
+                ydl.add_post_processor(LocalMediaConvertorPP(
+                    ydl,
+                    target_ext,
+                    output_args=self._video_conversion_args(settings, target_ext),
+                    fallback_args=self._video_fallback_args(target_ext),
+                ))
+            elif fmt == "audio":
+                ydl.add_post_processor(LocalMediaConvertorPP(
+                    ydl,
+                    target_ext,
+                    output_args=self._audio_conversion_args(settings, target_ext),
+                    fallback_args=self._audio_fallback_args(target_ext),
+                ))
             ydl.download([url])
 
     def _on_progress(self, d, idx, total):
