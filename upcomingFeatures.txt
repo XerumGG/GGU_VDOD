@@ -1,0 +1,9 @@
+UI improvements
+
+Handling multiple video title and previews while pasted multiple different links or playlist link
+
+Changeable key binds
+
+Addition and improvements in UI themes --> Dark theme, fainted theme, orange theme, green-hacker theme
+
+Multiple video(.mp4, .mkv, .mov and so on...) and audio(.mp3, .wav etc...) formats support and inter conversion 
