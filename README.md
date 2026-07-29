@@ -13,6 +13,7 @@ Simple Windows media downloader powered by yt-dlp and FFmpeg.
 - Help, About, Preferences, undo/redo, context menus, and a scroll-speed setting are included.
 - Themes include Dark, Fainted, Orange, Green Hacker, and Custom. Custom exposes every UI color
   and saves the palette for the next launch.
+- Modern buttons, fields, selectors, checkboxes, progress bars, and panels use ttkbootstrap.
 - Buttons and checkboxes use larger hit areas, clear hover/press feedback, and colorful selected
   indicators that return to a blank state when unchecked.
 
@@ -98,6 +99,8 @@ and Python standard-library networking/threading tools.
 
 ## Changelog
 
+- **#021 - Modern ttkbootstrap UI**: replaced the old flat control layer with themed ttkbootstrap
+  widgets while keeping the downloader and custom color system intact.
 - **#020 - Larger intuitive controls**: enlarged buttons, added hover/press/disabled feedback,
   and improved checkbox/radio indicators with accent-colored selected states.
 

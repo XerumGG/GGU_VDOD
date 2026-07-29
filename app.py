@@ -35,6 +35,11 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext, colorchooser
 
 try:
+    import ttkbootstrap as ttkb
+except ImportError:
+    ttkb = None
+
+try:
     import yt_dlp
     from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
     from yt_dlp.utils import replace_extension
@@ -62,6 +67,7 @@ APP_NAME = "GGU_VDOD"
 UPDATE_COMPONENTS = (
     ("yt-dlp", "yt_dlp", "runtime dependency"),
     ("Pillow", "PIL", "runtime dependency"),
+    ("ttkbootstrap", "ttkbootstrap", "runtime UI dependency"),
     ("PyInstaller", "PyInstaller", "build dependency"),
 )
 
@@ -249,7 +255,7 @@ def clamp_scroll_speed(value):
     return max(SCROLL_SPEED_MIN, min(SCROLL_SPEED_MAX, value))
 
 
-class UndoEntry(tk.Entry):
+class UndoEntry(ttkb.Entry if ttkb is not None else tk.Entry):
     """Entry widget with portable undo/redo support."""
 
     def __init__(self, parent, **kwargs):
@@ -684,34 +690,78 @@ class GGUVDODApp(tk.Tk):
 
     # ------------------------------------------------------------ styling --
     def _setup_style(self):
-        style = ttk.Style(self)
-        try:
-            style.theme_use("clam")
-        except tk.TclError:
-            pass
+        if ttkb is not None:
+            if not hasattr(self, "_style"):
+                self._style = ttkb.Style(theme="darkly")
+            style = self._style
+        else:
+            style = getattr(self, "_style", None) or ttk.Style(self)
+            self._style = style
+            try:
+                style.theme_use("clam")
+            except tk.TclError:
+                pass
 
-        style.configure("TCombobox",
-                         fieldbackground=BG_ENTRY, background=BG_PANEL, foreground=FG,
-                         arrowcolor=FG, bordercolor=BORDER, lightcolor=BG_ENTRY, darkcolor=BG_ENTRY,
-                         selectbackground=SELECTION_BG, selectforeground=BUTTON_FG)
-        style.map("TCombobox",
-                  fieldbackground=[("readonly", BG_ENTRY)],
+        style.configure("App.TFrame", background=BG)
+        style.configure("Panel.TFrame", background=BG_PANEL)
+        style.configure("Entry.TFrame", background=BG_ENTRY)
+        style.configure("Log.TFrame", background=BG_LOG)
+        style.configure("Status.TFrame", background=STATUS_BAR_BG)
+
+        label_styles = {
+            "App.TLabel": (BG, FG), "Panel.TLabel": (BG_PANEL, FG),
+            "PanelMuted.TLabel": (BG_PANEL, FG_MUTED), "Entry.TLabel": (BG_ENTRY, FG),
+            "Muted.TLabel": (BG, FG_MUTED), "Accent.TLabel": (BG, ACCENT),
+            "Log.TLabel": (BG_LOG, FG_LOG), "Status.TLabel": (STATUS_BAR_BG, STATUS_BAR_FG),
+            "StatusMuted.TLabel": (STATUS_BAR_BG, FG_MUTED),
+        }
+        for style_name, (background, foreground) in label_styles.items():
+            style.configure(style_name, background=background, foreground=foreground)
+
+        style.configure("Panel.TLabelframe", background=BG_PANEL, bordercolor=BORDER,
+                        darkcolor=BORDER, lightcolor=BORDER, borderwidth=1, relief="solid")
+        style.configure("Panel.TLabelframe.Label", background=BG_PANEL, foreground=FG_MUTED,
+                        font=("Segoe UI", 11, "bold"))
+
+        style.configure("App.TEntry", fieldbackground=BG_ENTRY, foreground=FG,
+                        bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER,
+                        insertcolor=FG, padding=8)
+        style.map("App.TEntry", bordercolor=[("focus", ACCENT)], lightcolor=[("focus", ACCENT)])
+
+        style.configure("App.TButton", background=BG_ENTRY, foreground=FG,
+                        bordercolor=BORDER, lightcolor=BORDER, darkcolor=BORDER,
+                        padding=(14, 8), font=("Segoe UI", 10))
+        style.map("App.TButton", background=[("pressed", ACCENT_ACTIVE), ("active", BORDER)],
+                  foreground=[("disabled", FG_MUTED), ("active", FG)])
+        style.configure("Primary.TButton", background=ACCENT, foreground=BUTTON_FG,
+                        bordercolor=ACCENT, lightcolor=ACCENT, darkcolor=ACCENT,
+                        padding=(18, 10), font=("Segoe UI", 13, "bold"))
+        style.map("Primary.TButton", background=[("pressed", ACCENT_ACTIVE), ("active", ACCENT_ACTIVE)],
+                  foreground=[("disabled", FG_MUTED)])
+
+        style.configure("App.TCheckbutton", background=BG_PANEL, foreground=FG,
+                        padding=(8, 6), font=("Segoe UI", 11))
+        style.map("App.TCheckbutton", background=[("active", BG_PANEL)],
+                  foreground=[("disabled", FG_MUTED)], indicatorcolor=[("selected", ACCENT), ("pressed", ACCENT)])
+        style.configure("App.TRadiobutton", background=BG_PANEL, foreground=FG,
+                        padding=(8, 6), font=("Segoe UI", 11))
+        style.map("App.TRadiobutton", background=[("active", BG_PANEL)],
+                  foreground=[("disabled", FG_MUTED)], indicatorcolor=[("selected", ACCENT), ("pressed", ACCENT)])
+
+        style.configure("TCombobox", fieldbackground=BG_ENTRY, background=BG_PANEL, foreground=FG,
+                        arrowcolor=FG, bordercolor=BORDER, lightcolor=BG_ENTRY, darkcolor=BG_ENTRY,
+                        selectbackground=SELECTION_BG, selectforeground=BUTTON_FG, padding=6)
+        style.map("TCombobox", fieldbackground=[("readonly", BG_ENTRY)],
                   selectbackground=[("readonly", SELECTION_BG)],
-                  selectforeground=[("readonly", BUTTON_FG)],
-                  foreground=[("readonly", FG)])
-
-        style.configure("TProgressbar",
-                         troughcolor=BG_PANEL, background=ACCENT, bordercolor=BG_PANEL,
-                         lightcolor=ACCENT, darkcolor=ACCENT)
-
+                  selectforeground=[("readonly", BUTTON_FG)], foreground=[("readonly", FG)])
+        style.configure("TProgressbar", troughcolor=BG_PANEL, background=ACCENT,
+                        bordercolor=BG_PANEL, lightcolor=ACCENT, darkcolor=ACCENT)
         style.configure("TNotebook", background=BG, borderwidth=0)
         style.configure("TNotebook.Tab", background=BG_ENTRY, foreground=FG,
                         padding=(16, 8), borderwidth=0)
-        style.map("TNotebook.Tab",
-                  background=[("selected", ACCENT), ("active", BORDER)],
+        style.map("TNotebook.Tab", background=[("selected", ACCENT), ("active", BORDER)],
                   foreground=[("selected", BUTTON_FG), ("active", FG)])
 
-        # Dropdown listbox popup isn't a ttk widget - themed via option database.
         self.option_add("*TCombobox*Listbox.background", BG_ENTRY)
         self.option_add("*TCombobox*Listbox.foreground", FG)
         self.option_add("*TCombobox*Listbox.selectBackground", SELECTION_BG)
@@ -732,11 +782,68 @@ class GGUVDODApp(tk.Tk):
             pass
 
     # ------------------------------------------------------- widget helpers --
+    @staticmethod
+    def _parent_surface(parent):
+        try:
+            style_name = str(parent.cget("style"))
+        except (tk.TclError, TypeError):
+            style_name = ""
+        if style_name.startswith("Panel"):
+            return BG_PANEL
+        if style_name.startswith("Entry"):
+            return BG_ENTRY
+        if style_name.startswith("Log"):
+            return BG_LOG
+        if style_name.startswith("Status"):
+            return STATUS_BAR_BG
+        try:
+            return str(parent.cget("bg"))
+        except (tk.TclError, TypeError):
+            return BG
+
+    @staticmethod
+    def _label_style(background, foreground):
+        if background == BG_PANEL and foreground == FG_MUTED:
+            return "PanelMuted.TLabel"
+        if background == BG_PANEL:
+            return "Panel.TLabel"
+        if background == BG_ENTRY:
+            return "Entry.TLabel"
+        if background == BG_LOG:
+            return "Log.TLabel"
+        if background == STATUS_BAR_BG and foreground == FG_MUTED:
+            return "StatusMuted.TLabel"
+        if background == STATUS_BAR_BG:
+            return "Status.TLabel"
+        if foreground == ACCENT:
+            return "Accent.TLabel"
+        if foreground == FG_MUTED:
+            return "Muted.TLabel"
+        return "App.TLabel"
+
     def _label(self, parent, **kwargs):
-        kwargs.setdefault("bg", parent.cget("bg") if isinstance(parent, (tk.Frame, tk.LabelFrame)) else BG)
-        kwargs.setdefault("fg", FG)
+        background = kwargs.pop("bg", self._parent_surface(parent))
+        foreground = kwargs.pop("fg", FG)
         kwargs.setdefault("font", ("Segoe UI", 11))
-        return tk.Label(parent, **kwargs)
+        kwargs.setdefault("style", self._label_style(background, foreground))
+        return ttkb.Label(parent, **kwargs) if ttkb is not None else tk.Label(
+            parent, bg=background, fg=foreground, **kwargs
+        )
+
+    def _set_label_foreground(self, widget, color):
+        if ttkb is None:
+            widget.configure(fg=color)
+            return
+        background = self._parent_surface(widget.master)
+        background_key = {
+            BG_PANEL: "Panel", BG_ENTRY: "Entry", BG_LOG: "Log", STATUS_BAR_BG: "Status",
+        }.get(background, "App")
+        color_key = {
+            FG: "Text", FG_MUTED: "Muted", ACCENT: "Accent", SUCCESS: "Success", WARNING: "Warning",
+        }.get(color, "Custom")
+        style_name = f"{background_key}{color_key}.TLabel"
+        self._style.configure(style_name, background=background, foreground=color)
+        widget.configure(style=style_name)
 
     def _add_tooltip(self, widget, text):
         self._tooltips.append(Tooltip(widget, text))
@@ -789,100 +896,66 @@ class GGUVDODApp(tk.Tk):
             pass
 
     def _frame(self, parent, **kwargs):
-        kwargs.setdefault("bg", BG)
-        return tk.Frame(parent, **kwargs)
+        background = kwargs.pop("bg", BG)
+        style_name = {
+            BG_PANEL: "Panel.TFrame", BG_ENTRY: "Entry.TFrame",
+            BG_LOG: "Log.TFrame", STATUS_BAR_BG: "Status.TFrame",
+        }.get(background, "App.TFrame")
+        kwargs.setdefault("style", style_name)
+        return ttkb.Frame(parent, **kwargs) if ttkb is not None else tk.Frame(parent, bg=background, **kwargs)
 
     def _labelframe(self, parent, text, **kwargs):
-        kwargs.setdefault("bg", BG_PANEL)
-        kwargs.setdefault("fg", FG_MUTED)
-        kwargs.setdefault("font", ("Segoe UI", 11, "bold"))
-        kwargs.setdefault("relief", "flat")
-        kwargs.setdefault("bd", 1)
-        kwargs.setdefault("highlightbackground", BORDER)
-        kwargs.setdefault("highlightthickness", 1)
-        return tk.LabelFrame(parent, text=text, **kwargs)
+        padx = kwargs.pop("padx", None)
+        pady = kwargs.pop("pady", None)
+        if "padding" not in kwargs and (padx is not None or pady is not None):
+            kwargs["padding"] = (padx or 0, pady or 0)
+        kwargs.pop("bg", None)
+        kwargs.pop("fg", None)
+        kwargs.pop("font", None)
+        kwargs.pop("relief", None)
+        kwargs.pop("bd", None)
+        kwargs.pop("highlightbackground", None)
+        kwargs.pop("highlightthickness", None)
+        kwargs.setdefault("style", "Panel.TLabelframe")
+        return ttkb.LabelFrame(parent, text=text, **kwargs) if ttkb is not None else tk.LabelFrame(
+            parent, text=text, bg=BG_PANEL, fg=FG_MUTED, relief="flat", bd=1,
+            highlightbackground=BORDER, highlightthickness=1, **kwargs
+        )
 
     def _entry(self, parent, textvariable, **kwargs):
-        kwargs.setdefault("bg", BG_ENTRY)
-        kwargs.setdefault("fg", FG)
-        kwargs.setdefault("insertbackground", FG)
-        kwargs.setdefault("relief", "flat")
-        kwargs.setdefault("bd", 0)
-        kwargs.setdefault("highlightthickness", 1)
-        kwargs.setdefault("highlightbackground", BORDER)
-        kwargs.setdefault("highlightcolor", ACCENT)
-        kwargs.setdefault("font", ("Segoe UI", 11))
+        for option in ("bg", "fg", "insertbackground", "relief", "bd", "highlightthickness",
+                       "highlightbackground", "highlightcolor"):
+            kwargs.pop(option, None)
+        kwargs.setdefault("style", "App.TEntry")
+        kwargs.pop("font", None)
         return self._add_context_menu(UndoEntry(parent, textvariable=textvariable, **kwargs))
 
     def _button(self, parent, text, command, primary=False, **kwargs):
-        if primary:
-            kwargs.setdefault("bg", ACCENT)
-            kwargs.setdefault("activebackground", ACCENT_ACTIVE)
-            kwargs.setdefault("fg", BUTTON_FG)
-            kwargs.setdefault("activeforeground", BUTTON_FG)
-            kwargs.setdefault("font", ("Segoe UI", 13, "bold"))
-        else:
-            kwargs.setdefault("bg", BG_ENTRY)
-            kwargs.setdefault("activebackground", BORDER)
-            kwargs.setdefault("fg", FG)
-            kwargs.setdefault("activeforeground", FG)
-            kwargs.setdefault("font", ("Segoe UI", 10))
-        kwargs.setdefault("relief", "flat")
-        kwargs.setdefault("bd", 0)
-        kwargs.setdefault("highlightthickness", 1)
-        kwargs.setdefault("highlightbackground", BORDER)
-        kwargs.setdefault("highlightcolor", ACCENT)
-        kwargs.setdefault("padx", 14)
-        kwargs.setdefault("pady", 7)
-        kwargs.setdefault("cursor", "hand2")
-        kwargs.setdefault("disabledforeground", FG_MUTED)
-        button = tk.Button(parent, text=text, command=command, **kwargs)
-        def set_hover(_event=None):
-            if button.cget("state") != "disabled":
-                button.configure(bg=ACCENT_ACTIVE if primary else BORDER)
-
-        def clear_hover(_event=None):
-            if button.cget("state") != "disabled":
-                button.configure(bg=ACCENT if primary else BG_ENTRY)
-
-        button.bind("<Enter>", set_hover, add="+")
-        button.bind("<Leave>", clear_hover, add="+")
-        button.bind("<ButtonPress-1>", lambda _event: button.configure(relief="sunken"), add="+")
-        button.bind("<ButtonRelease-1>", lambda _event: button.configure(relief="flat"), add="+")
-        return button
+        for option in ("bg", "activebackground", "fg", "activeforeground", "relief", "bd",
+                       "highlightthickness", "highlightbackground", "highlightcolor", "padx",
+                       "pady", "disabledforeground", "anchor"):
+            kwargs.pop(option, None)
+        kwargs.setdefault("style", "Primary.TButton" if primary else "App.TButton")
+        return ttkb.Button(parent, text=text, command=command, **kwargs) if ttkb is not None else tk.Button(
+            parent, text=text, command=command, bg=ACCENT if primary else BG_ENTRY,
+            activebackground=ACCENT_ACTIVE if primary else BORDER, fg=BUTTON_FG if primary else FG,
+            activeforeground=BUTTON_FG if primary else FG, padx=14, pady=7, **kwargs
+        )
 
     def _radio(self, parent, **kwargs):
-        kwargs.setdefault("bg", parent.cget("bg"))
-        kwargs.setdefault("fg", FG)
-        kwargs.setdefault("selectcolor", ACCENT)
-        kwargs.setdefault("activebackground", parent.cget("bg"))
-        kwargs.setdefault("activeforeground", FG)
-        kwargs.setdefault("font", ("Segoe UI", 11))
-        kwargs.setdefault("highlightthickness", 1)
-        kwargs.setdefault("highlightbackground", BORDER)
-        kwargs.setdefault("highlightcolor", ACCENT)
-        kwargs.setdefault("padx", 8)
-        kwargs.setdefault("pady", 5)
-        kwargs.setdefault("cursor", "hand2")
-        return tk.Radiobutton(parent, **kwargs)
+        for option in ("bg", "fg", "selectcolor", "activebackground", "activeforeground",
+                       "highlightthickness", "highlightbackground", "highlightcolor", "padx", "pady"):
+            kwargs.pop(option, None)
+        kwargs.setdefault("style", "App.TRadiobutton")
+        return ttkb.Radiobutton(parent, **kwargs) if ttkb is not None else tk.Radiobutton(parent, **kwargs)
 
     def _check(self, parent, **kwargs):
-        kwargs.setdefault("bg", parent.cget("bg"))
-        kwargs.setdefault("fg", FG)
-        # The selected indicator is the accent color with a visible tick;
-        # the unchecked indicator returns to the normal blank background.
-        kwargs.setdefault("selectcolor", ACCENT)
-        kwargs.setdefault("activebackground", parent.cget("bg"))
-        kwargs.setdefault("activeforeground", FG)
-        kwargs.setdefault("font", ("Segoe UI", 11))
-        kwargs.setdefault("indicatoron", True)
-        kwargs.setdefault("highlightthickness", 1)
-        kwargs.setdefault("highlightbackground", BORDER)
-        kwargs.setdefault("highlightcolor", ACCENT)
-        kwargs.setdefault("padx", 8)
-        kwargs.setdefault("pady", 5)
-        kwargs.setdefault("cursor", "hand2")
-        return tk.Checkbutton(parent, **kwargs)
+        for option in ("bg", "fg", "selectcolor", "activebackground", "activeforeground",
+                       "highlightthickness", "highlightbackground", "highlightcolor", "padx", "pady",
+                       "indicatoron"):
+            kwargs.pop(option, None)
+        kwargs.setdefault("style", "App.TCheckbutton")
+        return ttkb.Checkbutton(parent, **kwargs) if ttkb is not None else tk.Checkbutton(parent, **kwargs)
 
     def _scrolled_text(self, parent, bg, fg, **kwargs):
         kwargs.setdefault("bg", bg)
@@ -1754,20 +1827,29 @@ class GGUVDODApp(tk.Tk):
         self._button(footer, "Close", dialog.destroy, primary=True).pack(side="right")
 
     def _build_status_bar(self):
-        status_bar = tk.Frame(self, bg=STATUS_BAR_BG, height=38, bd=0,
-                              highlightthickness=1, highlightbackground=BORDER)
+        status_bar = ttkb.Frame(self, style="Status.TFrame", height=42) if ttkb is not None else tk.Frame(
+            self, bg=STATUS_BAR_BG, height=42, bd=0, highlightthickness=1, highlightbackground=BORDER
+        )
         status_bar.pack(side="bottom", fill="x")
         status_bar.pack_propagate(False)
 
         def add_cell(caption, variable, width, tooltip):
-            cell = tk.Frame(status_bar, bg=STATUS_BAR_BG, width=width)
+            cell = ttkb.Frame(status_bar, style="Status.TFrame", width=width) if ttkb is not None else tk.Frame(
+                status_bar, bg=STATUS_BAR_BG, width=width
+            )
             cell.pack(side="left", fill="y", padx=(10, 0))
             cell.pack_propagate(False)
-            label = tk.Label(cell, text=caption, bg=STATUS_BAR_BG, fg=FG_MUTED,
-                             font=("Segoe UI", 9, "bold"), anchor="w")
+            label = ttkb.Label(cell, text=caption, style="StatusMuted.TLabel",
+                               font=("Segoe UI", 9, "bold"), anchor="w") if ttkb is not None else tk.Label(
+                cell, text=caption, bg=STATUS_BAR_BG, fg=FG_MUTED,
+                font=("Segoe UI", 9, "bold"), anchor="w"
+            )
             label.pack(side="left")
-            value = tk.Label(cell, textvariable=variable, bg=STATUS_BAR_BG, fg=STATUS_BAR_FG,
-                             font=("Segoe UI", 9), anchor="w")
+            value = ttkb.Label(cell, textvariable=variable, style="Status.TLabel",
+                               font=("Segoe UI", 9), anchor="w") if ttkb is not None else tk.Label(
+                cell, textvariable=variable, bg=STATUS_BAR_BG, fg=STATUS_BAR_FG,
+                font=("Segoe UI", 9), anchor="w"
+            )
             value.pack(side="left", padx=(5, 0))
             self._add_tooltip(cell, tooltip)
 
@@ -1932,7 +2014,7 @@ class GGUVDODApp(tk.Tk):
             return
         self.download_thumbnail_btn.configure(state="disabled")
         self.preview_status_var.set("Downloading high-quality thumbnail...")
-        self.preview_status_label.configure(fg=FG_MUTED)
+        self._set_label_foreground(self.preview_status_label, FG_MUTED)
         threading.Thread(
             target=self._thumbnail_download_worker,
             args=(thumbnail_url, destination),
@@ -1962,13 +2044,13 @@ class GGUVDODApp(tk.Tk):
 
     def _thumbnail_download_complete(self, destination):
         self.preview_status_var.set(f"High-quality thumbnail saved: {os.path.basename(destination)}")
-        self.preview_status_label.configure(fg=SUCCESS)
+        self._set_label_foreground(self.preview_status_label, SUCCESS)
         self.download_thumbnail_btn.configure(state="normal" if self._preview_thumbnail_url else "disabled")
         self.log(f"High-quality thumbnail saved: {destination}")
 
     def _thumbnail_download_failed(self, error):
         self.preview_status_var.set(f"Thumbnail download failed: {error}")
-        self.preview_status_label.configure(fg=ACCENT)
+        self._set_label_foreground(self.preview_status_label, ACCENT)
         self.download_thumbnail_btn.configure(state="normal" if self._preview_thumbnail_url else "disabled")
 
     @classmethod
@@ -2052,7 +2134,7 @@ class GGUVDODApp(tk.Tk):
         self.preview_details_var.set("Title, thumbnail, duration, uploader, and platform will appear here.")
         self.preview_status_var.set("Waiting for a link")
         self.preview_source_var.set("Source: waiting for a link")
-        self.preview_status_label.configure(fg=FG_MUTED)
+        self._set_label_foreground(self.preview_status_label, FG_MUTED)
         self._preview_photo = None
         self._preview_thumbnail_url = ""
         self.download_thumbnail_btn.configure(state="disabled")
@@ -2068,7 +2150,7 @@ class GGUVDODApp(tk.Tk):
         self.preview_details_var.set("Fetching public title, source, and thumbnail...")
         self.preview_status_var.set("Waiting for typing to finish...")
         self.preview_source_var.set("Source: loading preview...")
-        self.preview_status_label.configure(fg=FG_MUTED)
+        self._set_label_foreground(self.preview_status_label, FG_MUTED)
         self._preview_photo = None
         self._preview_thumbnail_url = ""
         self.download_thumbnail_btn.configure(state="disabled")
@@ -2088,7 +2170,7 @@ class GGUVDODApp(tk.Tk):
         self._preview_photo = None
         self._preview_thumbnail_url = ""
         self.download_thumbnail_btn.configure(state="disabled")
-        self.preview_status_label.configure(fg=ACCENT)
+        self._set_label_foreground(self.preview_status_label, ACCENT)
         self.preview_image_label.configure(
             image="", text="Thumbnail unavailable",
             width=PREVIEW_PLACEHOLDER_COLUMNS,
@@ -2103,7 +2185,7 @@ class GGUVDODApp(tk.Tk):
         self.preview_source_var.set(f"Source: {preview.get('source') or 'Unknown source'}")
         preview_status = preview.get("status", "Preview ready")
         self.preview_status_var.set(preview_status)
-        self.preview_status_label.configure(fg=WARNING if preview.get("status") else SUCCESS)
+        self._set_label_foreground(self.preview_status_label, WARNING if preview.get("status") else SUCCESS)
         self._preview_thumbnail_url = preview.get("thumbnail_url") or ""
         self.download_thumbnail_btn.configure(state="normal" if self._preview_thumbnail_url else "disabled")
         thumbnail_data = preview.get("thumbnail_data")
@@ -2324,9 +2406,11 @@ class GGUVDODApp(tk.Tk):
     def _update_ffmpeg_status(self, *_args):
         path = self.ffmpeg_var.get().strip()
         if path and os.path.isfile(path):
-            self.ffmpeg_status_label.config(text=f"\u2713 Using: {path}", fg=SUCCESS)
+            self.ffmpeg_status_label.config(text=f"\u2713 Using: {path}")
+            self._set_label_foreground(self.ffmpeg_status_label, SUCCESS)
         elif path:
-            self.ffmpeg_status_label.config(text="\u26a0 That file wasn't found - check the path.", fg=WARNING)
+            self.ffmpeg_status_label.config(text="\u26a0 That file wasn't found - check the path.")
+            self._set_label_foreground(self.ffmpeg_status_label, WARNING)
         else:
             self.ffmpeg_status_label.config(
                 text="\u26a0 ffmpeg wasn't found automatically - click Browse, or install it (see README).",
