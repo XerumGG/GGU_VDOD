@@ -4,7 +4,7 @@ Handling multiple video title and previews while pasted multiple different links
 
 Changeable key binds
 
-Addition and improvements in UI themes --> Dark theme, fainted theme, orange theme, green-hacker theme
+Addition and improvements in UI themes --> Dark theme, fainted theme, orange theme, green-hacker theme, Custom theme with save option( expose all the parameters of UI color elements)
 
 
 
