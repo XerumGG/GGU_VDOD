@@ -151,24 +151,24 @@ CONNECTIVITY_ENDPOINTS = (
 )
 
 # -------------------------------------------------------------- themes -----
-BG = "#1e1e1e"
-BG_PANEL = "#252526"
-BG_ENTRY = "#2d2d2e"
-BG_LOG = "#121212"
-FG = "#e6e6e6"
-FG_MUTED = "#9a9a9a"
-FG_LOG = "#d4d4d4"
-BORDER = "#3c3c3c"
+BG = "#000000"
+BG_PANEL = "#0a0a0a"
+BG_ENTRY = "#111111"
+BG_LOG = "#000000"
+FG = "#f2f2f2"
+FG_MUTED = "#a7a7a7"
+FG_LOG = "#dedede"
+BORDER = "#303030"
 ACCENT = "#e5484d"
 ACCENT_ACTIVE = "#c53f43"
 SUCCESS = "#57c26a"
 WARNING = "#e5b84d"
-STATUS_BAR_BG = "#171717"
-STATUS_BAR_FG = "#e6e6e6"
+STATUS_BAR_BG = "#050505"
+STATUS_BAR_FG = "#f2f2f2"
 BUTTON_FG = "#ffffff"
-TOOLTIP_BG = "#101010"
+TOOLTIP_BG = "#0b0b0b"
 TOOLTIP_FG = "#f4f4f4"
-TOOLTIP_BORDER = "#555555"
+TOOLTIP_BORDER = "#4a4a4a"
 SELECTION_BG = ACCENT
 
 THEME_COLOR_FIELDS = (
@@ -195,11 +195,11 @@ THEME_COLOR_FIELDS = (
 
 THEME_PRESETS = {
     "Dark": {
-        "window_bg": "#1e1e1e", "panel_bg": "#252526", "entry_bg": "#2d2d2e", "log_bg": "#121212",
-        "text_fg": "#e6e6e6", "muted_fg": "#9a9a9a", "log_fg": "#d4d4d4", "border": "#3c3c3c",
+        "window_bg": "#000000", "panel_bg": "#0a0a0a", "entry_bg": "#111111", "log_bg": "#000000",
+        "text_fg": "#f2f2f2", "muted_fg": "#a7a7a7", "log_fg": "#dedede", "border": "#303030",
         "accent": "#e5484d", "accent_active": "#c53f43", "success": "#57c26a", "warning": "#e5b84d",
-        "status_bar_bg": "#171717", "status_bar_fg": "#e6e6e6", "button_fg": "#ffffff",
-        "tooltip_bg": "#101010", "tooltip_fg": "#f4f4f4", "tooltip_border": "#555555", "selection_bg": "#e5484d",
+        "status_bar_bg": "#050505", "status_bar_fg": "#f2f2f2", "button_fg": "#ffffff",
+        "tooltip_bg": "#0b0b0b", "tooltip_fg": "#f4f4f4", "tooltip_border": "#4a4a4a", "selection_bg": "#e5484d",
     },
     "Fainted": {
         "window_bg": "#303236", "panel_bg": "#383b40", "entry_bg": "#41454b", "log_bg": "#26282c",
@@ -484,21 +484,31 @@ class LocalMediaConvertorPP(FFmpegPostProcessor):
             return [], info
 
         same_extension = source_ext == self.target_ext
-        destination = replace_extension(
+        temporary_path = replace_extension(
             source_path,
             f"ggu-converted.{self.target_ext}" if same_extension else self.target_ext,
             source_ext,
         )
+        destination = temporary_path
         args = self.output_args or self.fallback_args or ["-c", "copy"]
         self.to_screen(f'Converting {source_ext.upper()} to {self.target_ext.upper()}: {destination}')
-        self.run_ffmpeg(source_path, destination, args)
-
-        if same_extension:
-            os.replace(destination, source_path)
-            destination = source_path
-            files_to_delete = []
-        else:
-            files_to_delete = [source_path]
+        try:
+            self.run_ffmpeg(source_path, destination, args)
+            if same_extension:
+                # Re-encoding an MP4 to MP4 (or another same-container conversion)
+                # must replace the original atomically.  The working filename must
+                # never survive as a second user-visible download.
+                os.replace(temporary_path, source_path)
+                destination = source_path
+                files_to_delete = []
+            else:
+                files_to_delete = [source_path]
+        finally:
+            if same_extension and os.path.isfile(temporary_path):
+                try:
+                    os.remove(temporary_path)
+                except OSError:
+                    pass
 
         info["filepath"] = destination
         info["format"] = info["ext"] = self.target_ext
@@ -1428,12 +1438,25 @@ class GGUVDODApp(tk.Tk):
         dialog.title("Preferences - Key Bindings")
         dialog.configure(bg=BG)
         dialog.transient(self)
-        dialog.resizable(False, False)
-        dialog.grab_set()
+        self._configure_landing_dialog(dialog, "620x460", (520, 380))
 
         body = self._frame(dialog)
         body.pack(fill="both", expand=True, padx=20, pady=16)
-        title = self._label(body, text="Key bindings and scroll speed", font=("Segoe UI", 15, "bold"))
+        actions = self._frame(body)
+        actions.pack(fill="x", pady=(0, 12))
+        title = self._label(actions, text="Key bindings and scroll speed", font=("Segoe UI", 15, "bold"))
+        title.pack(side="left")
+
+        def apply_preferences():
+            self.scroll_speed_var.set(clamp_scroll_speed(dialog_speed.get()))
+            save_config(self._settings_from_ui())
+            dialog.destroy()
+
+        self._button(actions, "Close", dialog.destroy).pack(side="right")
+        self._button(actions, "Apply", apply_preferences, primary=True).pack(side="right", padx=(0, 8))
+
+        title = self._label(body, text="Choose the scroll response you prefer. Standard editing shortcuts are always available.",
+                            fg=FG_MUTED, font=("Segoe UI", 10))
         title.pack(anchor="w", pady=(0, 12))
 
         speed_row = self._frame(body)
@@ -1461,60 +1484,57 @@ class GGUVDODApp(tk.Tk):
             self._label(row, text=name, width=14, anchor="w").pack(side="left")
             self._label(row, text=binding, fg=FG_MUTED, anchor="w").pack(side="left")
 
-        button_row = self._frame(body)
-        button_row.pack(fill="x", pady=(16, 0))
-        self._button(button_row, "Cancel", dialog.destroy).pack(side="right")
-
-        def apply_preferences():
-            self.scroll_speed_var.set(clamp_scroll_speed(dialog_speed.get()))
-            save_config(self._settings_from_ui())
-            dialog.destroy()
-
-        self._button(button_row, "Apply", apply_preferences, primary=True).pack(side="right", padx=(0, 10))
-
     @staticmethod
     def _valid_theme_color(value):
         return bool(re.fullmatch(r"#[0-9a-fA-F]{6}", str(value or "").strip()))
 
-    def _recolor_widget_tree(self, old_colors):
-        old_to_new = {}
-        for key, _label in THEME_COLOR_FIELDS:
-            old_value = old_colors.get(key)
-            new_value = self.theme_colors.get(key)
-            if old_value and new_value and old_value != new_value:
-                old_to_new[old_value] = new_value
+    def _configure_landing_dialog(self, dialog, geometry, minimum_size):
+        """Give landing dialogs normal Windows window controls and safe sizing."""
+        dialog.geometry(geometry)
+        dialog.minsize(*minimum_size)
+        dialog.resizable(True, True)
+        dialog.protocol("WM_DELETE_WINDOW", dialog.destroy)
+        return dialog
 
-        color_options = (
-            "background", "foreground", "insertbackground", "highlightbackground",
-            "highlightcolor", "selectbackground", "selectforeground", "activebackground",
-            "activeforeground", "disabledforeground", "selectcolor", "troughcolor",
+    def _refresh_theme_sensitive_widgets(self):
+        """Refresh only Tk widgets that do not inherit ttk styles.
+
+        Walking every widget and every color option made theme changes visibly laggy,
+        especially on the larger Advanced panel. ttk widgets follow their shared
+        styles, so only native canvases, text boxes, and image labels need updates.
+        """
+        try:
+            self.main_canvas.configure(bg=BG)
+        except (AttributeError, tk.TclError):
+            pass
+
+        text_widgets = (
+            (getattr(self, "url_text", None), BG_ENTRY, FG),
+            (getattr(self, "log_box", None), BG_LOG, FG_LOG),
         )
+        for widget, background, foreground in text_widgets:
+            if widget is None:
+                continue
+            try:
+                widget.configure(bg=background, fg=foreground, insertbackground=foreground,
+                                 highlightbackground=BORDER, highlightcolor=ACCENT,
+                                 selectbackground=SELECTION_BG, selectforeground=BUTTON_FG)
+                widget.vbar.configure(bg=BG_PANEL, troughcolor=BG, activebackground=BORDER)
+            except (AttributeError, tk.TclError):
+                pass
 
-        def recolor(widget):
-            for option in color_options:
-                try:
-                    current = str(widget.cget(option))
-                except (tk.TclError, TypeError):
-                    continue
-                replacement = old_to_new.get(current)
-                if replacement:
-                    try:
-                        widget.configure(**{option: replacement})
-                    except tk.TclError:
-                        pass
-            for child in widget.winfo_children():
-                recolor(child)
-
-        recolor(self)
+        try:
+            self.preview_image_label.configure(bg=BG_ENTRY, fg=FG_MUTED, highlightbackground=BORDER)
+        except (AttributeError, tk.TclError):
+            pass
 
     def _apply_theme(self, theme_name, colors):
-        old_colors = dict(self.theme_colors)
         self.theme_name = theme_name if theme_name in THEME_PRESETS or theme_name == "Custom" else "Dark"
         self.theme_colors = dict(colors)
         _set_theme_globals(self.theme_colors)
         self.configure(bg=BG)
         self._setup_style()
-        self._recolor_widget_tree(old_colors)
+        self._refresh_theme_sensitive_widgets()
         self._build_menu_bar()
         self._update_ffmpeg_status()
         save_config(self._settings_from_ui())
@@ -1524,20 +1544,41 @@ class GGUVDODApp(tk.Tk):
         dialog.title("Preferences - Themes and colors")
         dialog.configure(bg=BG)
         dialog.transient(self)
-        dialog.geometry("760x760")
+        self._configure_landing_dialog(dialog, "760x720", (560, 460))
 
-        body = self._frame(dialog)
-        body.pack(fill="both", expand=True, padx=20, pady=16)
-        self._label(body, text="Themes and colors", font=("Segoe UI", 16, "bold")).pack(anchor="w")
+        header = self._frame(dialog)
+        header.pack(fill="x", padx=20, pady=(16, 8))
+        heading = self._frame(header)
+        heading.pack(side="left", fill="x", expand=True)
+        self._label(heading, text="Themes and colors", font=("Segoe UI", 16, "bold")).pack(anchor="w")
         self._label(
-            body,
-            text="Pick a preset, or choose Custom and edit every exposed color as #RRGGBB.",
+            heading,
+            text="Choose a preset or customize every color. Dark is the pitch-black default.",
             fg=FG_MUTED,
             font=("Segoe UI", 10),
-        ).pack(anchor="w", pady=(4, 12))
+        ).pack(anchor="w", pady=(4, 0))
+
+        scroll_shell = self._frame(dialog)
+        scroll_shell.pack(fill="both", expand=True, padx=20, pady=(0, 12))
+        canvas = tk.Canvas(scroll_shell, bg=BG, highlightthickness=0, bd=0)
+        scrollbar = ttk.Scrollbar(scroll_shell, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        body = self._frame(canvas)
+        body_window = canvas.create_window((0, 0), window=body, anchor="nw")
+        body.bind("<Configure>", lambda _event: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda event: canvas.itemconfigure(body_window, width=event.width))
+
+        def scroll_dialog(event):
+            if event.delta:
+                canvas.yview_scroll(-max(1, int(event.delta / 120)), "units")
+                return "break"
+
+        dialog.bind("<MouseWheel>", scroll_dialog, add="+")
 
         preset_row = self._frame(body)
-        preset_row.pack(fill="x", pady=(0, 10))
+        preset_row.pack(fill="x", padx=2, pady=(2, 10))
         self._label(preset_row, text="Theme:").pack(side="left")
         theme_var = tk.StringVar(value=self.theme_name)
         theme_combo = ttk.Combobox(
@@ -1551,7 +1592,7 @@ class GGUVDODApp(tk.Tk):
 
         color_vars = {}
         color_rows = self._frame(body)
-        color_rows.pack(fill="both", expand=True)
+        color_rows.pack(fill="x", padx=2, pady=(0, 12))
         color_rows.grid_columnconfigure(1, weight=1)
         draft = dict(self.theme_colors)
 
@@ -1582,10 +1623,6 @@ class GGUVDODApp(tk.Tk):
 
         theme_combo.bind("<<ComboboxSelected>>", load_preset)
 
-        button_row = self._frame(body)
-        button_row.pack(fill="x", pady=(14, 0))
-        self._button(button_row, "Cancel", dialog.destroy).pack(side="right")
-
         def apply_theme():
             colors = {}
             for key, label_text in THEME_COLOR_FIELDS:
@@ -1597,7 +1634,8 @@ class GGUVDODApp(tk.Tk):
             self._apply_theme(theme_var.get(), colors)
             dialog.destroy()
 
-        self._button(button_row, "Apply and save", apply_theme, primary=True).pack(side="right", padx=(0, 10))
+        self._button(header, "Close", dialog.destroy).pack(side="right")
+        self._button(header, "Apply and save", apply_theme, primary=True).pack(side="right", padx=(0, 8))
 
     def _show_shortcuts(self):
         self._show_help_page("shortcuts")
@@ -1607,12 +1645,15 @@ class GGUVDODApp(tk.Tk):
         dialog.title("GGU_VDOD Help Center")
         dialog.configure(bg=BG)
         dialog.transient(self)
-        dialog.geometry("900x700")
+        self._configure_landing_dialog(dialog, "900x700", (640, 480))
 
         header = self._frame(dialog)
         header.pack(fill="x", padx=22, pady=16)
-        self._label(header, text="GGU_VDOD Help Center",
-                    font=("Segoe UI", 22, "bold")).pack(anchor="w")
+        title_area = self._frame(header)
+        title_area.pack(fill="x")
+        self._label(title_area, text="GGU_VDOD Help Center",
+                    font=("Segoe UI", 22, "bold")).pack(side="left")
+        self._button(title_area, "Close", dialog.destroy).pack(side="right")
         self._label(header,
                     text="Guides, shortcuts, troubleshooting, and the installed platform extractor directory.",
                     fg=FG_MUTED, font=("Segoe UI", 10)).pack(anchor="w", pady=(4, 12))
@@ -1697,15 +1738,18 @@ class GGUVDODApp(tk.Tk):
         dialog.title("Supported platforms and extractors")
         dialog.configure(bg=BG)
         dialog.transient(self)
-        dialog.geometry("820x620")
+        self._configure_landing_dialog(dialog, "820x620", (600, 420))
 
         header = self._frame(dialog)
         header.pack(fill="x", padx=16, pady=12)
+        title_area = self._frame(header)
+        title_area.pack(fill="x")
         self._label(
-            header,
+            title_area,
             text="Platforms supported by this installed yt-dlp build",
             font=("Segoe UI", 14, "bold"),
-        ).pack(anchor="w")
+        ).pack(side="left")
+        self._button(title_area, "Close", dialog.destroy).pack(side="right")
         self._label(
             header,
             text="Support changes over time and individual sites may be broken, restricted, or require cookies.",
@@ -1788,10 +1832,11 @@ class GGUVDODApp(tk.Tk):
         dialog.title("About GGU_VDOD")
         dialog.configure(bg=BG)
         dialog.transient(self)
-        dialog.geometry("820x680")
+        self._configure_landing_dialog(dialog, "820x680", (600, 440))
 
         header = self._frame(dialog)
         header.pack(fill="x", padx=28, pady=24)
+        self._button(header, "Close", dialog.destroy).pack(side="right")
         self._label(header, text="GGU_VDOD", font=("Segoe UI", 28, "bold")).pack()
         self._label(header, text="Media downloader and metadata workspace",
                     fg=FG_MUTED, font=("Segoe UI", 11)).pack(pady=(4, 12))
@@ -1900,7 +1945,17 @@ class GGUVDODApp(tk.Tk):
         ).start()
 
     def _preview_worker(self, url, token, browser, cookies_file, proxy):
-        options = {"quiet": True, "no_warnings": True, "skip_download": True}
+        preview_url = self._preview_target_url(url)
+        options = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            # A pasted watch URL can contain a playlist context. Preview the
+            # selected video quickly instead of expanding the whole playlist.
+            "noplaylist": True,
+            "socket_timeout": 12,
+            "extractor_retries": 1,
+        }
         if browser != "None":
             options["cookiesfrombrowser"] = (browser.lower(), None, None, None)
         if cookies_file:
@@ -1909,20 +1964,20 @@ class GGUVDODApp(tk.Tk):
             options["proxy"] = proxy
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
-                info = ydl.extract_info(url, download=False)
+                info = ydl.extract_info(preview_url, download=False)
         except Exception as error:
             final_error = error
             if browser != "None" and _looks_like_cookie_database_error(error):
                 options.pop("cookiesfrombrowser", None)
                 try:
                     with yt_dlp.YoutubeDL(options) as ydl:
-                        info = ydl.extract_info(url, download=False)
+                        info = ydl.extract_info(preview_url, download=False)
                 except Exception as retry_error:
                     final_error = retry_error
                 else:
                     final_error = None
             if final_error is not None:
-                public_preview = self._get_public_title_preview(url)
+                public_preview = self._get_public_title_preview(preview_url)
                 if public_preview:
                     self._enqueue(self._apply_preview, token, public_preview)
                 else:
@@ -1931,7 +1986,13 @@ class GGUVDODApp(tk.Tk):
 
         if info.get("_type") == "playlist":
             entries = info.get("entries") or []
-            info = next((entry for entry in entries if entry), info)
+            selected_video_id = self._youtube_video_id(url)
+            info = next(
+                (entry for entry in entries if entry and (
+                    not selected_video_id or entry.get("id") == selected_video_id
+                )),
+                next((entry for entry in entries if entry), info),
+            )
 
         thumbnail_url = self._best_thumbnail_url(info)
         thumbnail_data = self._download_preview_thumbnail(thumbnail_url)
@@ -1953,6 +2014,28 @@ class GGUVDODApp(tk.Tk):
             "source": self._friendly_source_name(info.get("extractor_key") or info.get("extractor")),
         }
         self._enqueue(self._apply_preview, token, preview)
+
+    @staticmethod
+    def _youtube_video_id(url):
+        """Return a YouTube watch ID when a pasted URL includes playlist data."""
+        try:
+            parsed = urllib.parse.urlsplit(url)
+            host = parsed.netloc.casefold().split(":", 1)[0]
+            if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}:
+                return urllib.parse.parse_qs(parsed.query).get("v", [""])[0]
+            if host in {"youtu.be", "www.youtu.be"}:
+                return parsed.path.strip("/").split("/", 1)[0]
+        except (TypeError, ValueError):
+            pass
+        return ""
+
+    @classmethod
+    def _preview_target_url(cls, url):
+        """Strip YouTube playlist context while preserving the selected video."""
+        video_id = cls._youtube_video_id(url)
+        if video_id:
+            return f"https://www.youtube.com/watch?v={urllib.parse.quote(video_id)}"
+        return url
 
     @staticmethod
     def _best_thumbnail_url(info):
@@ -2352,6 +2435,19 @@ class GGUVDODApp(tk.Tk):
                 continue
 
         removed = 0
+        # Same-container conversions use this filename as an atomic working file.
+        # Remove any abandoned working file from this run before handling sidecars.
+        for name in names:
+            if ".ggu-converted." not in name.casefold():
+                continue
+            path = os.path.join(output_dir, name)
+            try:
+                if os.path.isfile(path) and os.path.getmtime(path) >= started_at - 2:
+                    os.remove(path)
+                    removed += 1
+            except OSError:
+                pass
+
         for final_name in finished_media:
             stem = os.path.splitext(final_name)[0]
             prefix = stem + "."
@@ -2647,11 +2743,14 @@ class GGUVDODApp(tk.Tk):
         dialog.title("GGU_VDOD Library Update Report")
         dialog.configure(bg=BG)
         dialog.transient(self)
-        dialog.geometry("900x620")
+        self._configure_landing_dialog(dialog, "900x620", (640, 440))
 
         header = self._frame(dialog)
         header.pack(fill="x", padx=24, pady=(20, 12))
-        self._label(header, text="Library update report", font=("Segoe UI", 22, "bold")).pack(anchor="w")
+        title_area = self._frame(header)
+        title_area.pack(fill="x")
+        self._label(title_area, text="Library update report", font=("Segoe UI", 22, "bold")).pack(side="left")
+        self._button(title_area, "Close", dialog.destroy).pack(side="right")
         self._label(
             header,
             text=f"Checked {report['checked_at']}  •  No files were changed.",

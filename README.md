@@ -11,7 +11,7 @@ Simple Windows media downloader powered by yt-dlp and FFmpeg.
 - Preview the title, source, duration, resolution, and thumbnail before downloading.
 - Downloads resume after connection loss. The footer shows speed, progress, transfer size, and ETA.
 - Help, About, Preferences, undo/redo, context menus, and a scroll-speed setting are included.
-- Themes include Dark, Fainted, Orange, Green Hacker, and Custom. Custom exposes every UI color
+- Themes include a pitch-black Dark default, Fainted, Orange, Green Hacker, and Custom. Custom exposes every UI color
   and saves the palette for the next launch.
 - Modern buttons, fields, selectors, checkboxes, progress bars, and panels use ttkbootstrap.
 - Buttons and checkboxes use larger hit areas, clear hover/press feedback, and colorful selected
@@ -46,8 +46,9 @@ venv\Scripts\python.exe app.py
 4. Open **Advanced** for cookies, subtitles, metadata, FFmpeg, proxy, exact format IDs,
    and conversion controls.
 
-Change themes with **Edit > Preferences > Themes and colors**. Pick a preset or choose
-**Custom**, edit the hex colors, and click **Apply and save**.
+Change themes with **Edit > Preferences > Themes and colors**. The preference page is
+resizable and scrollable; pick a preset or choose **Custom**, edit the hex colors, and click
+**Apply and save** at the top.
 
 If a link needs sign-in, select an authorized browser cookie source or a `cookies.txt` file.
 The app does not bypass DRM, private access, age checks, bot checks, or regional blocks.
@@ -99,6 +100,10 @@ and Python standard-library networking/threading tools.
 
 ## Changelog
 
+- **#023 - UI stability and preview fixes**: made preferences and landing pages resizable,
+  scrollable, and easy to close; set Dark to a pitch-black default; removed slow full-window
+  theme repainting; made YouTube watch links with playlist context preview the selected video;
+  and prevented stale `.ggu-converted` working files from remaining beside final downloads.
 - **#022 - Fix packaged UI assets**: the build now includes ttkbootstrap fonts and image
   assets, preventing the packaged executable from failing at startup.
 - **#021 - Modern ttkbootstrap UI**: replaced the old flat control layer with themed ttkbootstrap
