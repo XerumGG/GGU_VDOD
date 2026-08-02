@@ -1834,7 +1834,7 @@ class GGUVDODApp(tk.Tk):
         self._label(header, text="GGU_VDOD", font=("Segoe UI", 28, "bold")).pack()
         self._label(header, text="Media downloader and metadata workspace",
                     fg=FG_MUTED, font=("Segoe UI", 11)).pack(pady=(4, 12))
-        self._label(header, text="Developed by: XerumGG",
+        self._label(header, text="Developed by: GG Uranium",
                     fg=ACCENT, font=("Segoe UI", 13, "bold")).pack()
 
         body = self._scrolled_text(dialog, BG_LOG, FG_LOG, state="disabled",

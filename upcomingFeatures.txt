@@ -4,7 +4,7 @@ Handling multiple video title and previews while pasted multiple different links
 
 Complete Playlist mass download #Feat
 
-Changeable key binds more zoom-in-out (Ctrl+"+"/"-") #Navigan
+Changeable key binds more zoom-in-out (Ctrl+"+"/"-"+scroll) #Keybind
 
 Ghost interface of Loading : Ghosting on thumbnail loader (ghosting is not done properly) #Internal
 
@@ -16,9 +16,21 @@ Font panel for changing fonts #UI
 
 Have to  bypass DRM, private access, age checks, bot checks, or regional blocks.  #ANti-Feat
 
+Localization #Feat
+
+Advanced file, folder, path organization #Feat
+
+Video Time-stamp Cutter (Limited)#Feat
+
+Library interface of all downloaded content separated for videos, audios and images. #Feat
+
+In-app video streaming with advanced fine tuned controls. #Feat
+
+Standalone audio player for audio downloaded with playlist level organization. #Feat
+
 -----------------------------------------------------------------------------------------------------
 
-Video thumbnail download : mention the source such as youtube/x/facebook and download the thumbnail in high quality in Thumbnail Preview section #Done
+Video thumbnail download : mention the source such as Youtube/x/Facebook and download the thumbnail in high quality in Thumbnail Preview section #Done
 
 Update option : Checking every library is up-to-date or not ?? #Done
 
