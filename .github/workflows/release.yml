@@ -39,7 +39,7 @@ jobs:
           New-Item -ItemType Directory -Path release | Out-Null
           Copy-Item dist\GGU_VDOD.exe release\
           Copy-Item README.md release\
-          Copy-Item LICENSE.txt release\
+          Copy-Item LICENSE release\
           # ffmpeg is intentionally NOT bundled here - see README for why.
           # Users add their own ffmpeg build next to the exe (or install it system-wide).
           Compress-Archive -Path release\* -DestinationPath GGU_VDOD-windows.zip
