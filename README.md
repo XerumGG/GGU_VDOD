@@ -2,6 +2,10 @@
 
 Simple Windows media downloader powered by yt-dlp and FFmpeg; created by GG Uranium
 
+> **0.2.0-alpha.1:** The project is being migrated from one legacy application
+> file to a modular source layout. Download behavior is intentionally preserved
+> during this architecture phase.
+
 ## What it does
 
 - **Video, Audio, Thumbnail download with all types of fine-tuned controls and quality range**.
@@ -14,6 +18,16 @@ Simple Windows media downloader powered by yt-dlp and FFmpeg; created by GG Uran
 
 
 Use this only for media you own or are allowed to download. Follow site rules and local law.
+
+## Project documentation
+
+- [Architecture](docs/Architecture.md)
+- [Installation](docs/Installation.md)
+- [FAQ](docs/FAQ.md)
+- [Roadmap](docs/Roadmap.md)
+- [Changelog](CHANGELOG.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 
 ## Quick setup
 

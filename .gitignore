@@ -5,6 +5,11 @@
 __pycache__/
 *.py[cod]
 
+# Per-user application preferences and secrets
+settings.json
+.env
+*.cookies.txt
+
 # Virtual Environment
 venv/
 

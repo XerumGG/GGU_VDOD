@@ -1,0 +1,14 @@
+# Repository defaults. User-specific preferences are stored outside the repo.
+application:
+  name: GGU_VDOD
+  theme: Dark
+download:
+  mode: video
+  quality: Best available
+  output_format: MP4
+paths:
+  ffmpeg: auto
+  output_directory: auto
+ui:
+  scroll_speed: 1
+  zoom_percent: 100

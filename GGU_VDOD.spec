@@ -7,7 +7,7 @@ datas += collect_data_files('ttkbootstrap')
 
 a = Analysis(
     ['app.py'],
-    pathex=[],
+    pathex=['src'],
     binaries=[],
     datas=datas,
     hiddenimports=[],

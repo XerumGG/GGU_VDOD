@@ -29,7 +29,7 @@ echo.
 echo [3/4] Building GGU_VDOD.exe (this can take a minute)...
 set "PYI_MODE=--onefile"
 if /I "%GGU_BUILD_MODE%"=="onedir" set "PYI_MODE=--onedir"
-pyinstaller %PYI_MODE% --noconsole --collect-data ttkbootstrap --name GGU_VDOD app.py
+pyinstaller %PYI_MODE% --noconsole --paths src --collect-data ttkbootstrap --name GGU_VDOD app.py
 
 if exist ffmpeg (
     echo Copying bundled ffmpeg folder into dist\ffmpeg...
