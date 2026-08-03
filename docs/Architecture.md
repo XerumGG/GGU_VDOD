@@ -8,9 +8,24 @@ Windows build. `src/ggu_vdod/app.py` is the composition root.
 ## Migration status
 
 The previous single-file implementation is preserved at
-`src/ggu_vdod/ui/main_window.py` as a behavior-preserving baseline. It will be
-split incrementally; no downloader behavior is intentionally changed in this
-structural migration.
+`src/ggu_vdod/ui/main_window.py` as a behavior-preserving baseline. The first
+extraction pass is complete; no downloader behavior is intentionally changed
+in this structural migration.
+
+The current extracted responsibilities are:
+
+- `core/constants.py` — quality, format, retry, zoom, and layout constants.
+- `core/formatting.py` — byte and transfer-rate formatting.
+- `config/paths.py` and `config/store.py` — application locations and settings persistence.
+- `conversion/options.py` — codec arguments, output templates, and sidecar cleanup.
+- `conversion/postprocessor.py` — the local FFmpeg postprocessor adapter.
+- `preview/metadata.py` — YouTube URL normalization and thumbnail/source metadata helpers.
+- `services/ffmpeg.py` and `services/network.py` — FFmpeg discovery and connectivity/error helpers.
+- `ui/widgets.py` — reusable undo/redo entry and animated tooltip widgets.
+
+The remaining UI composition, preview orchestration, update dialogs, and
+download orchestration stay together temporarily because they share Tk state.
+They are the next extraction targets after this baseline has been reviewed.
 
 ## Intended module ownership
 

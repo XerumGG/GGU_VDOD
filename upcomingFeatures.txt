@@ -4,7 +4,7 @@ Handling multiple video title and previews while pasted multiple different links
 
 Complete Playlist mass download #Feat
 
-Changeable key binds more zoom-in-out (Ctrl+"+"/"-"+scroll) #Keybind
+Changeable key binds and Zoom-in-out in boundary (Ctrl+"+"/"-"+scroll) #Keybind
 
 Ghost interface of Loading : Ghosting on thumbnail loader (ghosting is not done properly) #Internal
 

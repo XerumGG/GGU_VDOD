@@ -23,8 +23,6 @@ try:
 except ImportError:  # pragma: no cover - compatibility for older Python builds
     import importlib_metadata
 import queue
-import socket
-import shutil
 import html
 import subprocess
 import urllib.parse
@@ -41,8 +39,6 @@ except ImportError:
 
 try:
     import yt_dlp
-    from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
-    from yt_dlp.utils import replace_extension
 except ImportError:
     _root = tk.Tk()
     _root.withdraw()
@@ -61,94 +57,39 @@ except ImportError:
     Image = None
     ImageTk = None
 
-
-APP_NAME = "GGU_VDOD"
-
-UPDATE_COMPONENTS = (
-    ("yt-dlp", "yt_dlp", "runtime dependency"),
-    ("Pillow", "PIL", "runtime dependency"),
-    ("ttkbootstrap", "ttkbootstrap", "runtime UI dependency"),
-    ("PyInstaller", "PyInstaller", "build dependency"),
+from ..config.paths import get_app_dir, get_default_output_dir
+from ..config.store import load_config, save_config
+from ..conversion.options import (
+    audio_conversion_args, audio_fallback_args, clean_video_sidecars,
+    output_template, valid_bitrate, video_conversion_args, video_fallback_args,
 )
-
-def get_config_dir():
-    """Return a per-user config directory on Windows, macOS, or Linux."""
-    if sys.platform == "win32":
-        base = os.getenv("LOCALAPPDATA") or os.path.expanduser("~\\AppData\\Local")
-    elif sys.platform == "darwin":
-        base = os.path.expanduser("~/Library/Application Support")
-    else:
-        base = os.getenv("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    return os.path.join(base, APP_NAME)
-
-
-def get_default_output_dir():
-    """Choose a writable, conventional downloads folder for the current OS."""
-    downloads = os.path.join(os.path.expanduser("~"), "Downloads")
-    if os.path.isdir(downloads):
-        return os.path.join(downloads, APP_NAME)
-    return os.path.join(os.path.expanduser("~"), APP_NAME)
-
-
-CONFIG_DIR = get_config_dir()
-CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
-
-VIDEO_QUALITIES = ["Best available", "2160p (4K)", "1440p (2K)", "1080p", "720p", "480p", "360p"]
-AUDIO_QUALITIES = ["320 kbps (Best)", "256 kbps", "192 kbps", "128 kbps"]
-# MP4 is the default, but users can still choose another video container.
-VIDEO_OUTPUT_FORMATS = ["MP4", "MKV", "MOV", "AVI", "WebM", "FLV", "MPEG", "TS", "M4V", "OGV", "3GP"]
-AUDIO_OUTPUT_FORMATS = ["MP3", "WAV", "AAC", "FLAC", "OGG", "Opus", "M4A", "WMA", "AIFF", "ALAC"]
-VIDEO_SIDECAR_EXTENSIONS = {
-    ".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".mpeg", ".ts", ".m4v", ".ogv", ".3gp",
-    ".vtt", ".srt", ".ass", ".lrc", ".json", ".description", ".txt",
-    ".jpg", ".jpeg", ".png", ".webp", ".avif", ".gif", ".part",
-}
-VIDEO_FORMAT_EXTENSIONS = {
-    "MP4": "mp4", "MKV": "mkv", "MOV": "mov", "AVI": "avi", "WebM": "webm",
-    "FLV": "flv", "MPEG": "mpeg", "TS": "ts", "M4V": "m4v", "OGV": "ogv", "3GP": "3gp",
-}
-AUDIO_FORMAT_EXTENSIONS = {
-    "MP3": "mp3", "WAV": "wav", "AAC": "aac", "FLAC": "flac", "OGG": "ogg",
-    "Opus": "opus", "M4A": "m4a", "WMA": "wma", "AIFF": "aiff", "ALAC": "alac",
-}
-VIDEO_CODEC_OPTIONS = ["Auto", "H.264", "H.265", "VP9", "AV1"]
-VIDEO_CODEC_ARGS = {
-    "H.264": ["-c:v", "libx264"],
-    "H.265": ["-c:v", "libx265"],
-    "VP9": ["-c:v", "libvpx-vp9"],
-    "AV1": ["-c:v", "libaom-av1"],
-}
-VIDEO_RESOLUTION_OPTIONS = ["Source", "3840x2160", "2560x1440", "1920x1080", "1280x720", "854x480", "640x360"]
-FRAME_RATE_OPTIONS = ["Source", "24", "25", "30", "50", "60"]
-SAMPLE_RATE_OPTIONS = ["Source", "44100", "48000", "96000"]
-CHANNEL_OPTIONS = ["Source", "Mono", "Stereo"]
-COMPRESSION_OPTIONS = ["Auto", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
-COOKIE_BROWSERS = ["None", "Chrome", "Edge", "Firefox", "Brave", "Opera", "Vivaldi", "Safari"]
-
-HEIGHT_MAP = {
-    "2160p (4K)": 2160,
-    "1440p (2K)": 1440,
-    "1080p": 1080,
-    "720p": 720,
-    "480p": 480,
-    "360p": 360,
-    "144p": 144
-}
-
-BITRATE_MAP = {
-    "320 kbps (Best)": "320",
-    "256 kbps": "256",
-    "192 kbps": "192",
-    "128 kbps": "128",
-}
-
-MAX_RETRIES = 999999  # effectively unlimited - keep retrying until internet comes back
-RETRY_WAIT_SECONDS = 5
-CONNECTIVITY_ENDPOINTS = (
-    ("1.1.1.1", 53),
-    ("8.8.8.8", 53),
-    ("www.youtube.com", 443),
+from ..conversion.postprocessor import LocalMediaConvertorPP
+from ..core.constants import (
+    AUDIO_FORMAT_EXTENSIONS, AUDIO_OUTPUT_FORMATS, AUDIO_QUALITIES, BITRATE_MAP,
+    CHANNEL_OPTIONS, clamp_scroll_speed, clamp_zoom_percent, COMPRESSION_OPTIONS,
+    CONNECTIVITY_ENDPOINTS, CONTENT_MIN_WIDTH,
+    COOKIE_BROWSERS, DEFAULT_KEY_BINDINGS, FRAME_RATE_OPTIONS, HEIGHT_MAP,
+    KEY_BINDING_CHOICES, MAX_RETRIES, PREVIEW_HEIGHT, PREVIEW_PLACEHOLDER_COLUMNS,
+    PREVIEW_PLACEHOLDER_ROWS, PREVIEW_WIDTH, RETRY_WAIT_SECONDS, SAMPLE_RATE_OPTIONS,
+    SCROLL_SPEED_DEFAULT, SCROLL_SPEED_MAX, SCROLL_SPEED_MIN, VIDEO_CODEC_ARGS,
+    VIDEO_CODEC_OPTIONS, VIDEO_FORMAT_EXTENSIONS, VIDEO_OUTPUT_FORMATS,
+    VIDEO_QUALITIES, VIDEO_RESOLUTION_OPTIONS, VIDEO_SIDECAR_EXTENSIONS,
+    ZOOM_DEFAULT_PERCENT, ZOOM_MAX_PERCENT, ZOOM_MIN_PERCENT, ZOOM_STEP_PERCENT,
+    APP_NAME, UPDATE_COMPONENTS,
 )
+from ..core.formatting import format_bytes, format_rate
+from ..preview.metadata import (
+    best_thumbnail_url, download_thumbnail_bytes, format_duration,
+    friendly_source_name, preview_target_url, youtube_video_id,
+)
+from ..services.ffmpeg import find_ffmpeg
+from ..services.network import (
+    ConnectionLostError, explain_download_error, is_internet_up,
+    looks_like_connection_error, looks_like_cookie_database_error,
+    looks_like_subtitle_rate_limit,
+)
+from .widgets import Tooltip, UndoEntry
+
 
 # -------------------------------------------------------------- themes -----
 BG = "#000000"
@@ -237,382 +178,10 @@ def _set_theme_globals(colors):
         "TOOLTIP_BG": colors["tooltip_bg"], "TOOLTIP_FG": colors["tooltip_fg"],
         "TOOLTIP_BORDER": colors["tooltip_border"], "SELECTION_BG": colors["selection_bg"],
     })
-SCROLL_SPEED_MIN = 1
-SCROLL_SPEED_MAX = 6
-SCROLL_SPEED_DEFAULT = 1
-ZOOM_MIN_PERCENT = 90
-ZOOM_MAX_PERCENT = 120
-ZOOM_STEP_PERCENT = 10
-ZOOM_DEFAULT_PERCENT = 100
-KEY_BINDING_CHOICES = (
-    "Ctrl + + / Ctrl + =",
-    "Ctrl + -",
-    "Ctrl + 0",
-    "None",
-)
-DEFAULT_KEY_BINDINGS = {
-    "zoom_in": "Ctrl + + / Ctrl + =",
-    "zoom_out": "Ctrl + -",
-    "zoom_reset": "Ctrl + 0",
-}
-CONTENT_MIN_WIDTH = 1000
-PREVIEW_WIDTH = 240
-PREVIEW_HEIGHT = 135
-PREVIEW_PLACEHOLDER_COLUMNS = 30
-PREVIEW_PLACEHOLDER_ROWS = 7
-
-
-def clamp_scroll_speed(value):
-    try:
-        value = int(value)
-    except (TypeError, ValueError):
-        value = SCROLL_SPEED_DEFAULT
-    return max(SCROLL_SPEED_MIN, min(SCROLL_SPEED_MAX, value))
-
-
-def clamp_zoom_percent(value):
-    try:
-        value = int(value)
-    except (TypeError, ValueError):
-        value = ZOOM_DEFAULT_PERCENT
-    return max(ZOOM_MIN_PERCENT, min(ZOOM_MAX_PERCENT, value))
-
-
-class UndoEntry(ttkb.Entry if ttkb is not None else tk.Entry):
-    """Entry widget with portable undo/redo support."""
-
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent, **kwargs)
-        self._history = [self.get()]
-        self._history_index = 0
-        self._internal_edit = False
-        self.bind("<KeyRelease>", self._capture_edit, add="+")
-        self.bind("<<Cut>>", self._capture_after_virtual_edit, add="+")
-        self.bind("<<Paste>>", self._capture_after_virtual_edit, add="+")
-        self.bind("<FocusIn>", self._sync_external_value, add="+")
-
-    def _sync_external_value(self, _event=None):
-        current = self.get()
-        if current != self._history[self._history_index]:
-            self._history = [current]
-            self._history_index = 0
-
-    def _capture_after_virtual_edit(self, _event=None):
-        self.after_idle(self._capture_edit)
-
-    def _capture_edit(self, _event=None):
-        if self._internal_edit:
-            return
-        current = self.get()
-        if current == self._history[self._history_index]:
-            return
-        if self._history_index < len(self._history) - 1:
-            self._history = self._history[:self._history_index + 1]
-        self._history.append(current)
-        self._history_index += 1
-
-    def _restore_history_value(self, index):
-        self._internal_edit = True
-        try:
-            self.delete(0, "end")
-            self.insert(0, self._history[index])
-        finally:
-            self._internal_edit = False
-
-    def edit_undo(self):
-        self._sync_external_value()
-        if self._history_index > 0:
-            self._history_index -= 1
-            self._restore_history_value(self._history_index)
-
-    def edit_redo(self):
-        self._sync_external_value()
-        if self._history_index < len(self._history) - 1:
-            self._history_index += 1
-            self._restore_history_value(self._history_index)
-
-
-def format_rate(bytes_per_second):
-    """Format a transfer rate using compact units suitable for the status bar."""
-    if not bytes_per_second:
-        return "0 B/s"
-    value = float(bytes_per_second)
-    for unit in ("B/s", "KB/s", "MB/s", "GB/s"):
-        if value < 1024 or unit == "GB/s":
-            return f"{value:.1f} {unit}"
-        value /= 1024
-
-
-def format_bytes(byte_count):
-    """Format a byte count for compact progress information."""
-    if not byte_count:
-        return "0 B"
-    value = float(byte_count)
-    for unit in ("B", "KB", "MB", "GB", "TB"):
-        if value < 1024 or unit == "TB":
-            return f"{value:.1f} {unit}"
-        value /= 1024
-
-
-class Tooltip:
-    """Small animated help popup shown when the pointer rests over a widget."""
-
-    def __init__(self, widget, text, delay_ms=300):
-        self.widget = widget
-        self.text = text
-        self.delay_ms = delay_ms
-        self.window = None
-        self.show_after_id = None
-        self.fade_id = None
-        widget.bind("<Enter>", self._on_enter, add="+")
-        widget.bind("<Leave>", self._on_leave, add="+")
-
-    def _on_enter(self, _event=None):
-        self._cancel_timer("show_after_id")
-        self._cancel_timer("fade_id")
-        self.show_after_id = self.widget.after(self.delay_ms, self._show)
-
-    def _on_leave(self, _event=None):
-        self._cancel_timer("show_after_id")
-        if self.window is not None:
-            self._fade_out()
-
-    def _cancel_timer(self, attribute):
-        timer_id = getattr(self, attribute)
-        if timer_id is not None:
-            try:
-                self.widget.after_cancel(timer_id)
-            except tk.TclError:
-                pass
-            setattr(self, attribute, None)
-
-    def _show(self):
-        self.show_after_id = None
-        if self.window is not None:
-            self._fade_in()
-            return
-        try:
-            window = tk.Toplevel(self.widget)
-            window.overrideredirect(True)
-            window.attributes("-topmost", True)
-            window.configure(bg=TOOLTIP_BG)
-            label = tk.Label(
-                window, text=self.text, justify="left", wraplength=360,
-                bg=TOOLTIP_BG, fg=TOOLTIP_FG, padx=12, pady=8,
-                relief="solid", bd=1, highlightthickness=1,
-                highlightbackground=TOOLTIP_BORDER, font=("Segoe UI", 10),
-            )
-            label.pack()
-            window.update_idletasks()
-            x = self.widget.winfo_rootx()
-            y = self.widget.winfo_rooty() + self.widget.winfo_height() + 8
-            screen_w = self.widget.winfo_screenwidth()
-            popup_w = window.winfo_reqwidth()
-            if x + popup_w > screen_w - 8:
-                x = max(8, screen_w - popup_w - 8)
-            window.geometry(f"+{x}+{y}")
-            self.window = window
-            try:
-                window.attributes("-alpha", 0.0)
-            except tk.TclError:
-                pass
-            self._fade_in()
-        except tk.TclError:
-            self.window = None
-
-    def _fade_in(self, alpha=0.0):
-        if self.window is None or not self.window.winfo_exists():
-            return
-        alpha = min(alpha + 0.12, 1.0)
-        try:
-            self.window.attributes("-alpha", alpha)
-        except tk.TclError:
-            alpha = 1.0
-        if alpha < 1.0:
-            self.fade_id = self.widget.after(18, self._fade_in, alpha)
-
-    def _fade_out(self, alpha=1.0):
-        if self.window is None:
-            return
-        self._cancel_timer("fade_id")
-        alpha -= 0.16
-        if alpha <= 0.0:
-            try:
-                self.window.destroy()
-            except tk.TclError:
-                pass
-            self.window = None
-            return
-        try:
-            self.window.attributes("-alpha", alpha)
-        except tk.TclError:
-            alpha = 0.0
-        self.fade_id = self.widget.after(18, self._fade_out, alpha)
-
-
-def get_app_dir():
-    """Folder the running exe (or script) lives in - used to look for a bundled ffmpeg."""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(sys.executable)
-    # The UI implementation lives under src/ggu_vdod/ui; source-mode FFmpeg
-    # discovery must still resolve relative to the repository launcher.
-    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-
-
-def find_ffmpeg():
-    """Best-effort auto-detect of ffmpeg so most people never have to set it manually."""
-    candidates = []
-
-    which_result = shutil.which("ffmpeg")
-    if which_result:
-        candidates.append(which_result)
-
-    app_dir = get_app_dir()
-    executable_names = ["ffmpeg.exe", "ffmpeg"] if sys.platform == "win32" else ["ffmpeg"]
-    for executable_name in executable_names:
-        candidates += [
-            os.path.join(app_dir, "ffmpeg", "bin", executable_name),
-            os.path.join(app_dir, "ffmpeg", executable_name),
-            os.path.join(app_dir, executable_name),
-        ]
-    if sys.platform == "win32":
-        candidates += [
-            r"C:\ffmpeg\bin\ffmpeg.exe",
-            r"C:\Program Files\ffmpeg\bin\ffmpeg.exe",
-            r"C:\Program Files (x86)\ffmpeg\bin\ffmpeg.exe",
-        ]
-    elif sys.platform == "darwin":
-        candidates += ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-    else:
-        candidates += ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"]
-    for c in candidates:
-        if c and os.path.isfile(c) and os.access(c, os.X_OK):
-            return c
-    return ""
-
-
-class LocalMediaConvertorPP(FFmpegPostProcessor):
-    """Locally convert a finished file to a selected container/codec with FFmpeg."""
-
-    def __init__(self, downloader, target_ext, output_args=None, fallback_args=None):
-        super().__init__(downloader)
-        self.target_ext = target_ext.casefold()
-        self.output_args = list(output_args or [])
-        self.fallback_args = list(fallback_args or [])
-
-    def run(self, info):
-        source_path = info["filepath"]
-        source_ext = (info.get("ext") or os.path.splitext(source_path)[1][1:]).casefold()
-        requires_conversion = source_ext != self.target_ext or bool(self.output_args)
-        if not requires_conversion:
-            self.to_screen(f'Keeping existing {self.target_ext.upper()} media file: {source_path}')
-            return [], info
-
-        same_extension = source_ext == self.target_ext
-        temporary_path = replace_extension(
-            source_path,
-            f"ggu-converted.{self.target_ext}" if same_extension else self.target_ext,
-            source_ext,
-        )
-        destination = temporary_path
-        args = self.output_args or self.fallback_args or ["-c", "copy"]
-        self.to_screen(f'Converting {source_ext.upper()} to {self.target_ext.upper()}: {destination}')
-        try:
-            self.run_ffmpeg(source_path, destination, args)
-            if same_extension:
-                # Re-encoding an MP4 to MP4 (or another same-container conversion)
-                # must replace the original atomically.  The working filename must
-                # never survive as a second user-visible download.
-                os.replace(temporary_path, source_path)
-                destination = source_path
-                files_to_delete = []
-            else:
-                files_to_delete = [source_path]
-        finally:
-            if same_extension and os.path.isfile(temporary_path):
-                try:
-                    os.remove(temporary_path)
-                except OSError:
-                    pass
-
-        info["filepath"] = destination
-        info["format"] = info["ext"] = self.target_ext
-        return files_to_delete, info
-
-
-def load_config():
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
-def save_config(data):
-    try:
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f)
-    except Exception:
-        pass
-
-
-def is_internet_up(timeout=3):
-    for host, port in CONNECTIVITY_ENDPOINTS:
-        try:
-            with socket.create_connection((host, port), timeout=timeout):
-                return True
-        except OSError:
-            continue
-    return False
-
-
-class _ConnectionLostError(Exception):
-    """Raised internally when we detect the internet dropped mid-download."""
-    pass
-
-
-_CONNECTION_ERROR_HINTS = (
-    "urlopen error", "timed out", "connection reset", "connection aborted",
-    "network is unreachable", "temporary failure in name resolution",
-    "failed to establish a new connection", "remote end closed connection",
-    "getaddrinfo failed", "10054", "10060", "10061",
-)
-
-
-def _looks_like_connection_error(err):
-    text = str(err).lower()
-    return any(hint in text for hint in _CONNECTION_ERROR_HINTS)
-
-
-def explain_download_error(err):
-    """Turn common extractor failures into actionable, user-facing messages."""
-    text = str(err)
-    lower = text.lower()
-    if "drm" in lower or "encrypted" in lower:
-        return "DRM-protected content cannot be downloaded by this app."
-    if "members-only" in lower or "member only" in lower or "private video" in lower:
-        return "This content requires account access. Select browser cookies or a cookies.txt file."
-    if "sign in" in lower or "login" in lower or "age-restricted" in lower:
-        return "This content requires sign-in or age verification. Select valid browser cookies or a cookies.txt file."
-    if "not available in your country" in lower or "geo" in lower or "region" in lower:
-        return "This content is region-restricted. Configure an appropriate proxy if you are authorized to access it."
-    if "confirm you're not a bot" in lower or "captcha" in lower or "robot" in lower:
-        return "The site requested bot verification. Try again later with valid browser cookies and an updated yt-dlp."
-    if "live" in lower and "not currently available" in lower:
-        return "This live stream is not currently available to the extractor."
-    return text
-
-
-def _looks_like_cookie_database_error(err):
-    text = str(err).lower()
-    return (("could not copy" in text and "cookie" in text)
-            or "cookie database" in text)
-
-
-def _looks_like_subtitle_rate_limit(err):
-    text = str(err).lower()
-    return "subtitle" in text and ("429" in text or "too many requests" in text)
+_ConnectionLostError = ConnectionLostError
+_looks_like_connection_error = looks_like_connection_error
+_looks_like_cookie_database_error = looks_like_cookie_database_error
+_looks_like_subtitle_rate_limit = looks_like_subtitle_rate_limit
 
 
 class GGUVDODApp(tk.Tk):
@@ -903,7 +472,11 @@ class GGUVDODApp(tk.Tk):
         widget.configure(style=style_name)
 
     def _add_tooltip(self, widget, text):
-        self._tooltips.append(Tooltip(widget, text))
+        self._tooltips.append(Tooltip(widget, text, colors_provider=lambda: {
+            "background": TOOLTIP_BG,
+            "foreground": TOOLTIP_FG,
+            "border": TOOLTIP_BORDER,
+        }))
         return widget
 
     def _add_context_menu(self, widget):
@@ -2193,64 +1766,23 @@ class GGUVDODApp(tk.Tk):
 
     @staticmethod
     def _youtube_video_id(url):
-        """Return a YouTube watch ID when a pasted URL includes playlist data."""
-        try:
-            parsed = urllib.parse.urlsplit(url)
-            host = parsed.netloc.casefold().split(":", 1)[0]
-            if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}:
-                return urllib.parse.parse_qs(parsed.query).get("v", [""])[0]
-            if host in {"youtu.be", "www.youtu.be"}:
-                return parsed.path.strip("/").split("/", 1)[0]
-        except (TypeError, ValueError):
-            pass
-        return ""
+        return youtube_video_id(url)
 
     @classmethod
     def _preview_target_url(cls, url):
-        """Strip YouTube playlist context while preserving the selected video."""
-        video_id = cls._youtube_video_id(url)
-        if video_id:
-            return f"https://www.youtube.com/watch?v={urllib.parse.quote(video_id)}"
-        return url
+        return preview_target_url(url)
 
     @staticmethod
     def _best_thumbnail_url(info):
-        thumbnails = [item for item in (info.get("thumbnails") or []) if item.get("url")]
-        if thumbnails:
-            def size_score(item):
-                try:
-                    width = int(item.get("width") or 0)
-                    height = int(item.get("height") or 0)
-                    preference = float(item.get("preference") or 0)
-                except (TypeError, ValueError):
-                    width = height = preference = 0
-                return width * height, width, height, preference
-            return max(thumbnails, key=size_score).get("url")
-        return info.get("thumbnail") or ""
+        return best_thumbnail_url(info)
 
     @staticmethod
     def _download_preview_thumbnail(thumbnail_url, max_bytes=12 * 1024 * 1024):
-        if not thumbnail_url:
-            return None
-        try:
-            request = urllib.request.Request(thumbnail_url, headers={"User-Agent": APP_NAME})
-            with urllib.request.urlopen(request, timeout=8) as response:
-                return response.read(max_bytes)
-        except Exception:
-            return None
+        return download_thumbnail_bytes(thumbnail_url, max_bytes)
 
     @staticmethod
     def _friendly_source_name(source):
-        normalized = (source or "").casefold()
-        source_names = {
-            "youtube": "YouTube", "twitter": "X (Twitter)", "facebook": "Facebook",
-            "instagram": "Instagram", "tiktok": "TikTok", "vimeo": "Vimeo", "twitch": "Twitch",
-            "reddit": "Reddit", "dailymotion": "Dailymotion", "soundcloud": "SoundCloud",
-        }
-        for key, label in source_names.items():
-            if key in normalized:
-                return label
-        return re.sub(r"[_-]+", " ", source or "Unknown source").strip().title()
+        return friendly_source_name(source)
 
     def _download_preview_thumbnail_file(self):
         thumbnail_url = self._preview_thumbnail_url
@@ -2378,15 +1910,7 @@ class GGUVDODApp(tk.Tk):
 
     @staticmethod
     def _format_duration(seconds):
-        if not seconds:
-            return ""
-        try:
-            seconds = int(seconds)
-        except (TypeError, ValueError):
-            return ""
-        hours, remainder = divmod(seconds, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
+        return format_duration(seconds)
 
     def _clear_preview(self):
         self.preview_title_var.set("Paste a link to preview it")
@@ -2533,136 +2057,29 @@ class GGUVDODApp(tk.Tk):
 
     @staticmethod
     def _valid_bitrate(value):
-        value = (value or "").strip()
-        return value if re.fullmatch(r"\d+(?:\.\d+)?[kKmMgG]?", value) else ""
+        return valid_bitrate(value)
 
     @staticmethod
     def _video_fallback_args(target_ext):
-        return {
-            "mp4": ["-c:v", "libx264", "-c:a", "aac"],
-            "mkv": ["-c:v", "libx264", "-c:a", "aac"],
-            "mov": ["-c:v", "libx264", "-c:a", "aac"],
-            "m4v": ["-c:v", "libx264", "-c:a", "aac"],
-            "webm": ["-c:v", "libvpx-vp9", "-c:a", "libopus"],
-            "avi": ["-c:v", "libxvid", "-c:a", "libmp3lame"],
-            "flv": ["-c:v", "libx264", "-c:a", "aac"],
-            "mpeg": ["-c:v", "mpeg2video", "-c:a", "mp2"],
-            "ts": ["-c:v", "libx264", "-c:a", "aac"],
-            "ogv": ["-c:v", "libtheora", "-c:a", "libvorbis"],
-            "3gp": ["-c:v", "libx264", "-c:a", "aac"],
-        }.get(target_ext, ["-c:v", "libx264", "-c:a", "aac"])
+        return video_fallback_args(target_ext)
 
     @staticmethod
     def _audio_fallback_args(target_ext):
-        codecs = {
-            "mp3": "libmp3lame", "wav": "pcm_s16le", "aac": "aac", "flac": "flac",
-            "ogg": "libvorbis", "opus": "libopus", "m4a": "aac", "wma": "wmav2",
-            "aiff": "pcm_s16be", "alac": "alac",
-        }
-        return ["-vn", "-c:a", codecs[target_ext]]
+        return audio_fallback_args(target_ext)
 
     def _video_conversion_args(self, settings, target_ext):
-        selected_codec_args = list(VIDEO_CODEC_ARGS.get(settings.get("video_codec"), []))
-        resolution = settings.get("conversion_resolution", "Source")
-        frame_rate = settings.get("frame_rate", "Source")
-        bitrate = self._valid_bitrate(settings.get("video_bitrate"))
-        needs_reencode = bool(selected_codec_args) or resolution != "Source" or frame_rate != "Source" or bool(bitrate)
-        if not needs_reencode:
-            return []
-        fallback_args = self._video_fallback_args(target_ext)
-        args = selected_codec_args or fallback_args[:2]
-        args += fallback_args[2:]
-        if resolution in VIDEO_RESOLUTION_OPTIONS and resolution != "Source":
-            width, height = resolution.split("x", 1)
-            args += ["-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease"]
-        if frame_rate in FRAME_RATE_OPTIONS and frame_rate != "Source":
-            args += ["-r", frame_rate]
-        if bitrate:
-            args += ["-b:v", bitrate]
-        return args
+        return video_conversion_args(settings, target_ext)
 
     def _audio_conversion_args(self, settings, target_ext):
-        args = list(self._audio_fallback_args(target_ext))
-        if target_ext not in {"wav", "flac", "aiff", "alac"}:
-            args += ["-b:a", BITRATE_MAP.get(settings["quality"], "192") + "k"]
-        sample_rate = settings.get("sample_rate", "Source")
-        if sample_rate in SAMPLE_RATE_OPTIONS and sample_rate != "Source":
-            args += ["-ar", sample_rate]
-        channels = settings.get("channels", "Source")
-        if channels == "Mono":
-            args += ["-ac", "1"]
-        elif channels == "Stereo":
-            args += ["-ac", "2"]
-        compression = settings.get("compression_level", "Auto")
-        if compression in COMPRESSION_OPTIONS and compression != "Auto" and target_ext in {"flac", "opus"}:
-            args += ["-compression_level", compression]
-        return args
+        return audio_conversion_args(settings, target_ext)
 
     @staticmethod
     def _clean_video_sidecars(output_dir, started_at, target_ext):
-        """Keep the requested video file and remove matching temporary sidecars."""
-        try:
-            names = os.listdir(output_dir)
-        except OSError:
-            return 0
-
-        finished_media = []
-        for name in names:
-            path = os.path.join(output_dir, name)
-            if not os.path.isfile(path) or not name.casefold().endswith(f".{target_ext}"):
-                continue
-            try:
-                if os.path.getmtime(path) >= started_at - 2:
-                    finished_media.append(name)
-            except OSError:
-                continue
-
-        removed = 0
-        # Same-container conversions use this filename as an atomic working file.
-        # Remove an abandoned working file whenever its matching final file exists.
-        # This safely cleans leftovers produced by earlier app versions as well.
-        for name in names:
-            if ".ggu-converted." not in name.casefold():
-                continue
-            path = os.path.join(output_dir, name)
-            final_name = re.sub(r"\.ggu-converted\.", ".", name, flags=re.IGNORECASE)
-            final_path = os.path.join(output_dir, final_name)
-            try:
-                is_current_file = os.path.getmtime(path) >= started_at - 2
-                if os.path.isfile(path) and (is_current_file or os.path.isfile(final_path)):
-                    os.remove(path)
-                    removed += 1
-            except OSError:
-                pass
-
-        for final_name in finished_media:
-            stem = os.path.splitext(final_name)[0]
-            prefix = stem + "."
-            for name in names:
-                if name == final_name or not name.startswith(prefix):
-                    continue
-                extension = os.path.splitext(name)[1].casefold()
-                if extension not in VIDEO_SIDECAR_EXTENSIONS:
-                    continue
-                path = os.path.join(output_dir, name)
-                try:
-                    os.remove(path)
-                    removed += 1
-                except OSError:
-                    pass
-        return removed
+        return clean_video_sidecars(output_dir, started_at, target_ext)
 
     @staticmethod
     def _output_template(settings, output_dir, target_ext):
-        pattern = settings.get("filename_pattern", "").strip()
-        if not pattern:
-            if settings["format"] == "video":
-                pattern = "%(title)s [%(height)sp]"
-            else:
-                pattern = f"%(title)s [{BITRATE_MAP.get(settings['quality'], '192')}kbps]"
-        if "%(ext)" not in pattern:
-            pattern += ".%(ext)s"
-        return os.path.join(output_dir, pattern)
+        return output_template(settings, output_dir, target_ext)
 
     # ------------------------------------------------------------ helpers --
     def _browse_output(self):

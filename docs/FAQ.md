@@ -13,4 +13,4 @@ conversion.
 ## Why are some links unavailable?
 
 Private, deleted, region-restricted, DRM-protected, and currently-live media
-may not be downloadable.
+may not be downloadable for now . I am working on this issue to resolve it effectly..
