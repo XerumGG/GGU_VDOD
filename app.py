@@ -240,6 +240,21 @@ def _set_theme_globals(colors):
 SCROLL_SPEED_MIN = 1
 SCROLL_SPEED_MAX = 6
 SCROLL_SPEED_DEFAULT = 1
+ZOOM_MIN_PERCENT = 80
+ZOOM_MAX_PERCENT = 140
+ZOOM_STEP_PERCENT = 10
+ZOOM_DEFAULT_PERCENT = 100
+KEY_BINDING_CHOICES = (
+    "Ctrl + + / Ctrl + =",
+    "Ctrl + -",
+    "Ctrl + 0",
+    "None",
+)
+DEFAULT_KEY_BINDINGS = {
+    "zoom_in": "Ctrl + + / Ctrl + =",
+    "zoom_out": "Ctrl + -",
+    "zoom_reset": "Ctrl + 0",
+}
 CONTENT_MIN_WIDTH = 1000
 PREVIEW_WIDTH = 240
 PREVIEW_HEIGHT = 135
@@ -253,6 +268,14 @@ def clamp_scroll_speed(value):
     except (TypeError, ValueError):
         value = SCROLL_SPEED_DEFAULT
     return max(SCROLL_SPEED_MIN, min(SCROLL_SPEED_MAX, value))
+
+
+def clamp_zoom_percent(value):
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        value = ZOOM_DEFAULT_PERCENT
+    return max(ZOOM_MIN_PERCENT, min(ZOOM_MAX_PERCENT, value))
 
 
 class UndoEntry(ttkb.Entry if ttkb is not None else tk.Entry):
@@ -595,6 +618,10 @@ class GGUVDODApp(tk.Tk):
         super().__init__()
         self.title(APP_NAME)
         self.configure(bg=BG)
+        try:
+            self._base_tk_scaling = float(self.tk.call("tk", "scaling"))
+        except (tk.TclError, ValueError):
+            self._base_tk_scaling = 1.0
 
         # Open at 1920x1080 (auto-shrinks to fit the screen if the monitor is smaller),
         # centered, and resizable/maximizable from there.
@@ -609,6 +636,17 @@ class GGUVDODApp(tk.Tk):
         self.minsize(900, 650)
 
         config = load_config()
+
+        self.zoom_percent_var = tk.IntVar(value=clamp_zoom_percent(
+            config.get("zoom_percent", ZOOM_DEFAULT_PERCENT)
+        ))
+        self._set_tk_scaling(self.zoom_percent_var.get())
+        saved_bindings = config.get("key_bindings") or {}
+        self.key_bindings = {
+            action: saved_bindings.get(action, default)
+            if saved_bindings.get(action, default) in KEY_BINDING_CHOICES else default
+            for action, default in DEFAULT_KEY_BINDINGS.items()
+        }
 
         self.theme_name = config.get("theme", "Dark")
         if self.theme_name not in THEME_PRESETS and self.theme_name != "Custom":
@@ -687,6 +725,7 @@ class GGUVDODApp(tk.Tk):
         self._setup_style()
         self._build_ui()
         self._build_menu_bar()
+        self._bind_configured_shortcuts()
         self._update_ffmpeg_status()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -743,7 +782,7 @@ class GGUVDODApp(tk.Tk):
                   foreground=[("disabled", FG_MUTED), ("active", FG)])
         style.configure("Primary.TButton", background=ACCENT, foreground=BUTTON_FG,
                         bordercolor=ACCENT, lightcolor=ACCENT, darkcolor=ACCENT,
-                        padding=(18, 10), font=("Segoe UI", 13, "bold"))
+                        padding=(18, 10), font=("Segoe UI", 11, "bold"))
         style.map("Primary.TButton", background=[("pressed", ACCENT_ACTIVE), ("active", ACCENT_ACTIVE)],
                   foreground=[("disabled", FG_MUTED)])
 
@@ -1395,6 +1434,68 @@ class GGUVDODApp(tk.Tk):
 
         self.bind("<Control-n>", lambda _event: self._new_link_list(), add="+")
 
+    @staticmethod
+    def _key_binding_sequences(binding):
+        return {
+            "Ctrl + + / Ctrl + =": ("<Control-plus>", "<Control-equal>"),
+            "Ctrl + -": ("<Control-minus>",),
+            "Ctrl + 0": ("<Control-Key-0>",),
+            "None": (),
+        }.get(binding, ())
+
+    def _bind_configured_shortcuts(self):
+        if not hasattr(self, "_shortcut_bind_ids"):
+            self._shortcut_bind_ids = []
+        for sequence, function_id in self._shortcut_bind_ids:
+            try:
+                self.unbind(sequence, function_id)
+            except tk.TclError:
+                pass
+        self._shortcut_bind_ids.clear()
+
+        callbacks = {
+            "zoom_in": lambda _event: self._change_zoom(ZOOM_STEP_PERCENT),
+            "zoom_out": lambda _event: self._change_zoom(-ZOOM_STEP_PERCENT),
+            "zoom_reset": lambda _event: self._apply_zoom(ZOOM_DEFAULT_PERCENT),
+        }
+        for action, callback in callbacks.items():
+            for sequence in self._key_binding_sequences(self.key_bindings.get(action)):
+                try:
+                    function_id = self.bind(sequence, callback, add="+")
+                    self._shortcut_bind_ids.append((sequence, function_id))
+                except tk.TclError:
+                    continue
+
+    def _set_tk_scaling(self, percent):
+        percent = clamp_zoom_percent(percent)
+        try:
+            self.tk.call("tk", "scaling", self._base_tk_scaling * percent / 100.0)
+        except tk.TclError:
+            pass
+
+    def _apply_zoom(self, percent, save=True):
+        percent = clamp_zoom_percent(percent)
+        self.zoom_percent_var.set(percent)
+        self._set_tk_scaling(percent)
+        self.update_idletasks()
+        if save:
+            save_config(self._settings_from_ui())
+        return "break"
+
+    def _change_zoom(self, delta):
+        return self._apply_zoom(self.zoom_percent_var.get() + delta)
+
+    def _zoom_from_wheel(self, event):
+        if getattr(event, "num", None) == 4:
+            direction = 1
+        elif getattr(event, "num", None) == 5:
+            direction = -1
+        elif getattr(event, "delta", 0):
+            direction = 1 if event.delta > 0 else -1
+        else:
+            return "break"
+        return self._change_zoom(direction * ZOOM_STEP_PERCENT)
+
     def _edit_focused(self, action):
         widget = self.focus_get()
         if widget is None:
@@ -1447,6 +1548,10 @@ class GGUVDODApp(tk.Tk):
 
         def apply_preferences():
             self.scroll_speed_var.set(clamp_scroll_speed(dialog_speed.get()))
+            self.key_bindings = {
+                action: variable.get() for action, variable in binding_vars.items()
+            }
+            self._bind_configured_shortcuts()
             save_config(self._settings_from_ui())
             dialog.destroy()
 
@@ -1481,6 +1586,30 @@ class GGUVDODApp(tk.Tk):
             row.pack(fill="x", pady=2)
             self._label(row, text=name, width=14, anchor="w").pack(side="left")
             self._label(row, text=binding, fg=FG_MUTED, anchor="w").pack(side="left")
+
+        self._label(body, text="Zoom shortcuts", font=("Segoe UI", 11, "bold")).pack(anchor="w", pady=(14, 4))
+        binding_vars = {}
+        for action, label_text in (
+            ("zoom_in", "Zoom in"),
+            ("zoom_out", "Zoom out"),
+            ("zoom_reset", "Reset zoom"),
+        ):
+            row = self._frame(body)
+            row.pack(fill="x", pady=3)
+            self._label(row, text=label_text + ":", width=14, anchor="w").pack(side="left")
+            binding_var = tk.StringVar(value=self.key_bindings[action])
+            binding_vars[action] = binding_var
+            binding_combo = ttk.Combobox(
+                row, textvariable=binding_var, values=KEY_BINDING_CHOICES,
+                state="readonly", width=24,
+            )
+            binding_combo.pack(side="left")
+
+        self._label(
+            body,
+            text=f"Zoom range: {ZOOM_MIN_PERCENT}% to {ZOOM_MAX_PERCENT}%. Hold Ctrl and use the mouse wheel to zoom.",
+            fg=FG_MUTED, font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(8, 0))
 
     @staticmethod
     def _valid_theme_color(value):
@@ -2289,6 +2418,8 @@ class GGUVDODApp(tk.Tk):
 
     def _scroll_main(self, event):
         """Scroll the outer panel in responsive, speed-controlled wheel steps."""
+        if getattr(event, "state", 0) & 0x0004:
+            return self._zoom_from_wheel(event)
         if isinstance(event.widget, tk.Text):
             return
         if getattr(event, "num", None) == 4:
@@ -2548,6 +2679,8 @@ class GGUVDODApp(tk.Tk):
             "format_id": self.format_id_var.get().strip(),
             "last_update_check": self._last_update_check,
             "scroll_speed": clamp_scroll_speed(self.scroll_speed_var.get()),
+            "zoom_percent": clamp_zoom_percent(self.zoom_percent_var.get()),
+            "key_bindings": dict(self.key_bindings),
         }
 
     def _list_formats(self):

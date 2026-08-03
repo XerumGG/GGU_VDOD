@@ -97,6 +97,8 @@ and Python standard-library networking/threading.
 
 ## Changelog
 
+- **#028 - Responsive zoom and UI controls**: added bounded 80–140% zoom with Ctrl+wheel,
+  configurable zoom shortcuts, and a more consistent control typography baseline.
 - **#024 - Responsive windows and scrolling**: landing pages now keep normal Windows
   minimize, maximize, and close controls, and main-page wheel scrolling no longer uses a
   laggy global animation handler.
