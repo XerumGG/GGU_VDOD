@@ -23,9 +23,9 @@ class ProjectLayoutTests(unittest.TestCase):
         self.assertTrue(callable(main))
 
     def test_main_window_is_in_ui_package(self):
-        from ggu_vdod.ui.main_window import GGUVDODApp
+        from ggu_vdod.ui import QtMainWindow
 
-        self.assertTrue(issubclass(GGUVDODApp, object))
+        self.assertTrue(issubclass(QtMainWindow, object))
 
     def test_expected_source_packages_exist(self):
         for relative_path in (

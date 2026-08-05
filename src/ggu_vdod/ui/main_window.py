@@ -30,7 +30,7 @@ import urllib.request
 import traceback
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext, colorchooser
+from tkinter import ttk, filedialog, messagebox, scrolledtext, colorchooser, font as tkfont
 
 try:
     import ttkbootstrap as ttkb
@@ -78,6 +78,7 @@ from ..core.constants import (
     APP_NAME, UPDATE_COMPONENTS,
 )
 from ..core.formatting import format_bytes, format_rate
+from ..core.version import DEVELOPMENT_BUILD_LABEL
 from ..preview.metadata import (
     best_thumbnail_url, download_thumbnail_bytes, format_duration,
     friendly_source_name, preview_target_url, youtube_video_id,
@@ -361,7 +362,7 @@ class GGUVDODApp(tk.Tk):
                   foreground=[("disabled", FG_MUTED), ("active", FG)])
         style.configure("Primary.TButton", background=ACCENT, foreground=BUTTON_FG,
                         bordercolor=ACCENT, lightcolor=ACCENT, darkcolor=ACCENT,
-                        padding=(18, 10), font=("Segoe UI", 11, "bold"))
+                        padding=(14, 8), font=("Segoe UI", 10, "bold"))
         style.map("Primary.TButton", background=[("pressed", ACCENT_ACTIVE), ("active", ACCENT_ACTIVE)],
                   foreground=[("disabled", FG_MUTED)])
 
@@ -626,12 +627,10 @@ class GGUVDODApp(tk.Tk):
         container.bind("<Configure>", self._schedule_scrollregion_update)
         self.main_canvas.bind("<Configure>", lambda event: self.main_canvas.itemconfigure(
             canvas_window, width=max(event.width, CONTENT_MIN_WIDTH)))
-        # Bind only within the main application window. A global bind_all made
-        # every wheel event in Help/Preferences and every child widget traverse
-        # the main canvas, which caused visible lag and popup interference.
-        self.bind("<MouseWheel>", self._scroll_main, add="+")
-        self.bind("<Button-4>", self._scroll_main, add="+")
-        self.bind("<Button-5>", self._scroll_main, add="+")
+        self.bind_all("<MouseWheel>", self._scroll_main, add="+")
+        self.bind_all("<Button-4>", self._scroll_main, add="+")
+        self.bind_all("<Button-5>", self._scroll_main, add="+")
+        self.bind_all("<Control-MouseWheel>", self._zoom_from_wheel, add="+")
 
         container.grid_columnconfigure(0, weight=1)
         container.grid_columnconfigure(1, weight=0, minsize=CONTENT_MIN_WIDTH)
@@ -918,7 +917,7 @@ class GGUVDODApp(tk.Tk):
         self._advanced_anchor = btn_frame
         btn_frame.pack(fill="x", **pad)
         self.download_btn = self._button(btn_frame, "Download", self._start_download, primary=True)
-        self.download_btn.pack(side="left", ipadx=30, ipady=10)
+        self.download_btn.pack(side="left", ipadx=16, ipady=6)
         self._add_tooltip(self.download_btn, "Start downloading all links in the box using the selected options.")
         self.cancel_btn = self._button(btn_frame, "Cancel", self._cancel_download, state="disabled")
         self.cancel_btn.pack(side="left", padx=(14, 0), ipady=6)
@@ -1023,21 +1022,35 @@ class GGUVDODApp(tk.Tk):
     @staticmethod
     def _key_binding_sequences(binding):
         return {
-            "Ctrl + + / Ctrl + =": ("<Control-plus>", "<Control-equal>", "<Control-KP_Add>"),
-            "Ctrl + -": ("<Control-minus>", "<Control-KP_Subtract>"),
-            "Ctrl + 0": ("<Control-Key-0>",),
+            "Ctrl + + / Ctrl + =": (
+                "<Control-equal>", "<Control-Key-equal>",
+                "<Control-plus>", "<Control-Key-plus>", "<Control-Plus>",
+                "<Control-KP_Add>", "<Control-Key-KP_Add>",
+                "<Control-Equal>", "<Control-Shift-equal>", "<Control-Shift-Equal>",
+                "<Control-Shift-plus>", "<Control-Shift-Plus>"
+            ),
+            "Ctrl + -": (
+                "<Control-minus>", "<Control-Key-minus>", "<Control-Minus>",
+                "<Control-KP_Subtract>", "<Control-Key-KP_Subtract>",
+                "<Control-underscore>", "<Control-Key-underscore>", "<Control-Underscore>"
+            ),
+            "Ctrl + 0": (
+                "<Control-0>", "<Control-Key-0>",
+                "<Control-KP_0>", "<Control-Key-KP_0>", "<Control-KP_Insert>"
+            ),
             "None": (),
         }.get(binding, ())
 
     def _bind_configured_shortcuts(self):
-        if not hasattr(self, "_shortcut_bind_ids"):
-            self._shortcut_bind_ids = []
-        for sequence, function_id in self._shortcut_bind_ids:
+        if not hasattr(self, "_shortcut_sequences"):
+            self._shortcut_sequences = []
+        for sequence in self._shortcut_sequences:
             try:
-                self.unbind(sequence, function_id)
+                self.unbind_all(sequence)
+                self.unbind(sequence)
             except tk.TclError:
                 pass
-        self._shortcut_bind_ids.clear()
+        self._shortcut_sequences.clear()
 
         callbacks = {
             "zoom_in": lambda _event: self._change_zoom(ZOOM_STEP_PERCENT),
@@ -1050,8 +1063,9 @@ class GGUVDODApp(tk.Tk):
                 if sequence in bound_sequences:
                     continue
                 try:
-                    function_id = self.bind(sequence, callback, add="+")
-                    self._shortcut_bind_ids.append((sequence, function_id))
+                    self.bind(sequence, callback, add="+")
+                    self.bind_all(sequence, callback, add="+")
+                    self._shortcut_sequences.append(sequence)
                     bound_sequences.add(sequence)
                 except tk.TclError:
                     continue
@@ -1063,17 +1077,57 @@ class GGUVDODApp(tk.Tk):
         except tk.TclError:
             pass
 
+    def _update_scaled_fonts(self, percent):
+        scale = percent / 100.0
+        for font_name, base_size in (
+            ("TkDefaultFont", 10),
+            ("TkTextFont", 10),
+            ("TkFixedFont", 10),
+            ("TkMenuFont", 9),
+            ("TkHeadingFont", 11),
+        ):
+            try:
+                f = tkfont.nametofont(font_name)
+                f.configure(size=max(6, int(base_size * scale)))
+            except Exception:
+                pass
+
+        try:
+            style = ttkb.Style() if ttkb is not None else ttk.Style()
+            base_10 = max(6, int(10 * scale))
+            base_11 = max(7, int(11 * scale))
+            style.configure("App.TButton", font=("Segoe UI", base_10))
+            style.configure("Primary.TButton", font=("Segoe UI", base_10, "bold"))
+            style.configure("Panel.TLabelframe.Label", font=("Segoe UI", base_11, "bold"))
+            style.configure("App.TCheckbutton", font=("Segoe UI", base_11))
+            style.configure("App.TRadiobutton", font=("Segoe UI", base_11))
+            style.configure("TCombobox", font=("Segoe UI", base_10))
+        except Exception:
+            pass
+
+        self._schedule_scrollregion_update()
+
     def _apply_zoom(self, percent, save=True):
         percent = clamp_zoom_percent(percent)
+        if percent == self.zoom_percent_var.get() and hasattr(self, "_last_applied_zoom") and self._last_applied_zoom == percent:
+            return "break"
+        self._last_applied_zoom = percent
         self.zoom_percent_var.set(percent)
         self._set_tk_scaling(percent)
-        self.update_idletasks()
+        self._update_scaled_fonts(percent)
         return "break"
 
     def _change_zoom(self, delta):
         return self._apply_zoom(self.zoom_percent_var.get() + delta)
 
     def _zoom_from_wheel(self, event):
+        widget = getattr(event, "widget", None)
+        if widget and hasattr(widget, "winfo_toplevel"):
+            try:
+                if widget.winfo_toplevel() != self:
+                    return
+            except tk.TclError:
+                pass
         if getattr(event, "num", None) == 4:
             direction = 1
         elif getattr(event, "num", None) == 5:
@@ -1124,6 +1178,7 @@ class GGUVDODApp(tk.Tk):
     def _update_scrollregion(self):
         self._scrollregion_after_id = None
         try:
+            self.update_idletasks()
             self.main_canvas.configure(scrollregion=self.main_canvas.bbox("all"))
         except tk.TclError:
             pass
@@ -1627,6 +1682,13 @@ class GGUVDODApp(tk.Tk):
         status_bar.pack(side="bottom", fill="x")
         status_bar.pack_propagate(False)
 
+        version_lbl = ttkb.Label(status_bar, text=DEVELOPMENT_BUILD_LABEL, style="StatusMuted.TLabel",
+                                 font=("Segoe UI", 9)) if ttkb is not None else tk.Label(
+            status_bar, text=DEVELOPMENT_BUILD_LABEL, bg=STATUS_BAR_BG, fg=FG_MUTED,
+            font=("Segoe UI", 9)
+        )
+        version_lbl.pack(side="right", padx=(0, 16))
+
         def add_cell(caption, variable, width, tooltip):
             cell = ttkb.Frame(status_bar, style="Status.TFrame", width=width) if ttkb is not None else tk.Frame(
                 status_bar, bg=STATUS_BAR_BG, width=width
@@ -1994,16 +2056,24 @@ class GGUVDODApp(tk.Tk):
         )
 
     def _scroll_main(self, event):
-        """Scroll the outer panel smoothly without blocking the Tk event loop."""
+        """Scroll the main panel responsively without lag or stop-motion delay."""
+        widget = getattr(event, "widget", None)
+        if widget and hasattr(widget, "winfo_toplevel"):
+            try:
+                if widget.winfo_toplevel() != self:
+                    return
+            except tk.TclError:
+                pass
         if getattr(event, "state", 0) & 0x0004:
             return self._zoom_from_wheel(event)
-        if isinstance(event.widget, tk.Text):
+        if isinstance(widget, tk.Text):
             return
+
         if getattr(event, "num", None) == 4:
             direction = -1
         elif getattr(event, "num", None) == 5:
             direction = 1
-        elif event.delta:
+        elif getattr(event, "delta", 0):
             direction = -1 if event.delta > 0 else 1
         else:
             return
@@ -2012,34 +2082,14 @@ class GGUVDODApp(tk.Tk):
         visible_fraction = current_bottom - current_top
         if visible_fraction >= 0.999:
             return "break"
-        try:
-            scroll_region = self.main_canvas.bbox("all")
-            scrollable_pixels = max(1, (scroll_region[3] - scroll_region[1]) - self.main_canvas.winfo_height())
-        except (tk.TclError, TypeError):
-            return "break"
 
-        wheel_steps = max(1, min(3, abs(int(getattr(event, "delta", 0) or 120)) // 120))
         speed = clamp_scroll_speed(self.scroll_speed_var.get())
-        distance = (26 * speed * wheel_steps) / scrollable_pixels
-        max_top = max(0.0, 1.0 - visible_fraction)
-        start = self._scroll_target if self._scroll_target is not None else current_top
-        self._scroll_target = max(0.0, min(max_top, start + direction * distance))
-        if self._scroll_animation_id is None:
-            self._scroll_animation_id = self.after(16, self._step_smooth_scroll)
+        units = int(direction * max(1, speed * 2))
+        self.main_canvas.yview_scroll(units, "units")
         return "break"
 
     def _step_smooth_scroll(self):
-        self._scroll_animation_id = None
-        if self._scroll_target is None:
-            return
-        current_top, _current_bottom = self.main_canvas.yview()
-        distance = self._scroll_target - current_top
-        if abs(distance) < 0.0002:
-            self.main_canvas.yview_moveto(self._scroll_target)
-            self._scroll_target = None
-            return
-        self.main_canvas.yview_moveto(current_top + distance * 0.34)
-        self._scroll_animation_id = self.after(16, self._step_smooth_scroll)
+        pass
 
     def _toggle_format(self):
         if self.format_var.get() == "video":

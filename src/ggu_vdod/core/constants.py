@@ -5,7 +5,7 @@ APP_NAME = "GGU_VDOD"
 UPDATE_COMPONENTS = (
     ("yt-dlp", "yt_dlp", "runtime dependency"),
     ("Pillow", "PIL", "runtime dependency"),
-    ("ttkbootstrap", "ttkbootstrap", "runtime UI dependency"),
+    ("PySide6", "PySide6", "primary runtime UI dependency"),
     ("PyInstaller", "PyInstaller", "build dependency"),
 )
 
@@ -65,8 +65,8 @@ CONNECTIVITY_ENDPOINTS = (("1.1.1.1", 53), ("8.8.8.8", 53), ("www.youtube.com", 
 SCROLL_SPEED_MIN = 1
 SCROLL_SPEED_MAX = 6
 SCROLL_SPEED_DEFAULT = 1
-ZOOM_MIN_PERCENT = 90
-ZOOM_MAX_PERCENT = 120
+ZOOM_MIN_PERCENT = 80
+ZOOM_MAX_PERCENT = 140
 ZOOM_STEP_PERCENT = 10
 ZOOM_DEFAULT_PERCENT = 100
 KEY_BINDING_CHOICES = (

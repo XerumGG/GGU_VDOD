@@ -14,7 +14,7 @@ Show all supported languages #Feat
 
 Font panel for changing fonts #UI
 
-Have to  bypass DRM, private access, age checks, bot checks, or regional blocks.  #ANti-Feat
+Have to  bypass DRM, private access, age checks, bot checks, or regional blocks.  #USP
 
 Localization #Feat
 

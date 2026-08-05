@@ -19,13 +19,31 @@ The current extracted responsibilities are:
 - `config/paths.py` and `config/store.py` — application locations and settings persistence.
 - `conversion/options.py` — codec arguments, output templates, and sidecar cleanup.
 - `conversion/postprocessor.py` — the local FFmpeg postprocessor adapter.
-- `preview/metadata.py` — YouTube URL normalization and thumbnail/source metadata helpers.
+- `preview/metadata.py` and `preview/service.py` — preview URL normalization,
+  public metadata fallback, and extractor-backed title/source/thumbnail retrieval.
 - `services/ffmpeg.py` and `services/network.py` — FFmpeg discovery and connectivity/error helpers.
 - `ui/widgets.py` — reusable undo/redo entry and animated tooltip widgets.
 
 The remaining UI composition, preview orchestration, update dialogs, and
 download orchestration stay together temporarily because they share Tk state.
 They are the next extraction targets after this baseline has been reviewed.
+
+## Qt migration status
+
+The next-generation UI lives in `src/ggu_vdod/ui/qt`. It uses
+`PySide6-Essentials` and is intentionally kept separate from the legacy
+Tk/ttkbootstrap window until download, preview, settings, and advanced options
+reach feature parity.
+
+| Qt module | Responsibility |
+| --- | --- |
+| `application.py` | QApplication startup and process-wide setup |
+| `theme.py` | Qt palette and stylesheet |
+| `widgets.py` | reusable Qt controls, including transfer status |
+| `main_window.py` | window composition and UI-only interactions |
+
+This parallel approach lets the working legacy UI remain available while Qt
+controllers replace the Tk-bound workflow one responsibility at a time.
 
 ## Intended module ownership
 
@@ -42,3 +60,11 @@ They are the next extraction targets after this baseline has been reviewed.
 
 Dependencies point inward: UI calls services and application adapters; core
 code never imports UI code.
+
+## Development build versioning
+
+`core/version.py` is the single source of truth for the development label shown
+at the bottom-right of both desktop interfaces. Its format is
+`Development build : vMajor.Minor.Patch (Build)` with the minor, patch, and
+build values zero-padded to three digits. Increase the relevant value by `001`
+for each future change set.

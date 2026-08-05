@@ -5,10 +5,9 @@ logic remains in its existing implementation while the codebase is migrated
 module by module.
 """
 
-from .ui.main_window import GGUVDODApp
+from .ui.qt.application import run_qt_application
 
 
 def main() -> None:
-    """Create and run the desktop application."""
-    window = GGUVDODApp()
-    window.mainloop()
+    """Create and run the desktop application using PySide6."""
+    run_qt_application()
