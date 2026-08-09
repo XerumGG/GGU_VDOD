@@ -8,9 +8,8 @@ Windows build. `src/ggu_vdod/app.py` is the composition root.
 ## Migration status
 
 The previous single-file implementation is preserved at
-`src/ggu_vdod/ui/main_window.py` as a behavior-preserving baseline. The first
-extraction pass is complete; no downloader behavior is intentionally changed
-in this structural migration.
+`src/ggu_vdod/ui/main_window.py` as a legacy reference. The active application
+uses the PySide6 window in `src/ggu_vdod/ui/qt/main_window.py`.
 
 The current extracted responsibilities are:
 
@@ -30,10 +29,9 @@ They are the next extraction targets after this baseline has been reviewed.
 
 ## Qt migration status
 
-The next-generation UI lives in `src/ggu_vdod/ui/qt`. It uses
-`PySide6-Essentials` and is intentionally kept separate from the legacy
-Tk/ttkbootstrap window until download, preview, settings, and advanced options
-reach feature parity.
+The active desktop UI lives in `src/ggu_vdod/ui/qt`. It uses PySide6 and owns
+window composition, preferences, previews, and downloader orchestration. The
+legacy Tk/ttkbootstrap window remains only as a reference during cleanup.
 
 | Qt module | Responsibility |
 | --- | --- |

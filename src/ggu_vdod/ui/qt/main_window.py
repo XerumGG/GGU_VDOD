@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import time
 import urllib.request
 
 from PIL import Image
@@ -14,18 +15,18 @@ from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, Qt, QThread, Q
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog,
-    QFormLayout, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
+    QFormLayout, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
     QPushButton, QRadioButton, QScrollArea, QSlider, QSpinBox, QSplitter,
     QStyle, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
     QVBoxLayout, QWidget,
 )
 
-from ...config.paths import get_app_dir, get_default_output_dir
-from ...config.store import load_config, save_config
+from ...config.paths import get_app_dir, get_default_ffmpeg_path, get_default_output_dir
+from ...config.store import add_history_entry, load_config, save_config, update_history_entry
 from ...conversion.options import (
-    audio_conversion_args, audio_fallback_args, clean_video_sidecars,
-    output_template, valid_bitrate, video_conversion_args, video_fallback_args,
+    FFmpegCustomAudioConvertPP, FFmpegCustomReencodePP, audio_conversion_args,
+    clean_video_sidecars, output_template, video_conversion_args,
 )
 from ...core.constants import (
     APP_NAME, AUDIO_FORMAT_EXTENSIONS, AUDIO_OUTPUT_FORMATS, AUDIO_QUALITIES,
@@ -45,7 +46,10 @@ from ...preview.metadata import (
     friendly_source_name, preview_target_url, youtube_video_id,
 )
 from ...preview.service import fetch_preview
-from ...services.network import explain_download_error, is_internet_up
+from ...services.network import (
+    explain_download_error, is_internet_up, looks_like_connection_error,
+    looks_like_cookie_database_error, looks_like_subtitle_rate_limit,
+)
 from .dialogs import (
     FontPreferencesDialog, HelpCenterDialog, KeyBindingsDialog, LibraryDialog,
     LinkHistoryDialog, SupportedPlatformsDialog, UpdateCheckDialog,
@@ -94,7 +98,17 @@ class ThumbnailDownloadWorker(QThread):
 
     def run(self):
         try:
-            raw_bytes, ext = download_thumbnail_bytes(self.thumbnail_url)
+            raw_bytes = download_thumbnail_bytes(self.thumbnail_url)
+            if not raw_bytes:
+                self.thumbnail_failed.emit("Failed to download thumbnail bytes from server.")
+                return
+
+            ext = ".jpg"
+            if ".png" in self.thumbnail_url.lower():
+                ext = ".png"
+            elif ".webp" in self.thumbnail_url.lower():
+                ext = ".webp"
+
             safe_title = re.sub(r'[\\/*?:"<>|]', '_', self.title or "thumbnail")
             save_path = os.path.join(self.output_dir, f"{safe_title}_HQ{ext}")
 
@@ -106,11 +120,74 @@ class ThumbnailDownloadWorker(QThread):
             self.thumbnail_failed.emit(str(err))
 
 
+class FormatListWorker(QThread):
+    """Inspect all available formats without blocking the main Qt event loop."""
+
+    formats_ready = Signal(list)
+    formats_failed = Signal(str)
+
+    def __init__(self, url, browser, cookies_file, proxy, parent=None):
+        super().__init__(parent)
+        self.url = url
+        self.browser = browser
+        self.cookies_file = cookies_file
+        self.proxy = proxy
+
+    def run(self):
+        try:
+            if not yt_dlp:
+                raise RuntimeError("yt-dlp library is missing.")
+            options = {"quiet": True, "no_warnings": True, "noplaylist": True}
+            if self.cookies_file and os.path.exists(self.cookies_file):
+                options["cookiefile"] = self.cookies_file
+            elif self.browser and self.browser not in ("None", "Custom cookies.txt file..."):
+                options["cookiesfrombrowser"] = (self.browser.lower(),)
+            if self.proxy:
+                options["proxy"] = self.proxy
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(self.url, download=False)
+            rows = []
+            for item in info.get("formats", []):
+                rows.append({
+                    "id": item.get("format_id", "?"),
+                    "ext": item.get("ext", "?"),
+                    "resolution": item.get("resolution") or item.get("format_note") or "audio",
+                    "vcodec": item.get("vcodec", "none"),
+                    "acodec": item.get("acodec", "none"),
+                    "size": item.get("filesize") or item.get("filesize_approx"),
+                })
+            self.formats_ready.emit(rows)
+        except Exception as error:
+            self.formats_failed.emit(str(error))
+
+
+class DownloadCancelled(Exception):
+    """Raised from a progress hook to stop the active yt-dlp operation."""
+
+
+class QtYTDLPLogger:
+    """Forward useful yt-dlp messages into the Qt log without noisy debug lines."""
+
+    def __init__(self, emit):
+        self._emit = emit
+
+    def debug(self, message):
+        if message and not str(message).startswith("[debug]"):
+            self._emit(f"[yt-dlp] {message}")
+
+    def warning(self, message):
+        self._emit(f"[yt-dlp warning] {message}")
+
+    def error(self, message):
+        self._emit(f"[yt-dlp error] {message}")
+
+
 class QtDownloadWorker(QThread):
     """Download media queue on a background QThread with real-time Qt signals."""
     log_emitted = Signal(str)
     progress_updated = Signal(dict)
     status_updated = Signal(str)
+    item_finished = Signal(str, bool, str)
     queue_completed = Signal(int, int)
 
     def __init__(self, urls, settings, parent=None):
@@ -139,7 +216,8 @@ class QtDownloadWorker(QThread):
             self.log_emitted.emit(f"\n--- [Queue {index}/{len(self.urls)}] Processing {url} ---")
             self.status_updated.emit(f"Downloading item {index} of {len(self.urls)}...")
 
-            success = self._process_single_url(url)
+            success = self._download_with_retries(url)
+            self.item_finished.emit(url, success, self.settings.get("format", "video"))
             if success:
                 success_count += 1
             else:
@@ -148,17 +226,73 @@ class QtDownloadWorker(QThread):
         self.status_updated.emit("Ready.")
         self.queue_completed.emit(success_count, failure_count)
 
-    def _process_single_url(self, url):
-        output_dir = self.settings.get("output_dir") or get_default_output_dir()
+    def _download_with_retries(self, url):
+        """Retry recoverable failures while keeping the final error visible."""
+        settings = dict(self.settings)
+        cookie_fallback_used = False
+        subtitle_fallback_used = False
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            if self.cancelled:
+                self.log_emitted.emit("[INFO] Item cancelled.")
+                return False
+            try:
+                self._process_single_url(url, settings)
+                return True
+            except DownloadCancelled:
+                self.log_emitted.emit("[INFO] Item cancelled.")
+                return False
+            except Exception as error:
+                if (
+                    not cookie_fallback_used
+                    and settings.get("cookies_browser") not in (None, "", "None")
+                    and looks_like_cookie_database_error(error)
+                ):
+                    cookie_fallback_used = True
+                    settings["cookies_browser"] = "None"
+                    self.log_emitted.emit(
+                        "[WARNING] Browser cookies could not be read; retrying without them. "
+                        "Close the browser or use cookies.txt if sign-in is required."
+                    )
+                    continue
+                if (
+                    not subtitle_fallback_used
+                    and settings.get("embed_subtitles")
+                    and looks_like_subtitle_rate_limit(error)
+                ):
+                    subtitle_fallback_used = True
+                    settings["embed_subtitles"] = False
+                    self.log_emitted.emit(
+                        "[WARNING] Subtitle service rate-limited this request; retrying the media without subtitles."
+                    )
+                    continue
+                if looks_like_connection_error(error) and attempt < MAX_RETRIES:
+                    self.status_updated.emit(f"Connection issue; retrying ({attempt}/{MAX_RETRIES})...")
+                    self.log_emitted.emit(
+                        f"[WARNING] Network error. Retrying in {RETRY_WAIT_SECONDS}s "
+                        f"({attempt}/{MAX_RETRIES})..."
+                    )
+                    time.sleep(RETRY_WAIT_SECONDS)
+                    if not is_internet_up():
+                        self.log_emitted.emit("[WARNING] Internet connection still unavailable; retry will continue when possible.")
+                    continue
+                self.log_emitted.emit(f"[ERROR] Failed {url}: {explain_download_error(error)}")
+                return False
+        return False
+
+    def _process_single_url(self, url, settings):
+        output_dir = settings.get("output_dir") or get_default_output_dir()
         os.makedirs(output_dir, exist_ok=True)
-        is_audio = self.settings.get("format") == "audio"
+        is_audio = settings.get("format") == "audio"
         target_ext = (AUDIO_FORMAT_EXTENSIONS if is_audio else VIDEO_FORMAT_EXTENSIONS).get(
-            self.settings.get("output_format"), "mp3" if is_audio else "mp4"
-        )
+            str(settings.get("output_format") or "").upper(), ""
+        ).lower()
+        if not target_ext:
+            raise ValueError("Choose a valid output format before downloading.")
 
         def progress_hook(d):
             if self.cancelled:
-                raise Exception("Download cancelled by user")
+                raise DownloadCancelled("Download cancelled by user")
             status = d.get("status")
             if status == "downloading":
                 total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
@@ -179,70 +313,137 @@ class QtDownloadWorker(QThread):
                 self.log_emitted.emit("[INFO] Primary download complete. Finalizing media file...")
 
         ydl_opts = {
-            "outtmpl": output_template(self.settings, output_dir, target_ext),
+            "outtmpl": output_template(settings, output_dir, target_ext),
             "progress_hooks": [progress_hook],
-            "noplaylist": self.settings.get("single_only", True),
+            "noplaylist": settings.get("single_only", True),
             "quiet": True,
-            "no_warnings": True,
+            "no_warnings": False,
+            "logger": QtYTDLPLogger(self.log_emitted.emit),
+            "retries": MAX_RETRIES,
+            "fragment_retries": MAX_RETRIES,
+            "file_access_retries": MAX_RETRIES,
+            "http_headers": {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+            },
+            "postprocessors": [],
         }
 
-        ffmpeg_path = self.settings.get("ffmpeg_path") or os.path.join(get_app_dir(), "ffmpeg", "ffmpeg.exe")
+        ffmpeg_path = settings.get("ffmpeg_path") or get_default_ffmpeg_path()
         if ffmpeg_path and os.path.exists(ffmpeg_path):
             ydl_opts["ffmpeg_location"] = ffmpeg_path
+            self.log_emitted.emit(f"[INFO] Using FFmpeg binary: {ffmpeg_path}")
+        else:
+            self.log_emitted.emit("[WARNING] FFmpeg binary not found! Video merging and container conversion may be limited.")
 
         # Cookies configuration
-        browser = self.settings.get("cookies_browser")
-        cookies_file = self.settings.get("cookies_file")
+        browser = settings.get("cookies_browser")
+        cookies_file = settings.get("cookies_file")
         if cookies_file and os.path.exists(cookies_file):
             ydl_opts["cookiefile"] = cookies_file
-        elif browser and browser not in ("None", "custom"):
+        elif browser and browser not in ("None", "custom", "Custom cookies.txt file..."):
             ydl_opts["cookiesfrombrowser"] = (browser.lower(),)
 
         # Proxy configuration
-        proxy = self.settings.get("proxy")
+        proxy = settings.get("proxy")
         if proxy:
             ydl_opts["proxy"] = proxy
 
         # Subtitles configuration
-        if self.settings.get("embed_subtitles"):
+        if settings.get("embed_subtitles"):
             ydl_opts["writesubtitles"] = True
-            ydl_opts["writeautomaticsub"] = True
-            sub_langs = self.settings.get("subtitle_langs", "en").split(",")
-            ydl_opts["subtitleslangs"] = [s.strip() for s in sub_langs if s.strip()]
-            ydl_opts["postprocessors"] = ydl_opts.get("postprocessors", []) + [{
-                "key": "FFmpegEmbedSubtitle",
-            }]
+            if settings.get("auto_subtitles"):
+                ydl_opts["writeautomaticsub"] = True
+            sub_langs = [s.strip() for s in settings.get("subtitle_langs", "en").split(",") if s.strip()]
+            ydl_opts["subtitleslangs"] = sub_langs or ["en"]
+            ydl_opts["postprocessors"].append({"key": "FFmpegEmbedSubtitle"})
 
-        if is_audio:
+        # Metadata & thumbnail embedding
+        if settings.get("embed_metadata", True):
+            ydl_opts["postprocessors"].append({"key": "FFmpegMetadata", "add_chapters": True, "add_metadata": True})
+        if settings.get("embed_thumbnail"):
+            ydl_opts["writethumbnail"] = True
+            ydl_opts["postprocessors"].append({"key": "EmbedThumbnail"})
+
+        # Live stream option
+        if settings.get("live_start_from_beginning"):
+            ydl_opts["live_from_start"] = True
+
+        # Format & Quality selection
+        exact_format_id = settings.get("exact_format_id")
+        if exact_format_id:
+            ydl_opts["format"] = exact_format_id
+        elif is_audio:
             ydl_opts["format"] = "bestaudio/best"
-            ydl_opts["postprocessors"] = ydl_opts.get("postprocessors", []) + [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": target_ext,
-                "preferredquality": self.settings.get("quality", "320").split()[0],
-            }]
         else:
-            quality = self.settings.get("quality", "Best available")
+            quality = settings.get("quality", "Best available")
             height = HEIGHT_MAP.get(quality)
             if height:
-                ydl_opts["format"] = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+                ydl_opts["format"] = (
+                    f"bestvideo[height={height}]+bestaudio/best[height={height}]"
+                    f"/bestvideo[height<={height}]+bestaudio/best[height<={height}]"
+                    f"/best[height<={height}]/best"
+                )
             else:
                 ydl_opts["format"] = "bestvideo+bestaudio/best"
 
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([url])
+        # Local output conversion. Audio uses the custom converter so every UI
+        # target (including OGG, WMA, and AIFF) is handled consistently.
+        if is_audio:
+            audio_args = audio_conversion_args(settings, target_ext)
+        else:
+            ydl_opts["recode_video"] = target_ext
+            ydl_opts["merge_output_format"] = "mp4" if target_ext == "mp4" else "mkv"
+            video_args = video_conversion_args(settings, target_ext)
 
-            if self.settings.get("clean_sidecars", True):
-                clean_video_sidecars(output_dir)
+        started_at = time.time()
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            if is_audio:
+                ydl.add_post_processor(FFmpegCustomAudioConvertPP(ydl, target_ext, audio_args))
+            elif video_args:
+                ydl.add_post_processor(FFmpegCustomReencodePP(ydl, target_ext, video_args))
+            info = ydl.extract_info(url, download=True)
 
-            self.log_emitted.emit(f"[SUCCESS] Successfully processed: {url}")
-            return True
-        except Exception as err:
-            if "cancelled" in str(err).lower():
-                self.log_emitted.emit("[INFO] Item cancelled.")
-            else:
-                self.log_emitted.emit(f"[ERROR] Failed {url}: {explain_download_error(err)}")
-            return False
+        if settings.get("clean_sidecars", True):
+            clean_video_sidecars(output_dir, started_at, target_ext)
+        self._report_selected_format(info, settings, target_ext)
+        self.log_emitted.emit(f"[SUCCESS] Successfully processed: {url}")
+
+    def _report_selected_format(self, info, settings, target_ext):
+        """Make actual source and final conversion choices visible in the log."""
+        if not isinstance(info, dict):
+            return
+        selected = info.get("requested_formats") or [info]
+        stream_details = []
+        selected_heights = []
+        for item in selected:
+            if not isinstance(item, dict):
+                continue
+            height = item.get("height")
+            if height:
+                selected_heights.append(height)
+            role = "video" if item.get("vcodec") not in (None, "none") else "audio"
+            resolution = item.get("resolution") or (f"{height}p" if height else "audio")
+            codec = item.get("vcodec") if role == "video" else item.get("acodec")
+            stream_details.append(
+                f"{role}: id={item.get('format_id', '?')}, ext={item.get('ext', '?')}, "
+                f"resolution={resolution}, codec={codec}"
+            )
+        if stream_details:
+            self.log_emitted.emit("[FORMAT] Selected source " + " | ".join(stream_details))
+        requested_height = HEIGHT_MAP.get(settings.get("quality"))
+        if requested_height and selected_heights and max(selected_heights) < requested_height:
+            self.log_emitted.emit(
+                f"[FORMAT] Requested {requested_height}p; source only provided {max(selected_heights)}p. "
+                "The highest accessible lower-quality stream was used."
+            )
+        conversion_resolution = settings.get("conversion_resolution", "Source")
+        if conversion_resolution != "Source":
+            self.log_emitted.emit(
+                f"[FORMAT] Final output is intentionally scaled to {conversion_resolution}."
+            )
+        self.log_emitted.emit(f"[FORMAT] Final container target: {target_ext.upper()}")
 
 
 class QtMainWindow(QMainWindow):
@@ -254,6 +455,8 @@ class QtMainWindow(QMainWindow):
         self._persist_settings = persist_settings
         self._preview_token = 0
         self._preview_workers = set()
+        self._thumbnail_workers = set()
+        self._format_workers = set()
         self._download_worker = None
         self._current_preview_data = None
 
@@ -272,6 +475,7 @@ class QtMainWindow(QMainWindow):
         self._build_content()
         self._restore_settings()
         self._connect_ui()
+        self._apply_preferences()
 
     def _build_menu(self):
         menubar = self.menuBar()
@@ -349,19 +553,21 @@ class QtMainWindow(QMainWindow):
 
         view_menu.addSeparator()
         zoom_in_act = QAction("Zoom in", self)
-        zoom_in_act.setShortcut(QKeySequence("Ctrl++"))
         zoom_in_act.triggered.connect(lambda: self._change_zoom(ZOOM_STEP_PERCENT))
         view_menu.addAction(zoom_in_act)
 
         zoom_out_act = QAction("Zoom out", self)
-        zoom_out_act.setShortcut(QKeySequence("Ctrl+-"))
         zoom_out_act.triggered.connect(lambda: self._change_zoom(-ZOOM_STEP_PERCENT))
         view_menu.addAction(zoom_out_act)
 
         zoom_reset_act = QAction("Reset zoom", self)
-        zoom_reset_act.setShortcut(QKeySequence("Ctrl+0"))
         zoom_reset_act.triggered.connect(lambda: self._apply_zoom(ZOOM_DEFAULT_PERCENT))
         view_menu.addAction(zoom_reset_act)
+        self._zoom_actions = {
+            "zoom_in": zoom_in_act,
+            "zoom_out": zoom_out_act,
+            "zoom_reset": zoom_reset_act,
+        }
 
         # Help Menu
         help_menu = menubar.addMenu("Help")
@@ -389,9 +595,9 @@ class QtMainWindow(QMainWindow):
         main_vbox.setSpacing(0)
 
         # Scroll Area for main content
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
+        self.content_scroll = QScrollArea()
+        self.content_scroll.setWidgetResizable(True)
+        self.content_scroll.setFrameShape(QFrame.NoFrame)
 
         scroll_content = QWidget()
         layout = QVBoxLayout(scroll_content)
@@ -412,6 +618,7 @@ class QtMainWindow(QMainWindow):
         self.url_text = QPlainTextEdit()
         self.url_text.setPlaceholderText("https://www.youtube.com/watch?v=...")
         self.url_text.setMinimumHeight(120)
+        self.url_text.setToolTip("Paste one or multiple video/audio URLs (one per line) or playlist links here.")
         layout.addWidget(self.url_text)
 
         # Video Preview Box
@@ -442,6 +649,7 @@ class QtMainWindow(QMainWindow):
         self.download_thumbnail_btn = QPushButton("Download thumbnail (HQ)")
         self.download_thumbnail_btn.setEnabled(False)
         self.download_thumbnail_btn.setFixedWidth(180)
+        self.download_thumbnail_btn.setToolTip("Save high-resolution thumbnail image for the previewed video.")
         self.download_thumbnail_btn.clicked.connect(self._download_thumbnail_file)
 
         self.preview_status = QLabel("Waiting for a link")
@@ -469,17 +677,23 @@ class QtMainWindow(QMainWindow):
         self.video_radio = QRadioButton("Video")
         self.audio_radio = QRadioButton("Audio only")
         self.video_radio.setChecked(True)
+        self.video_radio.setToolTip("Download video streams with selectable resolution.")
+        self.audio_radio.setToolTip("Extract audio tracks and convert to MP3, M4A, WAV, FLAC, OPUS, etc.")
         self.format_group = QButtonGroup(self)
         self.format_group.addButton(self.video_radio)
         self.format_group.addButton(self.audio_radio)
 
         self.single_only_check = QCheckBox("Only download this video (ignore playlist)")
         self.single_only_check.setChecked(True)
+        self.single_only_check.setToolTip("Ignore playlist context and download only the specific video link.")
 
         self.quality_combo = QComboBox()
         self.quality_combo.addItems(VIDEO_QUALITIES)
+        self.quality_combo.setToolTip("Select desired video resolution (e.g. 2160p 4K, 1080p, 720p, 480p) or audio bitrate.")
+
         self.output_format_combo = QComboBox()
         self.output_format_combo.addItems(VIDEO_OUTPUT_FORMATS)
+        self.output_format_combo.setToolTip("Select output container format (MP4, MKV, MP3, WAV, etc.).")
 
         fmt_grid.addWidget(self.video_radio, 0, 0)
         fmt_grid.addWidget(self.audio_radio, 0, 1)
@@ -491,86 +705,209 @@ class QtMainWindow(QMainWindow):
         fmt_grid.setColumnStretch(2, 1)
         layout.addWidget(fmt_panel)
 
-        # Save Folder Picker
-        save_row = QHBoxLayout()
+        # Save Folder Picker Panel
+        save_panel = QFrame()
+        save_panel.setObjectName("panel")
+        save_row = QHBoxLayout(save_panel)
+        save_row.setContentsMargins(16, 12, 16, 12)
+        save_row.setSpacing(12)
         self.output_path = QLineEdit()
         self.output_path.setPlaceholderText("Save folder")
+        self.output_path.setToolTip("Destination folder where downloaded media files will be saved.")
         self.browse_button = QPushButton("Browse…")
+        self.browse_button.setToolTip("Browse and select a destination folder on your computer.")
         save_row.addWidget(QLabel("Save to:"))
         save_row.addWidget(self.output_path, 1)
         save_row.addWidget(self.browse_button)
-        layout.addLayout(save_row)
+        layout.addWidget(save_panel)
 
         # Advanced Panel Toggle & Granular Controls
+        adv_header = QHBoxLayout()
+        adv_header.setContentsMargins(4, 6, 4, 6)
         advanced_toggle = QToolButton()
         advanced_toggle.setText("Advanced Options  [+]")
         advanced_toggle.setCheckable(True)
-        advanced_toggle.setStyleSheet("border: none; color: #a7a7a7; font-weight: 600;")
-        layout.addWidget(advanced_toggle)
+        advanced_toggle.setStyleSheet("border: none; color: #a7a7a7; font-weight: 600; font-size: 13px; cursor: pointer;")
+        advanced_toggle.setToolTip("Expand or collapse advanced FFmpeg, cookie, proxy, subtitle, and codec settings.")
+        adv_header.addWidget(advanced_toggle)
+        adv_header.addStretch(1)
+        layout.addLayout(adv_header)
 
         self.advanced_panel = QFrame()
         self.advanced_panel.setObjectName("panel")
-        adv_layout = QFormLayout(self.advanced_panel)
-        adv_layout.setContentsMargins(16, 14, 16, 14)
-        adv_layout.setSpacing(10)
+        adv_vbox = QVBoxLayout(self.advanced_panel)
+        adv_vbox.setContentsMargins(14, 12, 14, 12)
+        adv_vbox.setSpacing(12)
 
-        self.video_codec_combo = QComboBox()
-        self.video_codec_combo.addItems(VIDEO_CODEC_OPTIONS)
+        # ------------------ Box 1: FFmpeg location ------------------
+        ffmpeg_box = QGroupBox("FFmpeg location (auto-detected - change only if needed)")
+        ffmpeg_layout = QVBoxLayout(ffmpeg_box)
+        ffmpeg_row = QHBoxLayout()
+        detected_ffmpeg = get_default_ffmpeg_path()
+        self.ffmpeg_path_input = QLineEdit(detected_ffmpeg)
+        self.ffmpeg_path_input.setPlaceholderText("Path to ffmpeg.exe")
+        self.ffmpeg_path_input.setToolTip("Path to ffmpeg.exe binary for audio extraction, merging, and local re-encoding.")
+        self.ffmpeg_browse_btn = QPushButton("Browse…")
+        self.ffmpeg_browse_btn.setToolTip("Browse for ffmpeg.exe on your system.")
+        self.ffmpeg_browse_btn.clicked.connect(self._choose_ffmpeg_file)
+        ffmpeg_row.addWidget(self.ffmpeg_path_input, 1)
+        ffmpeg_row.addWidget(self.ffmpeg_browse_btn)
+        ffmpeg_layout.addLayout(ffmpeg_row)
 
-        self.video_bitrate_input = QLineEdit()
-        self.video_bitrate_input.setPlaceholderText("Auto (e.g. 8000k)")
+        self.ffmpeg_status_label = QLabel()
+        self._update_ffmpeg_status_label()
+        ffmpeg_layout.addWidget(self.ffmpeg_status_label)
+        adv_vbox.addWidget(ffmpeg_box)
 
-        self.resolution_combo = QComboBox()
-        self.resolution_combo.addItems(VIDEO_RESOLUTION_OPTIONS)
-
-        self.frame_rate_combo = QComboBox()
-        self.frame_rate_combo.addItems(FRAME_RATE_OPTIONS)
-
-        self.sample_rate_combo = QComboBox()
-        self.sample_rate_combo.addItems(SAMPLE_RATE_OPTIONS)
-
-        self.channel_combo = QComboBox()
-        self.channel_combo.addItems(CHANNEL_OPTIONS)
-
-        self.compression_combo = QComboBox()
-        self.compression_combo.addItems(COMPRESSION_OPTIONS)
-
-        self.pattern_input = QLineEdit()
-        self.pattern_input.setPlaceholderText("%(title)s [%(height)sp]")
+        # ------------------ Box 2: Authentication and output options ------------------
+        auth_box = QGroupBox("Authentication and output options")
+        auth_grid = QGridLayout(auth_box)
+        auth_grid.setContentsMargins(12, 10, 12, 10)
+        auth_grid.setHorizontalSpacing(14)
+        auth_grid.setVerticalSpacing(8)
 
         self.cookie_browser_combo = QComboBox()
         self.cookie_browser_combo.addItems(["None", "chrome", "edge", "firefox", "brave", "vivaldi", "opera", "safari", "Custom cookies.txt file..."])
+        self.cookie_browser_combo.setToolTip("Import browser cookies to bypass login screens or age restrictions.")
 
         cookie_row = QHBoxLayout()
         self.cookie_file_input = QLineEdit()
         self.cookie_file_input.setPlaceholderText("Path to cookies.txt")
+        self.cookie_file_input.setToolTip("Path to custom cookies.txt file.")
         self.cookie_browse_btn = QPushButton("Browse…")
+        self.cookie_browse_btn.setToolTip("Browse and select a cookies.txt file.")
         self.cookie_browse_btn.clicked.connect(self._choose_cookie_file)
         cookie_row.addWidget(self.cookie_file_input, 1)
         cookie_row.addWidget(self.cookie_browse_btn)
 
         self.proxy_input = QLineEdit()
         self.proxy_input.setPlaceholderText("http://user:pass@host:port")
+        self.proxy_input.setToolTip("Route downloads through HTTP/HTTPS/SOCKS proxy server.")
 
-        self.embed_subs_check = QCheckBox("Embed subtitles")
-        self.sub_lang_input = QLineEdit("en,es,fr")
+        self.check_library_btn = QPushButton("Check library updates")
+        self.check_library_btn.setToolTip("Check for online updates to yt-dlp and FFmpeg core modules.")
+        self.check_library_btn.clicked.connect(self._show_updates_dialog)
+
+        auth_grid.addWidget(QLabel("Browser cookies:"), 0, 0)
+        auth_grid.addWidget(self.cookie_browser_combo, 0, 1)
+        auth_grid.addWidget(QLabel("Cookies file:"), 1, 0)
+        auth_grid.addLayout(cookie_row, 1, 1, 1, 2)
+        auth_grid.addWidget(QLabel("Proxy (optional):"), 2, 0)
+        auth_grid.addWidget(self.proxy_input, 2, 1)
+        auth_grid.addWidget(self.check_library_btn, 2, 2)
+
+        # Subtitles row
+        sub_row = QHBoxLayout()
+        self.download_subs_check = QCheckBox("Download subtitles")
+        self.download_subs_check.setToolTip("Download closed caption / subtitle files.")
+        self.auto_subs_check = QCheckBox("Include auto-generated")
+        self.auto_subs_check.setToolTip("Include automatically generated subtitle tracks.")
+        self.sub_lang_input = QLineEdit("en.*")
+        self.sub_lang_input.setFixedWidth(100)
+        self.sub_lang_input.setToolTip("Comma-separated language codes or regex patterns (e.g. en.*, es, fr).")
+        sub_row.addWidget(self.download_subs_check)
+        sub_row.addWidget(self.auto_subs_check)
+        sub_row.addWidget(QLabel("Languages:"))
+        sub_row.addWidget(self.sub_lang_input)
+        sub_row.addStretch(1)
+        auth_grid.addLayout(sub_row, 3, 0, 1, 3)
+
+        # Metadata row
+        meta_row = QHBoxLayout()
+        self.embed_metadata_check = QCheckBox("Embed metadata")
+        self.embed_metadata_check.setChecked(True)
+        self.embed_metadata_check.setToolTip("Embed media title, artist, uploader, and release tags directly into output files.")
+        self.embed_thumb_check = QCheckBox("Embed thumbnail")
+        self.embed_thumb_check.setToolTip("Embed video thumbnail image into output audio/video file cover art.")
+        self.live_start_check = QCheckBox("Live: start from beginning")
+        self.live_start_check.setToolTip("For ongoing live streams, start downloading from the beginning.")
+        meta_row.addWidget(self.embed_metadata_check)
+        meta_row.addWidget(self.embed_thumb_check)
+        meta_row.addWidget(self.live_start_check)
+        meta_row.addStretch(1)
+        auth_grid.addLayout(meta_row, 4, 0, 1, 3)
+
+        # Format ID row
+        fmt_id_row = QHBoxLayout()
+        fmt_id_row.addWidget(QLabel("Exact format ID(s) (optional):"))
+        self.format_id_input = QLineEdit()
+        self.format_id_input.setToolTip("Specify custom yt-dlp format codes (e.g. 137+140).")
+        self.list_formats_btn = QPushButton("List formats")
+        self.list_formats_btn.setToolTip("Fetch and display all available format IDs for the entered video URL.")
+        self.list_formats_btn.clicked.connect(self._list_formats)
+        fmt_id_row.addWidget(self.format_id_input, 1)
+        fmt_id_row.addWidget(self.list_formats_btn)
+        auth_grid.addLayout(fmt_id_row, 5, 0, 1, 3)
+
+        adv_vbox.addWidget(auth_box)
+
+        # ------------------ Box 3: Local conversion settings ------------------
+        conv_box = QGroupBox("Local conversion settings")
+        conv_grid = QGridLayout(conv_box)
+        conv_grid.setContentsMargins(12, 10, 12, 10)
+        conv_grid.setHorizontalSpacing(14)
+        conv_grid.setVerticalSpacing(8)
+
+        self.video_codec_combo = QComboBox()
+        self.video_codec_combo.addItems(VIDEO_CODEC_OPTIONS)
+        self.video_codec_combo.setToolTip("Select video re-encoding codec (H.264, HEVC, VP9, AV1, ProRes, MPEG-4).")
+
+        self.video_bitrate_input = QLineEdit()
+        self.video_bitrate_input.setPlaceholderText("Auto (e.g. 8000k)")
+        self.video_bitrate_input.setToolTip("Specify custom video bitrate (e.g. 8000k, 12M). Leave blank for auto.")
+
+        self.resolution_combo = QComboBox()
+        self.resolution_combo.addItems(VIDEO_RESOLUTION_OPTIONS)
+        self.resolution_combo.setToolTip("Override video resolution scaling.")
+
+        self.frame_rate_combo = QComboBox()
+        self.frame_rate_combo.addItems(FRAME_RATE_OPTIONS)
+        self.frame_rate_combo.setToolTip("Override video frame rate (FPS) during local re-encoding.")
+
+        self.sample_rate_combo = QComboBox()
+        self.sample_rate_combo.addItems(SAMPLE_RATE_OPTIONS)
+        self.sample_rate_combo.setToolTip("Override audio sampling frequency (e.g. 44100 Hz, 48000 Hz).")
+
+        self.channel_combo = QComboBox()
+        self.channel_combo.addItems(CHANNEL_OPTIONS)
+        self.channel_combo.setToolTip("Override audio channel layout (Source, Mono, Stereo).")
+
+        self.compression_combo = QComboBox()
+        self.compression_combo.addItems(COMPRESSION_OPTIONS)
+        self.compression_combo.setToolTip("Set compression level for FLAC or OPUS audio encoders.")
+
+        self.pattern_input = QLineEdit()
+        self.pattern_input.setPlaceholderText("%(title)s [%(height)sp]")
+        self.pattern_input.setToolTip("Customize output filename template pattern (e.g. %(title)s [%(height)sp]).")
 
         self.clean_sidecars_check = QCheckBox("Clean temporary sidecar files after conversion")
         self.clean_sidecars_check.setChecked(True)
+        self.clean_sidecars_check.setToolTip("Automatically remove intermediate conversion files and sidecars after processing.")
 
-        adv_layout.addRow(QLabel("Video Codec:"), self.video_codec_combo)
-        adv_layout.addRow(QLabel("Video Bitrate:"), self.video_bitrate_input)
-        adv_layout.addRow(QLabel("Resolution Override:"), self.resolution_combo)
-        adv_layout.addRow(QLabel("Frame Rate Override:"), self.frame_rate_combo)
-        adv_layout.addRow(QLabel("Audio Sample Rate:"), self.sample_rate_combo)
-        adv_layout.addRow(QLabel("Audio Channels:"), self.channel_combo)
-        adv_layout.addRow(QLabel("Audio Compression:"), self.compression_combo)
-        adv_layout.addRow(QLabel("Filename Pattern:"), self.pattern_input)
-        adv_layout.addRow(QLabel("Cookie Browser:"), self.cookie_browser_combo)
-        adv_layout.addRow(QLabel("Cookies File:"), cookie_row)
-        adv_layout.addRow(QLabel("Proxy Server:"), self.proxy_input)
-        adv_layout.addRow(self.embed_subs_check, self.sub_lang_input)
-        adv_layout.addRow(self.clean_sidecars_check)
+        conv_grid.addWidget(QLabel("Video codec:"), 0, 0)
+        conv_grid.addWidget(self.video_codec_combo, 0, 1)
+        conv_grid.addWidget(QLabel("Video bitrate:"), 0, 2)
+        conv_grid.addWidget(self.video_bitrate_input, 0, 3)
+
+        conv_grid.addWidget(QLabel("Resolution:"), 1, 0)
+        conv_grid.addWidget(self.resolution_combo, 1, 1)
+        conv_grid.addWidget(QLabel("FPS:"), 1, 2)
+        conv_grid.addWidget(self.frame_rate_combo, 1, 3)
+
+        conv_grid.addWidget(QLabel("Sample rate:"), 2, 0)
+        conv_grid.addWidget(self.sample_rate_combo, 2, 1)
+        conv_grid.addWidget(QLabel("Channels:"), 2, 2)
+        conv_grid.addWidget(self.channel_combo, 2, 3)
+
+        conv_grid.addWidget(QLabel("Compression:"), 3, 0)
+        conv_grid.addWidget(self.compression_combo, 3, 1)
+
+        conv_grid.addWidget(QLabel("Filename pattern (optional):"), 4, 0)
+        conv_grid.addWidget(self.pattern_input, 4, 1, 1, 3)
+
+        conv_grid.addWidget(self.clean_sidecars_check, 5, 0, 1, 4)
+
+        adv_vbox.addWidget(conv_box)
 
         self.advanced_panel.setVisible(False)
         advanced_toggle.toggled.connect(lambda open_: self.advanced_panel.setVisible(open_))
@@ -579,11 +916,24 @@ class QtMainWindow(QMainWindow):
 
         # Download Actions Row
         action_row = QHBoxLayout()
+        action_row.setContentsMargins(4, 10, 4, 10)
+        action_row.setSpacing(12)
+
         self.download_button = QPushButton("Download")
         self.download_button.setObjectName("primary")
+        self.download_button.setMinimumHeight(38)
+        self.download_button.setMinimumWidth(130)
+        self.download_button.setToolTip("Start downloading all links currently in the queue.")
+
         self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setMinimumHeight(38)
+        self.cancel_button.setMinimumWidth(100)
         self.cancel_button.setEnabled(False)
+        self.cancel_button.setToolTip("Cancel ongoing download operations.")
+
         self.open_folder_button = QPushButton("Open Save Folder")
+        self.open_folder_button.setMinimumHeight(38)
+        self.open_folder_button.setToolTip("Open the save directory in Windows File Explorer.")
 
         action_row.addWidget(self.download_button)
         action_row.addWidget(self.cancel_button)
@@ -613,8 +963,8 @@ class QtMainWindow(QMainWindow):
         log_layout.addWidget(self.log_box)
         layout.addWidget(log_frame)
 
-        scroll.setWidget(scroll_content)
-        main_vbox.addWidget(scroll, 1)
+        self.content_scroll.setWidget(scroll_content)
+        main_vbox.addWidget(self.content_scroll, 1)
 
         # Status Bar
         self.transfer_status = TransferStatusBar()
@@ -631,11 +981,84 @@ class QtMainWindow(QMainWindow):
         self.cancel_button.clicked.connect(self._cancel_download)
 
     def _restore_settings(self):
-        video_selected = self._config.get("format", "video") == "video"
-        self.video_radio.setChecked(video_selected)
+        is_audio = self._config.get("format", "video") == "audio"
+        if is_audio:
+            self.audio_radio.setChecked(True)
+        else:
+            self.video_radio.setChecked(True)
+        self._sync_format_controls(not is_audio)
         self._set_combo_value(self.quality_combo, self._config.get("quality"))
         self._set_combo_value(self.output_format_combo, self._config.get("output_format"))
         self.output_path.setText(self._config.get("output_dir") or get_default_output_dir())
+        self.single_only_check.setChecked(self._config.get("single_only", self._config.get("only_this_video", True)))
+        self.ffmpeg_path_input.setText(self._config.get("ffmpeg_path") or get_default_ffmpeg_path())
+        self._update_ffmpeg_status_label()
+        self._set_combo_value(self.cookie_browser_combo, self._config.get("cookies_browser"))
+        self.cookie_file_input.setText(self._config.get("cookies_file", ""))
+        self.proxy_input.setText(self._config.get("proxy", ""))
+        self.download_subs_check.setChecked(self._config.get("embed_subtitles", self._config.get("subtitles", False)))
+        self.auto_subs_check.setChecked(self._config.get("auto_subtitles", False))
+        self.sub_lang_input.setText(self._config.get("subtitle_langs", self._config.get("subtitle_languages", "en.*")))
+        self.embed_metadata_check.setChecked(self._config.get("embed_metadata", True))
+        self.embed_thumb_check.setChecked(self._config.get("embed_thumbnail", False))
+        self.live_start_check.setChecked(self._config.get("live_start_from_beginning", self._config.get("live_from_start", False)))
+        self.format_id_input.setText(self._config.get("exact_format_id", self._config.get("format_id", "")))
+        self._set_combo_value(self.video_codec_combo, self._config.get("video_codec"))
+        self.video_bitrate_input.setText(self._config.get("video_bitrate", ""))
+        self._set_combo_value(self.resolution_combo, self._config.get("conversion_resolution"))
+        self._set_combo_value(self.frame_rate_combo, self._config.get("frame_rate"))
+        self._set_combo_value(self.sample_rate_combo, self._config.get("sample_rate"))
+        self._set_combo_value(self.channel_combo, self._config.get("channels"))
+        self._set_combo_value(self.compression_combo, self._config.get("compression_level"))
+        self.pattern_input.setText(self._config.get("filename_pattern", ""))
+        self.clean_sidecars_check.setChecked(self._config.get("clean_sidecars", True))
+
+    def _choose_ffmpeg_file(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Select ffmpeg.exe", "", "Executables (*.exe);;All files (*.*)")
+        if file_path:
+            self.ffmpeg_path_input.setText(file_path)
+            self._update_ffmpeg_status_label()
+
+    def _update_ffmpeg_status_label(self):
+        path = self.ffmpeg_path_input.text().strip()
+        if path and os.path.exists(path):
+            self.ffmpeg_status_label.setText(f"✔ Using: {path}")
+            self.ffmpeg_status_label.setStyleSheet("color: #57c26a; font-weight: 500;")
+        else:
+            self.ffmpeg_status_label.setText("⚠ FFmpeg executable not found at specified path. System PATH will be used.")
+            self.ffmpeg_status_label.setStyleSheet("color: #e5b84d; font-weight: 500;")
+
+    def _list_formats(self):
+        url = self._first_url()
+        if not url:
+            QMessageBox.warning(self, "No URL", "Paste a video link first to list available formats.")
+            return
+
+        self.log_box.appendPlainText(f"\n[INFO] Fetching exact format IDs for {url}...")
+        self.list_formats_btn.setEnabled(False)
+        worker = FormatListWorker(
+            url,
+            self.cookie_browser_combo.currentText(),
+            self.cookie_file_input.text().strip(),
+            self.proxy_input.text().strip(),
+            self,
+        )
+        worker.formats_ready.connect(self._show_format_list)
+        worker.formats_failed.connect(lambda error: self.log_box.appendPlainText(f"[ERROR] Failed to fetch formats: {error}"))
+        worker.finished.connect(lambda: self.list_formats_btn.setEnabled(True))
+        worker.finished.connect(lambda: self._format_workers.discard(worker))
+        worker.finished.connect(worker.deleteLater)
+        self._format_workers.add(worker)
+        worker.start()
+
+    def _show_format_list(self, formats):
+        self.log_box.appendPlainText(f"\nAvailable Formats ({len(formats)}):")
+        self.log_box.appendPlainText("format_id | ext  | resolution   | video codec  | audio codec  | size")
+        for item in formats:
+            self.log_box.appendPlainText(
+                f"{str(item['id']):>8} | {item['ext']:<4} | {item['resolution']:<12} | "
+                f"{item['vcodec']:<12} | {item['acodec']:<12} | {item['size'] or '?'}"
+            )
 
     @staticmethod
     def _set_combo_value(combo, value):
@@ -644,6 +1067,8 @@ class QtMainWindow(QMainWindow):
             combo.setCurrentIndex(index)
 
     def _sync_format_controls(self, video_selected):
+        previous_quality = self.quality_combo.currentText()
+        previous_output = self.output_format_combo.currentText()
         self.quality_combo.clear()
         self.output_format_combo.clear()
         if video_selected:
@@ -652,6 +1077,65 @@ class QtMainWindow(QMainWindow):
         else:
             self.quality_combo.addItems(AUDIO_QUALITIES)
             self.output_format_combo.addItems(AUDIO_OUTPUT_FORMATS)
+        self._set_combo_value(self.quality_combo, previous_quality)
+        self._set_combo_value(self.output_format_combo, previous_output)
+
+    def _settings_from_ui(self):
+        """Return every user-facing setting using the stable Qt configuration schema."""
+        return {
+            "format": "video" if self.video_radio.isChecked() else "audio",
+            "quality": self.quality_combo.currentText(),
+            "output_format": self.output_format_combo.currentText(),
+            "output_dir": self.output_path.text().strip(),
+            "single_only": self.single_only_check.isChecked(),
+            "ffmpeg_path": self.ffmpeg_path_input.text().strip(),
+            "cookies_browser": self.cookie_browser_combo.currentText(),
+            "cookies_file": self.cookie_file_input.text().strip(),
+            "proxy": self.proxy_input.text().strip(),
+            "embed_subtitles": self.download_subs_check.isChecked(),
+            "auto_subtitles": self.auto_subs_check.isChecked(),
+            "subtitle_langs": self.sub_lang_input.text().strip() or "en.*",
+            "embed_metadata": self.embed_metadata_check.isChecked(),
+            "embed_thumbnail": self.embed_thumb_check.isChecked(),
+            "live_start_from_beginning": self.live_start_check.isChecked(),
+            "exact_format_id": self.format_id_input.text().strip(),
+            "video_codec": self.video_codec_combo.currentText(),
+            "video_bitrate": self.video_bitrate_input.text().strip(),
+            "conversion_resolution": self.resolution_combo.currentText(),
+            "frame_rate": self.frame_rate_combo.currentText(),
+            "sample_rate": self.sample_rate_combo.currentText(),
+            "channels": self.channel_combo.currentText(),
+            "compression_level": self.compression_combo.currentText(),
+            "filename_pattern": self.pattern_input.text().strip(),
+            "clean_sidecars": self.clean_sidecars_check.isChecked(),
+            "key_bindings": dict(self._config.get("key_bindings", DEFAULT_KEY_BINDINGS)),
+            "scroll_speed": clamp_scroll_speed(self._config.get("scroll_speed", SCROLL_SPEED_DEFAULT)),
+        }
+
+    def _save_settings(self):
+        if not self._persist_settings:
+            return
+        self._config = self._settings_from_ui()
+        save_config(self._config)
+
+    def _apply_preferences(self):
+        self._apply_key_bindings(self._config.get("key_bindings", DEFAULT_KEY_BINDINGS))
+        speed = clamp_scroll_speed(self._config.get("scroll_speed", SCROLL_SPEED_DEFAULT))
+        self.content_scroll.verticalScrollBar().setSingleStep(12 * speed)
+        self.content_scroll.horizontalScrollBar().setSingleStep(12 * speed)
+        application = QApplication.instance()
+        if application:
+            application.installEventFilter(self)
+
+    def _apply_key_bindings(self, bindings):
+        sequence_map = {
+            "Ctrl + + / Ctrl + =": [QKeySequence.ZoomIn, QKeySequence("Ctrl+="), QKeySequence("Ctrl++")],
+            "Ctrl + -": [QKeySequence.ZoomOut, QKeySequence("Ctrl+-")],
+            "Ctrl + 0": [QKeySequence("Ctrl+0")],
+            "None": [],
+        }
+        for name, action in self._zoom_actions.items():
+            action.setShortcuts(sequence_map.get(bindings.get(name, DEFAULT_KEY_BINDINGS[name]), []))
 
     def _choose_output_folder(self):
         folder = QFileDialog.getExistingDirectory(
@@ -689,9 +1173,31 @@ class QtMainWindow(QMainWindow):
 
     def _apply_zoom(self, percent):
         self.zoom_percent = clamp_zoom_percent(percent)
-        font = self.font()
-        font.setPointSize(max(7, int(10 * self.zoom_percent / 100.0)))
-        self.setFont(font)
+        scaled_size = max(7, int(10 * self.zoom_percent / 100.0))
+        app = QApplication.instance()
+        if app:
+            font = app.font()
+            font.setPointSize(scaled_size)
+            app.setFont(font)
+            for widget in app.allWidgets():
+                widget.setFont(font)
+                widget.update()
+        self.log_box.appendPlainText(f"[INFO] UI Zoom set to {self.zoom_percent}%")
+
+    def eventFilter(self, watched, event):
+        """Provide Ctrl + mouse-wheel zoom without interfering with normal scrolling."""
+        if (
+            event.type() == QEvent.Type.Wheel
+            and isinstance(watched, QWidget)
+            and (watched is self or self.isAncestorOf(watched))
+            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
+        ):
+            delta = event.angleDelta().y()
+            if delta:
+                self._change_zoom(ZOOM_STEP_PERCENT if delta > 0 else -ZOOM_STEP_PERCENT)
+                event.accept()
+                return True
+        return super().eventFilter(watched, event)
 
     def _schedule_preview(self):
         self._preview_timer.stop()
@@ -790,43 +1296,73 @@ class QtMainWindow(QMainWindow):
         worker = ThumbnailDownloadWorker(url, title, out_dir, self)
         worker.thumbnail_saved.connect(lambda path: self.log_box.appendPlainText(f"[SUCCESS] Thumbnail saved: {path}"))
         worker.thumbnail_failed.connect(lambda err: self.log_box.appendPlainText(f"[ERROR] Failed to save thumbnail: {err}"))
+        worker.finished.connect(lambda: self._thumbnail_workers.discard(worker))
+        worker.finished.connect(worker.deleteLater)
+        self._thumbnail_workers.add(worker)
         worker.start()
 
     def _start_download(self):
-        urls = [line.strip() for line in self.url_text.toPlainText().splitlines() if line.strip()]
-        if not urls:
-            QMessageBox.warning(self, "No links provided", "Please paste at least one video link before clicking Download.")
-            return
+        try:
+            raw_text = self.url_text.toPlainText()
+            urls = []
+            for token in re.split(r"[\r\n,\s]+", raw_text):
+                cleaned = token.strip(" \"'\t\r\n,;")
+                if cleaned and (cleaned.startswith("http://") or cleaned.startswith("https://") or "www." in cleaned or "youtu" in cleaned):
+                    urls.append(cleaned)
+                elif cleaned and len(cleaned) > 5 and "." in cleaned:
+                    urls.append("https://" + cleaned if not cleaned.startswith("http") else cleaned)
 
-        settings = {
-            "format": "video" if self.video_radio.isChecked() else "audio",
-            "quality": self.quality_combo.currentText(),
-            "output_format": self.output_format_combo.currentText(),
-            "output_dir": self.output_path.text().strip() or get_default_output_dir(),
-            "single_only": self.single_only_check.isChecked(),
-            "filename_pattern": self.pattern_input.text().strip(),
-            "cookies_browser": self.cookie_browser_combo.currentText(),
-            "cookies_file": self.cookie_file_input.text().strip(),
-            "proxy": self.proxy_input.text().strip(),
-            "embed_subtitles": self.embed_subs_check.isChecked(),
-            "subtitle_langs": self.sub_lang_input.text().strip(),
-            "clean_sidecars": self.clean_sidecars_check.isChecked(),
-        }
+            if not urls:
+                self.log_box.appendPlainText("[WARNING] Download clicked but no valid video links found in input box.")
+                QMessageBox.warning(self, "No links provided", "Please paste at least one valid video link before clicking Download.")
+                return
 
-        from ...config.store import add_history_entry
-        for url in urls:
-            add_history_entry(url, title=url, format_type=settings.get("format", "video"))
+            settings = {
+                "format": "video" if self.video_radio.isChecked() else "audio",
+                "quality": self.quality_combo.currentText(),
+                "output_format": self.output_format_combo.currentText(),
+                "output_dir": self.output_path.text().strip() or get_default_output_dir(),
+                "ffmpeg_path": self.ffmpeg_path_input.text().strip() or get_default_ffmpeg_path(),
+                "single_only": self.single_only_check.isChecked(),
+                "filename_pattern": self.pattern_input.text().strip(),
+                "cookies_browser": self.cookie_browser_combo.currentText(),
+                "cookies_file": self.cookie_file_input.text().strip(),
+                "proxy": self.proxy_input.text().strip(),
+                "embed_subtitles": self.download_subs_check.isChecked(),
+                "auto_subtitles": self.auto_subs_check.isChecked(),
+                "subtitle_langs": self.sub_lang_input.text().strip(),
+                "embed_metadata": self.embed_metadata_check.isChecked(),
+                "embed_thumbnail": self.embed_thumb_check.isChecked(),
+                "live_start_from_beginning": self.live_start_check.isChecked(),
+                "exact_format_id": self.format_id_input.text().strip(),
+                "video_codec": self.video_codec_combo.currentText(),
+                "video_bitrate": self.video_bitrate_input.text().strip(),
+                "conversion_resolution": self.resolution_combo.currentText(),
+                "frame_rate": self.frame_rate_combo.currentText(),
+                "sample_rate": self.sample_rate_combo.currentText(),
+                "channels": self.channel_combo.currentText(),
+                "compression_level": self.compression_combo.currentText(),
+                "clean_sidecars": self.clean_sidecars_check.isChecked(),
+            }
+            self._save_settings()
 
-        self.download_button.setEnabled(False)
-        self.cancel_button.setEnabled(True)
-        self.log_box.appendPlainText("\n=== Starting Download Operation ===")
+            for url in urls:
+                add_history_entry(url, title=url, format_type=settings.get("format", "video"), status="Queued")
 
-        self._download_worker = QtDownloadWorker(urls, settings, self)
-        self._download_worker.log_emitted.connect(self.log_box.appendPlainText)
-        self._download_worker.progress_updated.connect(self._on_progress_update)
-        self._download_worker.status_updated.connect(self._on_status_update)
-        self._download_worker.queue_completed.connect(self._on_download_complete)
-        self._download_worker.start()
+            self.download_button.setEnabled(False)
+            self.cancel_button.setEnabled(True)
+            self.log_box.appendPlainText(f"\n=== Starting Download Operation for {len(urls)} item(s) ===")
+
+            self._download_worker = QtDownloadWorker(urls, settings, self)
+            self._download_worker.log_emitted.connect(self.log_box.appendPlainText)
+            self._download_worker.progress_updated.connect(self._on_progress_update)
+            self._download_worker.status_updated.connect(self._on_status_update)
+            self._download_worker.item_finished.connect(self._on_item_finished)
+            self._download_worker.queue_completed.connect(self._on_download_complete)
+            self._download_worker.start()
+        except Exception as err:
+            self.log_box.appendPlainText(f"[ERROR] Could not start download: {err}")
+            QMessageBox.critical(self, "Download Error", f"Failed to start download operation:\n{err}")
 
     def _cancel_download(self):
         if self._download_worker:
@@ -852,6 +1388,25 @@ class QtMainWindow(QMainWindow):
         self.cancel_button.setEnabled(False)
         self.log_box.appendPlainText(f"\n[FINISHED] Queue finished: {success_count} succeeded, {failure_count} failed.")
 
+    def _on_item_finished(self, url, succeeded, format_type):
+        update_history_entry(
+            url,
+            "Completed" if succeeded else "Failed or cancelled",
+            format_type=format_type,
+        )
+
+    def closeEvent(self, event):
+        """Stop timers and give active workers a brief, safe shutdown window."""
+        self._preview_timer.stop()
+        if self._download_worker and self._download_worker.isRunning():
+            self._download_worker.cancel()
+            self._download_worker.wait(1500)
+        for worker in tuple(self._preview_workers | self._thumbnail_workers | self._format_workers):
+            if worker.isRunning():
+                worker.wait(750)
+        self._save_settings()
+        super().closeEvent(event)
+
     # Dialog Connectors
     def _show_key_bindings_dialog(self):
         dlg = KeyBindingsDialog(self._config.get("key_bindings"), self._config.get("scroll_speed", SCROLL_SPEED_DEFAULT), self)
@@ -861,6 +1416,7 @@ class QtMainWindow(QMainWindow):
             self._config["scroll_speed"] = speed
             if self._persist_settings:
                 save_config(self._config)
+            self._apply_preferences()
 
     def _show_history_dialog(self):
         dlg = LinkHistoryDialog(self)

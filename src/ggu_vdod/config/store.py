@@ -57,10 +57,36 @@ def add_history_entry(url, title="", format_type="", status="Completed"):
         pass
 
 
+def update_history_entry(url, status, title="", format_type=""):
+    """Update the status of an existing queue item without duplicating it."""
+    try:
+        history = load_history()
+        for item in history:
+            if item.get("url") == url:
+                item["status"] = status
+                if title:
+                    item["title"] = title
+                if format_type:
+                    item["format"] = format_type
+                break
+        else:
+            history.insert(0, {
+                "url": url,
+                "title": title or url,
+                "format": format_type,
+                "status": status,
+                "timestamp": os.getenv("LOCAL_TIME") or "Recently",
+            })
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(history[:500], f, indent=2)
+    except Exception:
+        pass
+
+
 def clear_history():
     try:
         if os.path.exists(HISTORY_FILE):
             os.remove(HISTORY_FILE)
     except Exception:
         pass
-

@@ -1,9 +1,14 @@
 """PySide6 dialog windows for preferences, help center, supported platforms, update checker, and shortcuts."""
 
+import importlib.metadata
+import json
 import os
+import re
 import subprocess
 import sys
 import threading
+import urllib.parse
+import urllib.request
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence
 from PySide6.QtWidgets import (
@@ -188,6 +193,11 @@ class SupportedPlatformsDialog(QDialog):
         self.count_label.setText(f"Loaded {len(extractors)} supported platform extractors.")
         self._filter_table(self.search_input.text())
 
+    def closeEvent(self, event):
+        if hasattr(self, "worker") and self.worker.isRunning():
+            self.worker.wait(1000)
+        super().closeEvent(event)
+
     def _filter_table(self, query):
         query = query.strip().lower()
         filtered = [
@@ -202,24 +212,36 @@ class SupportedPlatformsDialog(QDialog):
 
 
 class UpdateCheckWorker(QThread):
-    """Check component versions in background."""
+    """Check installed package versions against PyPI in the background."""
     results_ready = Signal(list)
 
     def run(self):
         results = []
         for name, module_name, component_type in UPDATE_COMPONENTS:
-            version_str = "Unknown"
-            if name == "yt-dlp" and yt_dlp:
-                version_str = getattr(yt_dlp, "__version__", "Installed")
-            else:
+            try:
+                installed = importlib.metadata.version(name)
+            except importlib.metadata.PackageNotFoundError:
+                installed = "Not installed"
+            latest = "—"
+            status = "Not installed" if installed == "Not installed" else "Could not check"
+            if installed != "Not installed":
                 try:
-                    mod = __import__(module_name)
-                    version_str = getattr(mod, "__version__", "Installed")
-                except ImportError:
-                    version_str = "Not installed"
-
-            results.append((name, component_type, version_str))
+                    package_name = urllib.parse.quote(name, safe="")
+                    request = urllib.request.Request(
+                        f"https://pypi.org/pypi/{package_name}/json",
+                        headers={"User-Agent": f"{APP_NAME}/{installed}"},
+                    )
+                    with urllib.request.urlopen(request, timeout=8) as response:
+                        latest = str(json.load(response)["info"]["version"])
+                    status = "Update available" if self._version_key(installed) < self._version_key(latest) else "Up to date"
+                except Exception:
+                    pass
+            results.append((name, component_type, installed, latest, status))
         self.results_ready.emit(results)
+
+    @staticmethod
+    def _version_key(version):
+        return tuple(int(part) for part in re.findall(r"\d+", version or "0"))
 
 
 class UpdateCheckDialog(QDialog):
@@ -243,8 +265,8 @@ class UpdateCheckDialog(QDialog):
         layout.addWidget(title)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["Component Name", "Type", "Installed Version"])
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Component", "Type", "Installed", "Latest", "Status"])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table, 1)
 
@@ -262,10 +284,17 @@ class UpdateCheckDialog(QDialog):
 
     def _populate_results(self, results):
         self.table.setRowCount(len(results))
-        for row, (name, comp_type, ver) in enumerate(results):
+        for row, (name, comp_type, installed, latest, status) in enumerate(results):
             self.table.setItem(row, 0, QTableWidgetItem(name))
             self.table.setItem(row, 1, QTableWidgetItem(comp_type))
-            self.table.setItem(row, 2, QTableWidgetItem(ver))
+            self.table.setItem(row, 2, QTableWidgetItem(installed))
+            self.table.setItem(row, 3, QTableWidgetItem(latest))
+            self.table.setItem(row, 4, QTableWidgetItem(status))
+
+    def closeEvent(self, event):
+        if hasattr(self, "worker") and self.worker.isRunning():
+            self.worker.wait(1000)
+        super().closeEvent(event)
 
 
 class HelpCenterDialog(QDialog):
@@ -560,4 +589,3 @@ class FontPreferencesDialog(QDialog):
 
     def get_font_choice(self):
         return self.family_combo.currentText(), self.size_spin.value()
-

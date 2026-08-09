@@ -25,7 +25,7 @@ VIDEO_FORMAT_EXTENSIONS = {
 }
 AUDIO_FORMAT_EXTENSIONS = {
     "MP3": "mp3", "WAV": "wav", "AAC": "aac", "FLAC": "flac", "OGG": "ogg",
-    "Opus": "opus", "M4A": "m4a", "WMA": "wma", "AIFF": "aiff", "ALAC": "alac",
+    "Opus": "opus", "M4A": "m4a", "WMA": "wma", "AIFF": "aiff", "ALAC": "m4a",
 }
 
 VIDEO_CODEC_OPTIONS = ["Auto", "H.264", "H.265", "VP9", "AV1"]
@@ -58,7 +58,7 @@ BITRATE_MAP = {
     "128 kbps": "128",
 }
 
-MAX_RETRIES = 999999
+MAX_RETRIES = 5
 RETRY_WAIT_SECONDS = 5
 CONNECTIVITY_ENDPOINTS = (("1.1.1.1", 53), ("8.8.8.8", 53), ("www.youtube.com", 443))
 

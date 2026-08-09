@@ -2,16 +2,15 @@
 
 Simple Windows media downloader powered by yt-dlp and FFmpeg; created by GG Uranium
 
-> **0.2.0-alpha.1:** The project is being migrated from one legacy application
-> file to a modular source layout. Download behavior is intentionally preserved
-> during this architecture phase.
+> **0.1.25-dev.25:** The PySide6 interface is the active development UI. Media
+> selection, conversion, retry, and settings behavior are covered by local regression tests.
 
 ## What it does
 
 - **Video, Audio, Thumbnail download with all types of fine-tuned controls and quality range**.
 - Media in **single source or Multiple sources or Playlist** can be downloaded all together.
 - Supported video download formats : **MP4, MKV, MOV, AVI, WebM, FLV, MPEG, TS, M4V, OGV, or 3GP**.
-- Supported audio download formats : **MP3, WAV, AAC, FLAC, OGG, Opus, M4A, WMA, AIFF, and ALAC**.
+- Supported audio download formats : **MP3, WAV, AAC, FLAC, OGG, Opus, M4A, WMA, AIFF, and ALAC**. ALAC is saved in its standard `.m4a` container.
 - Choose quality, subtitles, metadata, thumbnail embedding, cookies, proxy, and filename pattern.
 - Thumbnail downlaod with title, source, duration, resolution, and preview before downloading.
 - Downloads resume after connection loss.
@@ -106,7 +105,7 @@ content sites. Availability changes and some sites need cookies, proxy, or age v
 ## Credits
 
 Developed by **GG Uranium** .
-Tools used :  Python, Tkinter/ttk, yt-dlp, FFmpeg, Pillow, PyInstaller,
+Tools used : Python, PySide6, yt-dlp, FFmpeg, Pillow, PyInstaller,
 and Python standard-library networking/threading.
 
 ## Changelog

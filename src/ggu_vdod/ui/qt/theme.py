@@ -37,37 +37,32 @@ def apply_dark_theme(application):
             border-radius: 5px; padding: 7px;
         }}
         QLineEdit:focus, QPlainTextEdit:focus, QComboBox:focus {{ border-color: {ACCENT}; }}
-        QPushButton {{ background: {PANEL_BACKGROUND}; border: 1px solid {BORDER}; border-radius: 5px; padding: 8px 14px; }}
-        QPushButton:hover {{ border-color: {ACCENT}; }}
-        QPushButton#primary {{ background: {ACCENT}; border-color: {ACCENT}; color: {TEXT}; font-weight: 600; }}
+        QPushButton {{
+            background: #141414; color: {TEXT}; border: 1px solid #383838;
+            border-radius: 6px; padding: 7px 16px; font-size: 13px; font-weight: 500; min-height: 24px;
+        }}
+        QPushButton:hover {{ border-color: {ACCENT}; background: #1f1f1f; }}
+        QPushButton:pressed {{ background: #282828; }}
+        QPushButton#primary {{ background: {ACCENT}; border-color: {ACCENT}; color: #ffffff; font-weight: 600; }}
         QPushButton#primary:hover {{ background: {ACCENT_HOVER}; border-color: {ACCENT_HOVER}; }}
+        QPushButton#primary:pressed {{ background: #a33337; }}
+        QPushButton:disabled {{ background: #0f0f0f; color: #555555; border-color: #222222; }}
         QProgressBar {{ border: 1px solid {BORDER}; border-radius: 4px; text-align: center; min-height: 16px; }}
         QProgressBar::chunk {{ background: {ACCENT}; border-radius: 3px; }}
         QMenuBar, QMenu {{ background: {PANEL_BACKGROUND}; color: {TEXT}; }}
         QMenu::item:selected {{ background: {ACCENT}; }}
         QGroupBox {{
             background: {PANEL_BACKGROUND}; border: 1px solid {BORDER}; border-radius: 6px;
-            margin-top: 10px; padding-top: 12px; font-weight: 600; color: {TEXT};
+            margin-top: 12px; padding-top: 14px; font-weight: 600; color: {TEXT};
         }}
         QGroupBox::title {{
             subcontrol-origin: margin; subcontrol-position: top left; padding: 0 6px;
             color: {MUTED_TEXT}; font-size: 13px;
         }}
-        QCheckBox, QRadioButton {{ color: {TEXT}; spacing: 8px; padding: 3px 0; }}
-        QCheckBox::indicator {{
-            width: 16px; height: 16px; border: 1px solid #555555; border-radius: 3px; background: #111111;
+        QCheckBox, QRadioButton {{
+            color: {TEXT}; spacing: 8px; background: transparent; padding: 4px 0;
         }}
-        QCheckBox::indicator:hover {{ border-color: {ACCENT}; }}
-        QCheckBox::indicator:checked {{
-            border-color: {ACCENT}; background: {ACCENT};
-        }}
-        QRadioButton::indicator {{
-            width: 16px; height: 16px; border: 1px solid #555555; border-radius: 8px; background: #111111;
-        }}
-        QRadioButton::indicator:hover {{ border-color: {ACCENT}; }}
-        QRadioButton::indicator:checked {{
-            border-color: {ACCENT}; background: #111111;
-        }}
+        /* Keep native checkbox and radio indicators so checked controls retain
+           their familiar tick/dot glyphs instead of becoming solid squares. */
         """
     )
-

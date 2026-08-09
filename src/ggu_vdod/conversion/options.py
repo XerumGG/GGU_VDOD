@@ -30,43 +30,75 @@ def video_fallback_args(target_ext):
     }.get(target_ext, ["-c:v", "libx264", "-c:a", "aac"])
 
 
-def audio_fallback_args(target_ext):
+def audio_fallback_args(target_ext, output_format=""):
     codecs = {
         "mp3": "libmp3lame", "wav": "pcm_s16le", "aac": "aac", "flac": "flac",
         "ogg": "libvorbis", "opus": "libopus", "m4a": "aac", "wma": "wmav2",
         "aiff": "pcm_s16be", "alac": "alac",
     }
-    return ["-vn", "-c:a", codecs[target_ext]]
+    codec = "alac" if output_format == "ALAC" else codecs[target_ext]
+    return ["-vn", "-c:a", codec]
 
 
 def video_conversion_args(settings, target_ext):
-    selected_codec_args = list(VIDEO_CODEC_ARGS.get(settings.get("video_codec"), []))
+    codec_name = settings.get("video_codec", "Auto")
+    selected_codec_args = list(VIDEO_CODEC_ARGS.get(codec_name, []))
     resolution = settings.get("conversion_resolution", "Source")
     frame_rate = settings.get("frame_rate", "Source")
     bitrate = valid_bitrate(settings.get("video_bitrate"))
-    needs_reencode = bool(selected_codec_args) or resolution != "Source" or frame_rate != "Source" or bool(bitrate)
+    sample_rate = settings.get("sample_rate", "Source")
+    channels = settings.get("channels", "Source")
+
+    needs_reencode = (
+        bool(selected_codec_args)
+        or resolution != "Source"
+        or frame_rate != "Source"
+        or bool(bitrate)
+        or sample_rate != "Source"
+        or channels != "Source"
+    )
     if not needs_reencode:
         return []
+
     fallback_args = video_fallback_args(target_ext)
     args = selected_codec_args or fallback_args[:2]
     args += fallback_args[2:]
-    if resolution in VIDEO_RESOLUTION_OPTIONS and resolution != "Source":
-        width, height = resolution.split("x", 1)
-        args += ["-vf", f"scale={width}:{height}:force_original_aspect_ratio=decrease"]
-    if frame_rate in FRAME_RATE_OPTIONS and frame_rate != "Source":
-        args += ["-r", frame_rate]
+
+    res_match = re.search(r"(\d+)x(\d+)", str(resolution))
+    if res_match and resolution != "Source":
+        w, h = res_match.group(1), res_match.group(2)
+        args += ["-vf", f"scale={w}:{h}"]
+
+    fps_match = re.search(r"\d+", str(frame_rate))
+    if fps_match and frame_rate != "Source":
+        args += ["-r", fps_match.group(0)]
+
     if bitrate:
         args += ["-b:v", bitrate]
+
+    sr_match = re.search(r"\d+", str(sample_rate))
+    if sr_match and sample_rate != "Source":
+        args += ["-ar", sr_match.group(0)]
+    if channels == "Mono":
+        args += ["-ac", "1"]
+    elif channels == "Stereo":
+        args += ["-ac", "2"]
+
     return args
 
 
 def audio_conversion_args(settings, target_ext):
-    args = list(audio_fallback_args(target_ext))
+    output_format = str(settings.get("output_format") or "").upper()
+    args = list(audio_fallback_args(target_ext, output_format))
     if target_ext not in {"wav", "flac", "aiff", "alac"}:
-        args += ["-b:a", BITRATE_MAP.get(settings["quality"], "192") + "k"]
+        args += ["-b:a", BITRATE_MAP.get(settings.get("quality"), "320") + "k"]
     sample_rate = settings.get("sample_rate", "Source")
-    if sample_rate in SAMPLE_RATE_OPTIONS and sample_rate != "Source":
-        args += ["-ar", sample_rate]
+    sr_match = re.search(r"\d+", str(sample_rate))
+    if sr_match and sample_rate != "Source":
+        # libopus supports only 48/24/16/12/8 kHz. It rejects the two other
+        # sample-rate options exposed by the interface, so use its native 48 kHz.
+        effective_rate = "48000" if target_ext == "opus" else sr_match.group(0)
+        args += ["-ar", effective_rate]
     channels = settings.get("channels", "Source")
     if channels == "Mono":
         args += ["-ac", "1"]
@@ -74,57 +106,140 @@ def audio_conversion_args(settings, target_ext):
         args += ["-ac", "2"]
     compression = settings.get("compression_level", "Auto")
     if compression in COMPRESSION_OPTIONS and compression != "Auto" and target_ext in {"flac", "opus"}:
-        args += ["-compression_level", compression]
+        args += ["-compression_level", str(compression)]
     return args
 
 
-def clean_video_sidecars(output_dir, started_at, target_ext):
-    """Keep the requested video file and remove matching temporary sidecars."""
+try:
+    from yt_dlp.postprocessor.ffmpeg import FFmpegPostProcessor
+except ImportError:
+    FFmpegPostProcessor = object
+
+
+class FFmpegCustomReencodePP(FFmpegPostProcessor):
+    """Convert a video file locally when advanced conversion options are used."""
+    def __init__(self, downloader, target_ext, ffmpeg_args):
+        super().__init__(downloader)
+        self.target_ext = target_ext
+        self.ffmpeg_args = ffmpeg_args
+
+    def run(self, info):
+        filename = info.get("filepath")
+        if not filename or not os.path.exists(filename):
+            return [], info
+        dir_name, base_name = os.path.split(filename)
+        stem = os.path.splitext(base_name)[0]
+        out_filename = os.path.join(dir_name, f"{stem}.ggu-conv.{self.target_ext}")
+        self.to_screen(f"[FFmpeg] Re-encoding media to {self.target_ext} with custom parameters...")
+        self.run_ffmpeg(filename, out_filename, self.ffmpeg_args)
+        final_filename = _available_final_path(dir_name, stem, self.target_ext, filename)
+        if os.path.exists(out_filename):
+            if os.path.exists(filename) and filename != final_filename and filename != out_filename:
+                try:
+                    os.remove(filename)
+                except OSError:
+                    pass
+            os.replace(out_filename, final_filename)
+            info["filepath"] = final_filename
+            info["ext"] = self.target_ext
+        return [], info
+
+
+class FFmpegCustomAudioConvertPP(FFmpegPostProcessor):
+    """Convert any supported audio target with ffmpeg, including WMA, AIFF, and OGG."""
+
+    def __init__(self, downloader, target_ext, ffmpeg_args):
+        super().__init__(downloader)
+        self.target_ext = target_ext
+        self.ffmpeg_args = ffmpeg_args
+
+    def run(self, info):
+        filename = info.get("filepath")
+        if not filename or not os.path.exists(filename):
+            return [], info
+
+        dir_name, base_name = os.path.split(filename)
+        stem = os.path.splitext(base_name)[0]
+        out_filename = os.path.join(dir_name, f"{stem}.ggu-conv.{self.target_ext}")
+        final_filename = _available_final_path(dir_name, stem, self.target_ext, filename)
+        self.to_screen(f"[FFmpeg] Converting audio to {self.target_ext}...")
+        self.run_ffmpeg(filename, out_filename, self.ffmpeg_args)
+        if os.path.exists(out_filename):
+            if os.path.exists(filename) and filename != final_filename:
+                try:
+                    os.remove(filename)
+                except OSError:
+                    pass
+            os.replace(out_filename, final_filename)
+            info["filepath"] = final_filename
+            info["ext"] = self.target_ext
+        return [], info
+
+
+def _available_final_path(directory, stem, target_ext, source_filename):
+    """Avoid replacing a completed file that happens to share the target name."""
+    candidate = os.path.join(directory, f"{stem}.{target_ext}")
+    if candidate == source_filename or not os.path.exists(candidate):
+        return candidate
+    index = 1
+    while True:
+        candidate = os.path.join(directory, f"{stem} ({index}).{target_ext}")
+        if not os.path.exists(candidate):
+            return candidate
+        index += 1
+
+
+def clean_video_sidecars(output_dir, started_at=0, target_ext=""):
+    """Keep the requested media file and remove matching temporary sidecars and stream fragments."""
     try:
         names = os.listdir(output_dir)
     except OSError:
         return 0
 
+    target_ext = (target_ext or "").lower().lstrip(".")
     finished_media = []
     for name in names:
         path = os.path.join(output_dir, name)
-        if not os.path.isfile(path) or not name.casefold().endswith(f".{target_ext}"):
+        if not os.path.isfile(path):
+            continue
+        if target_ext and not name.casefold().endswith(f".{target_ext}"):
+            continue
+        if re.search(r"\.f\d+\.", name, re.IGNORECASE) or ".temp." in name.casefold() or ".part" in name.casefold() or ".ytdl" in name.casefold():
             continue
         try:
-            if os.path.getmtime(path) >= started_at - 2:
+            if started_at == 0 or os.path.getmtime(path) >= started_at - 2:
                 finished_media.append(name)
         except OSError:
             continue
 
     removed = 0
+    # 1. Clean explicit temporary sidecar markers (.ggu-converted, .temp, .part, .ytdl)
     for name in names:
-        if ".ggu-converted." not in name.casefold():
-            continue
-        path = os.path.join(output_dir, name)
-        final_name = re.sub(r"\.ggu-converted\.", ".", name, flags=re.IGNORECASE)
-        final_path = os.path.join(output_dir, final_name)
-        try:
-            is_current_file = os.path.getmtime(path) >= started_at - 2
-            if os.path.isfile(path) and (is_current_file or os.path.isfile(final_path)):
-                os.remove(path)
-                removed += 1
-        except OSError:
-            pass
-
-    for final_name in finished_media:
-        stem = os.path.splitext(final_name)[0]
-        prefix = stem + "."
-        for name in names:
-            if name == final_name or not name.startswith(prefix):
-                continue
-            extension = os.path.splitext(name)[1].casefold()
-            if extension not in VIDEO_SIDECAR_EXTENSIONS:
-                continue
+        cf = name.casefold()
+        if ".ggu-converted." in cf or ".temp." in cf or cf.endswith(".part") or cf.endswith(".ytdl"):
+            path = os.path.join(output_dir, name)
             try:
-                os.remove(os.path.join(output_dir, name))
-                removed += 1
+                if os.path.isfile(path) and (started_at == 0 or os.path.getmtime(path) >= started_at - 2):
+                    os.remove(path)
+                    removed += 1
             except OSError:
                 pass
+
+    # 2. Clean matching stream format fragments (.f251, .f398, etc.) for finished files
+    for final_name in finished_media:
+        stem = os.path.splitext(final_name)[0]
+        for name in names:
+            if name == final_name:
+                continue
+            path = os.path.join(output_dir, name)
+            if not os.path.isfile(path):
+                continue
+            if name.startswith(stem) and re.search(r"\.f\d+\.", name, re.IGNORECASE):
+                try:
+                    os.remove(path)
+                    removed += 1
+                except OSError:
+                    pass
     return removed
 
 

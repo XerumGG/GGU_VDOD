@@ -30,8 +30,14 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
+      - name: Run regression tests
+        env:
+          QT_QPA_PLATFORM: offscreen
+          PYTHONPATH: src
+        run: python -m unittest discover -s tests -v
+
       - name: Build GGU_VDOD.exe
-        run: pyinstaller --onefile --noconsole --name GGU_VDOD app.py
+        run: pyinstaller --onefile --noconsole --paths src --collect-all PySide6 --name GGU_VDOD app.py
 
       - name: Assemble release package
         shell: pwsh

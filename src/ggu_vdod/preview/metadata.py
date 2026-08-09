@@ -31,6 +31,18 @@ def preview_target_url(url):
 
 
 def best_thumbnail_url(info):
+    video_id = info.get("id") or youtube_video_id(info.get("webpage_url") or info.get("url") or "")
+    if video_id:
+        maxres_url = f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
+        try:
+            ctx = ssl._create_unverified_context()
+            req = urllib.request.Request(maxres_url, headers={"User-Agent": "Mozilla/5.0"}, method="HEAD")
+            with urllib.request.urlopen(req, timeout=3, context=ctx) as resp:
+                if resp.status == 200:
+                    return maxres_url
+        except Exception:
+            pass
+
     thumbnails = [item for item in (info.get("thumbnails") or []) if item.get("url")]
     if thumbnails:
         def size_score(item):
@@ -38,6 +50,10 @@ def best_thumbnail_url(info):
                 width = int(item.get("width") or 0)
                 height = int(item.get("height") or 0)
                 preference = float(item.get("preference") or 0)
+                url = item.get("url", "")
+                if "maxresdefault" in url:
+                    width = max(width, 1920)
+                    height = max(height, 1080)
             except (TypeError, ValueError):
                 width = height = preference = 0
             return width * height, width, height, preference
@@ -45,12 +61,19 @@ def best_thumbnail_url(info):
     return info.get("thumbnail") or ""
 
 
+import ssl
+
+
 def download_thumbnail_bytes(thumbnail_url, max_bytes=12 * 1024 * 1024):
     if not thumbnail_url:
         return None
     try:
-        request = urllib.request.Request(thumbnail_url, headers={"User-Agent": APP_NAME})
-        with urllib.request.urlopen(request, timeout=8) as response:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"}
+        request = urllib.request.Request(thumbnail_url, headers=headers)
+        with urllib.request.urlopen(request, timeout=10, context=ctx) as response:
             return response.read(max_bytes)
     except Exception:
         return None

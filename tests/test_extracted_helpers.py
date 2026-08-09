@@ -40,6 +40,38 @@ class ExtractedHelperTests(unittest.TestCase):
             ["-vn", "-c:a", "libmp3lame", "-b:a", "320k"],
         )
 
+    def test_every_advertised_audio_extension_has_conversion_arguments(self):
+        from ggu_vdod.conversion.options import audio_conversion_args
+        from ggu_vdod.core.constants import AUDIO_FORMAT_EXTENSIONS
+
+        settings = {
+            "quality": "320 kbps (Best)",
+            "sample_rate": "Source",
+            "channels": "Source",
+            "compression_level": "Auto",
+        }
+        for extension in AUDIO_FORMAT_EXTENSIONS.values():
+            with self.subTest(extension=extension):
+                args = audio_conversion_args(settings, extension)
+                self.assertIn("-vn", args)
+                self.assertIn("-c:a", args)
+
+    def test_opus_uses_a_supported_sample_rate_and_alac_uses_m4a(self):
+        from ggu_vdod.conversion.options import audio_conversion_args
+        from ggu_vdod.core.constants import AUDIO_FORMAT_EXTENSIONS
+
+        opus_args = audio_conversion_args({
+            "quality": "320 kbps (Best)", "sample_rate": "44100",
+            "channels": "Source", "compression_level": "Auto", "output_format": "Opus",
+        }, "opus")
+        alac_args = audio_conversion_args({
+            "quality": "320 kbps (Best)", "sample_rate": "Source",
+            "channels": "Source", "compression_level": "Auto", "output_format": "ALAC",
+        }, AUDIO_FORMAT_EXTENSIONS["ALAC"])
+        self.assertEqual(opus_args[opus_args.index("-ar") + 1], "48000")
+        self.assertEqual(AUDIO_FORMAT_EXTENSIONS["ALAC"], "m4a")
+        self.assertEqual(alac_args[alac_args.index("-c:a") + 1], "alac")
+
 
 if __name__ == "__main__":
     unittest.main()
