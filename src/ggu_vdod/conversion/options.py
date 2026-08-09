@@ -64,10 +64,16 @@ def video_conversion_args(settings, target_ext):
     args = selected_codec_args or fallback_args[:2]
     args += fallback_args[2:]
 
-    res_match = re.search(r"(\d+)x(\d+)", str(resolution))
-    if res_match and resolution != "Source":
-        w, h = res_match.group(1), res_match.group(2)
-        args += ["-vf", f"scale={w}:{h}"]
+    if resolution != "Source":
+        res_match = re.search(r"(\d+)x(\d+)", str(resolution))
+        if res_match:
+            w, h = res_match.group(1), res_match.group(2)
+            args += ["-vf", f"scale={w}:{h}:force_original_aspect_ratio=decrease,pad=ceil(iw/2)*2:ceil(ih/2)*2"]
+        else:
+            h_match = re.search(r"\d+", str(resolution))
+            if h_match:
+                h = h_match.group(0)
+                args += ["-vf", f"scale=-2:{h}"]
 
     fps_match = re.search(r"\d+", str(frame_rate))
     if fps_match and frame_rate != "Source":
@@ -91,7 +97,10 @@ def audio_conversion_args(settings, target_ext):
     output_format = str(settings.get("output_format") or "").upper()
     args = list(audio_fallback_args(target_ext, output_format))
     if target_ext not in {"wav", "flac", "aiff", "alac"}:
-        args += ["-b:a", BITRATE_MAP.get(settings.get("quality"), "320") + "k"]
+        raw_quality = str(settings.get("quality") or "")
+        bitrate_val = BITRATE_MAP.get(raw_quality) or re.search(r"\d+", raw_quality)
+        bitrate_str = bitrate_val.group(0) if hasattr(bitrate_val, "group") else (bitrate_val or "320")
+        args += ["-b:a", f"{bitrate_str}k"]
     sample_rate = settings.get("sample_rate", "Source")
     sr_match = re.search(r"\d+", str(sample_rate))
     if sr_match and sample_rate != "Source":
@@ -116,6 +125,23 @@ except ImportError:
     FFmpegPostProcessor = object
 
 
+def _safe_replace_file(src, dst):
+    """Safely replace destination file with retry handling for transient Windows file locks."""
+    import time
+    for attempt in range(5):
+        try:
+            if os.path.exists(dst) and src != dst:
+                try:
+                    os.remove(dst)
+                except OSError:
+                    pass
+            os.replace(src, dst)
+            return True
+        except OSError:
+            time.sleep(0.15 * (attempt + 1))
+    return False
+
+
 class FFmpegCustomReencodePP(FFmpegPostProcessor):
     """Convert a video file locally when advanced conversion options are used."""
     def __init__(self, downloader, target_ext, ffmpeg_args):
@@ -134,13 +160,10 @@ class FFmpegCustomReencodePP(FFmpegPostProcessor):
         self.run_ffmpeg(filename, out_filename, self.ffmpeg_args)
         final_filename = _available_final_path(dir_name, stem, self.target_ext, filename)
         if os.path.exists(out_filename):
-            if os.path.exists(filename) and filename != final_filename and filename != out_filename:
-                try:
-                    os.remove(filename)
-                except OSError:
-                    pass
-            os.replace(out_filename, final_filename)
-            info["filepath"] = final_filename
+            if _safe_replace_file(out_filename, final_filename):
+                info["filepath"] = final_filename
+            else:
+                info["filepath"] = out_filename
             info["ext"] = self.target_ext
         return [], info
 
@@ -165,13 +188,10 @@ class FFmpegCustomAudioConvertPP(FFmpegPostProcessor):
         self.to_screen(f"[FFmpeg] Converting audio to {self.target_ext}...")
         self.run_ffmpeg(filename, out_filename, self.ffmpeg_args)
         if os.path.exists(out_filename):
-            if os.path.exists(filename) and filename != final_filename:
-                try:
-                    os.remove(filename)
-                except OSError:
-                    pass
-            os.replace(out_filename, final_filename)
-            info["filepath"] = final_filename
+            if _safe_replace_file(out_filename, final_filename):
+                info["filepath"] = final_filename
+            else:
+                info["filepath"] = out_filename
             info["ext"] = self.target_ext
         return [], info
 

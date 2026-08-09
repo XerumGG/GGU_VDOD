@@ -1,1 +1,1 @@
-"""Application-level services such as logging and update checks."""
+"""Application-level services such as logging, updates, and authorized sessions."""

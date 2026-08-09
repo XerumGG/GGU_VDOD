@@ -50,9 +50,13 @@ from ...services.network import (
     explain_download_error, is_internet_up, looks_like_connection_error,
     looks_like_cookie_database_error, looks_like_subtitle_rate_limit,
 )
+from ...services.cookies import inspect_netscape_cookie_file
+from ...auth.sanitizer import sanitize_log_text
+from .account_panel import AccountSessionWidget
+from .test_inbox import MailpitTestInboxWidget
 from .dialogs import (
     FontPreferencesDialog, HelpCenterDialog, KeyBindingsDialog, LibraryDialog,
-    LinkHistoryDialog, SupportedPlatformsDialog, UpdateCheckDialog,
+    LinkHistoryDialog, SignInPromptDialog, SupportedPlatformsDialog, UpdateCheckDialog,
 )
 from .theme import apply_dark_theme
 from .widgets import TransferStatusBar
@@ -364,6 +368,7 @@ class QtDownloadWorker(QThread):
             ydl_opts["postprocessors"].append({"key": "FFmpegMetadata", "add_chapters": True, "add_metadata": True})
         if settings.get("embed_thumbnail"):
             ydl_opts["writethumbnail"] = True
+            ydl_opts["postprocessors"].append({"key": "FFmpegThumbnailsConvertor", "format": "jpg"})
             ydl_opts["postprocessors"].append({"key": "EmbedThumbnail"})
 
         # Live stream option
@@ -459,6 +464,8 @@ class QtMainWindow(QMainWindow):
         self._format_workers = set()
         self._download_worker = None
         self._current_preview_data = None
+        self._cookie_file_approved = False
+        self._cookie_summary = None
 
         self.zoom_percent = ZOOM_DEFAULT_PERCENT
 
@@ -721,17 +728,40 @@ class QtMainWindow(QMainWindow):
         save_row.addWidget(self.browse_button)
         layout.addWidget(save_panel)
 
-        # Advanced Panel Toggle & Granular Controls
-        adv_header = QHBoxLayout()
-        adv_header.setContentsMargins(4, 6, 4, 6)
-        advanced_toggle = QToolButton()
-        advanced_toggle.setText("Advanced Options  [+]")
+        # ------------------ Complex & Advanced Options Card Header ------------------
+        adv_header_frame = QFrame()
+        adv_header_frame.setObjectName("panel")
+        adv_header_frame.setStyleSheet("QFrame#panel { background: #121212; border: 1px solid #333333; border-radius: 6px; padding: 2px 6px; }")
+        adv_header_layout = QHBoxLayout(adv_header_frame)
+        adv_header_layout.setContentsMargins(10, 4, 10, 4)
+
+        adv_title_label = QLabel("Complex & Advanced Conversion Options", self)
+        adv_title_label.setStyleSheet("font-weight: 600; color: #e5e5e5;")
+
+        advanced_toggle = QToolButton(self)
+        advanced_toggle.setText("Expand [+]")
         advanced_toggle.setCheckable(True)
-        advanced_toggle.setStyleSheet("border: none; color: #a7a7a7; font-weight: 600; font-size: 13px; cursor: pointer;")
+        advanced_toggle.setStyleSheet(
+            "QToolButton { background: #1f1f1f; color: #ffffff; border: 1px solid #383838; border-radius: 4px; padding: 4px 10px; font-weight: 600; } "
+            "QToolButton:hover { background: #2a2a2a; border-color: #e5484d; }"
+        )
         advanced_toggle.setToolTip("Expand or collapse advanced FFmpeg, cookie, proxy, subtitle, and codec settings.")
-        adv_header.addWidget(advanced_toggle)
-        adv_header.addStretch(1)
-        layout.addLayout(adv_header)
+
+        self.complex_help_btn = QToolButton(self)
+        self.complex_help_btn.setText("Help [?]")
+        self.complex_help_btn.setStyleSheet(
+            "QToolButton { background: #e5484d; color: #ffffff; border: 1px solid #e5484d; border-radius: 4px; padding: 4px 10px; font-weight: bold; } "
+            "QToolButton:hover { background: #c53f43; }"
+        )
+        self.complex_help_btn.setToolTip("Click to view detailed explanations for all complex video, audio, codec, and network options.")
+        self.complex_help_btn.clicked.connect(self._show_complex_options_help)
+
+        adv_header_layout.addWidget(adv_title_label)
+        adv_header_layout.addStretch(1)
+        adv_header_layout.addWidget(advanced_toggle)
+        adv_header_layout.addWidget(self.complex_help_btn)
+
+        layout.addWidget(adv_header_frame)
 
         self.advanced_panel = QFrame()
         self.advanced_panel.setObjectName("panel")
@@ -773,11 +803,15 @@ class QtMainWindow(QMainWindow):
         cookie_row = QHBoxLayout()
         self.cookie_file_input = QLineEdit()
         self.cookie_file_input.setPlaceholderText("Path to cookies.txt")
-        self.cookie_file_input.setToolTip("Path to custom cookies.txt file.")
+        self.cookie_file_input.setToolTip("Validated Netscape-format cookies.txt file used only with your confirmation.")
+        self.remember_cookie_path_check = QCheckBox("Remember path")
+        self.remember_cookie_path_check.setToolTip("Save only the file path, never cookie contents. You will still confirm before use.")
         self.cookie_browse_btn = QPushButton("Browse…")
         self.cookie_browse_btn.setToolTip("Browse and select a cookies.txt file.")
         self.cookie_browse_btn.clicked.connect(self._choose_cookie_file)
+        self.cookie_browse_btn.setText("Import and validate")
         cookie_row.addWidget(self.cookie_file_input, 1)
+        cookie_row.addWidget(self.remember_cookie_path_check)
         cookie_row.addWidget(self.cookie_browse_btn)
 
         self.proxy_input = QLineEdit()
@@ -911,7 +945,7 @@ class QtMainWindow(QMainWindow):
 
         self.advanced_panel.setVisible(False)
         advanced_toggle.toggled.connect(lambda open_: self.advanced_panel.setVisible(open_))
-        advanced_toggle.toggled.connect(lambda open_: advanced_toggle.setText("Advanced Options  [-]" if open_ else "Advanced Options  [+]"))
+        advanced_toggle.toggled.connect(lambda open_: advanced_toggle.setText("Collapse [-]" if open_ else "Expand [+]"))
         layout.addWidget(self.advanced_panel)
 
         # Download Actions Row
@@ -964,7 +998,18 @@ class QtMainWindow(QMainWindow):
         layout.addWidget(log_frame)
 
         self.content_scroll.setWidget(scroll_content)
-        main_vbox.addWidget(self.content_scroll, 1)
+
+        # Main Tab Widget
+        self.main_tab_widget = QTabWidget()
+        self.main_tab_widget.addTab(self.content_scroll, "📥 Downloader & Queue")
+
+        self.account_widget = AccountSessionWidget(self)
+        self.main_tab_widget.addTab(self.account_widget, "🔑 Account & Sessions")
+
+        self.test_inbox_widget = MailpitTestInboxWidget(self)
+        self.main_tab_widget.addTab(self.test_inbox_widget, "📬 Local Test Inbox (Mailpit)")
+
+        main_vbox.addWidget(self.main_tab_widget, 1)
 
         # Status Bar
         self.transfer_status = TransferStatusBar()
@@ -975,6 +1020,7 @@ class QtMainWindow(QMainWindow):
     def _connect_ui(self):
         self.url_text.textChanged.connect(self._schedule_preview)
         self.video_radio.toggled.connect(self._sync_format_controls)
+        self.cookie_file_input.textChanged.connect(self._invalidate_cookie_consent)
         self.browse_button.clicked.connect(self._choose_output_folder)
         self.open_folder_button.clicked.connect(self._open_output_folder)
         self.download_button.clicked.connect(self._start_download)
@@ -994,7 +1040,10 @@ class QtMainWindow(QMainWindow):
         self.ffmpeg_path_input.setText(self._config.get("ffmpeg_path") or get_default_ffmpeg_path())
         self._update_ffmpeg_status_label()
         self._set_combo_value(self.cookie_browser_combo, self._config.get("cookies_browser"))
+        self.remember_cookie_path_check.setChecked(self._config.get("remember_cookie_file", False))
         self.cookie_file_input.setText(self._config.get("cookies_file", ""))
+        self._cookie_file_approved = False
+        self._cookie_summary = None
         self.proxy_input.setText(self._config.get("proxy", ""))
         self.download_subs_check.setChecked(self._config.get("embed_subtitles", self._config.get("subtitles", False)))
         self.auto_subs_check.setChecked(self._config.get("auto_subtitles", False))
@@ -1033,13 +1082,15 @@ class QtMainWindow(QMainWindow):
         if not url:
             QMessageBox.warning(self, "No URL", "Paste a video link first to list available formats.")
             return
+        if not self._ensure_cookie_file_consent():
+            return
 
         self.log_box.appendPlainText(f"\n[INFO] Fetching exact format IDs for {url}...")
         self.list_formats_btn.setEnabled(False)
         worker = FormatListWorker(
             url,
             self.cookie_browser_combo.currentText(),
-            self.cookie_file_input.text().strip(),
+            self.cookie_file_input.text().strip() if self._cookie_file_approved else "",
             self.proxy_input.text().strip(),
             self,
         )
@@ -1080,8 +1131,10 @@ class QtMainWindow(QMainWindow):
         self._set_combo_value(self.quality_combo, previous_quality)
         self._set_combo_value(self.output_format_combo, previous_output)
 
-    def _settings_from_ui(self):
+    def _settings_from_ui(self, include_cookie_file=False):
         """Return every user-facing setting using the stable Qt configuration schema."""
+        cookie_file = self.cookie_file_input.text().strip()
+        remember_cookie_file = self.remember_cookie_path_check.isChecked()
         return {
             "format": "video" if self.video_radio.isChecked() else "audio",
             "quality": self.quality_combo.currentText(),
@@ -1090,7 +1143,8 @@ class QtMainWindow(QMainWindow):
             "single_only": self.single_only_check.isChecked(),
             "ffmpeg_path": self.ffmpeg_path_input.text().strip(),
             "cookies_browser": self.cookie_browser_combo.currentText(),
-            "cookies_file": self.cookie_file_input.text().strip(),
+            "cookies_file": cookie_file if include_cookie_file or remember_cookie_file else "",
+            "remember_cookie_file": remember_cookie_file,
             "proxy": self.proxy_input.text().strip(),
             "embed_subtitles": self.download_subs_check.isChecked(),
             "auto_subtitles": self.auto_subs_check.isChecked(),
@@ -1121,11 +1175,11 @@ class QtMainWindow(QMainWindow):
     def _apply_preferences(self):
         self._apply_key_bindings(self._config.get("key_bindings", DEFAULT_KEY_BINDINGS))
         speed = clamp_scroll_speed(self._config.get("scroll_speed", SCROLL_SPEED_DEFAULT))
-        self.content_scroll.verticalScrollBar().setSingleStep(12 * speed)
-        self.content_scroll.horizontalScrollBar().setSingleStep(12 * speed)
-        application = QApplication.instance()
-        if application:
-            application.installEventFilter(self)
+        vbar = self.content_scroll.verticalScrollBar()
+        hbar = self.content_scroll.horizontalScrollBar()
+        vbar.setSingleStep(12 * speed)
+        hbar.setSingleStep(12 * speed)
+        self.content_scroll.viewport().installEventFilter(self)
 
     def _apply_key_bindings(self, bindings):
         sequence_map = {
@@ -1145,9 +1199,56 @@ class QtMainWindow(QMainWindow):
             self.output_path.setText(folder)
 
     def _choose_cookie_file(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Select cookies.txt file", "", "Text files (*.txt);;All files (*.*)")
-        if file_path:
-            self.cookie_file_input.setText(file_path)
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Import Netscape cookies.txt", "", "Cookie files (*.txt *.cookies);;All files (*.*)"
+        )
+        if not file_path:
+            return
+        self._confirm_cookie_file(file_path)
+
+    def _confirm_cookie_file(self, file_path):
+        """Validate locally and request clear user consent before a cookie file is used."""
+        try:
+            summary = inspect_netscape_cookie_file(file_path)
+        except ValueError as error:
+            QMessageBox.warning(self, "Cookie import failed", str(error))
+            return False
+
+        domains = ", ".join(summary["domains"][:6])
+        if len(summary["domains"]) > 6:
+            domains += f" and {len(summary['domains']) - 6} more"
+        answer = QMessageBox.question(
+            self,
+            "Use imported cookies?",
+            "This file contains session cookies that may grant account access.\n\n"
+            f"Detected: {summary['cookie_count']} cookies for {len(summary['domains'])} domain(s)\n"
+            f"Domains: {domains}\n\n"
+            "Use this file only for downloads you are authorized to access?\n"
+            "Cookie values will not be displayed, copied, or written to logs.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return False
+        self.cookie_file_input.setText(file_path)
+        self._set_combo_value(self.cookie_browser_combo, "Custom cookies.txt file...")
+        self._cookie_file_approved = True
+        self._cookie_summary = summary
+        self.log_box.appendPlainText(
+            f"[INFO] Authorized cookies.txt import ready for {len(summary['domains'])} domain(s); cookie values are hidden."
+        )
+        return True
+
+    def _ensure_cookie_file_consent(self):
+        """Require a confirmation in each app session before a saved path is used."""
+        file_path = self.cookie_file_input.text().strip()
+        if not file_path or self._cookie_file_approved:
+            return True
+        return self._confirm_cookie_file(file_path)
+
+    def _invalidate_cookie_consent(self):
+        self._cookie_file_approved = False
+        self._cookie_summary = None
 
     def _open_output_folder(self):
         folder = self.output_path.text().strip() or get_default_output_dir()
@@ -1176,6 +1277,7 @@ class QtMainWindow(QMainWindow):
         scaled_size = max(7, int(10 * self.zoom_percent / 100.0))
         app = QApplication.instance()
         if app:
+            apply_dark_theme(app, base_font_size=scaled_size)
             font = app.font()
             font.setPointSize(scaled_size)
             app.setFont(font)
@@ -1188,8 +1290,6 @@ class QtMainWindow(QMainWindow):
         """Provide Ctrl + mouse-wheel zoom without interfering with normal scrolling."""
         if (
             event.type() == QEvent.Type.Wheel
-            and isinstance(watched, QWidget)
-            and (watched is self or self.isAncestorOf(watched))
             and event.modifiers() & Qt.KeyboardModifier.ControlModifier
         ):
             delta = event.angleDelta().y()
@@ -1220,13 +1320,13 @@ class QtMainWindow(QMainWindow):
         worker = PreviewWorker(
             token, url,
             self.cookie_browser_combo.currentText(),
-            self.cookie_file_input.text().strip(),
+            self.cookie_file_input.text().strip() if self._cookie_file_approved else "",
             self.proxy_input.text().strip(),
             self
         )
         worker.preview_ready.connect(self._apply_preview)
         worker.preview_failed.connect(self._apply_preview_error)
-        worker.finished.connect(lambda: self._preview_workers.discard(worker))
+        worker.finished.connect(lambda w=worker: self._preview_workers.discard(w))
         worker.finished.connect(worker.deleteLater)
         self._preview_workers.add(worker)
         worker.start()
@@ -1296,7 +1396,7 @@ class QtMainWindow(QMainWindow):
         worker = ThumbnailDownloadWorker(url, title, out_dir, self)
         worker.thumbnail_saved.connect(lambda path: self.log_box.appendPlainText(f"[SUCCESS] Thumbnail saved: {path}"))
         worker.thumbnail_failed.connect(lambda err: self.log_box.appendPlainText(f"[ERROR] Failed to save thumbnail: {err}"))
-        worker.finished.connect(lambda: self._thumbnail_workers.discard(worker))
+        worker.finished.connect(lambda w=worker: self._thumbnail_workers.discard(w))
         worker.finished.connect(worker.deleteLater)
         self._thumbnail_workers.add(worker)
         worker.start()
@@ -1315,6 +1415,8 @@ class QtMainWindow(QMainWindow):
             if not urls:
                 self.log_box.appendPlainText("[WARNING] Download clicked but no valid video links found in input box.")
                 QMessageBox.warning(self, "No links provided", "Please paste at least one valid video link before clicking Download.")
+                return
+            if not self._ensure_cookie_file_consent():
                 return
 
             settings = {
@@ -1396,7 +1498,7 @@ class QtMainWindow(QMainWindow):
         )
 
     def closeEvent(self, event):
-        """Stop timers and give active workers a brief, safe shutdown window."""
+        """Stop timers, purge temporary cookies, and give active workers a safe shutdown window."""
         self._preview_timer.stop()
         if self._download_worker and self._download_worker.isRunning():
             self._download_worker.cancel()
@@ -1405,9 +1507,32 @@ class QtMainWindow(QMainWindow):
             if worker.isRunning():
                 worker.wait(750)
         self._save_settings()
+        try:
+            from ...services.cookies import purge_all_temporary_cookie_files
+            from ...auth.manager import AuthManager
+            purge_all_temporary_cookie_files()
+            AuthManager.purge_expired_sessions()
+        except Exception:
+            pass
         super().closeEvent(event)
 
     # Dialog Connectors
+    def _show_complex_options_help(self):
+        QMessageBox.information(
+            self,
+            "Complex Options Reference Guide",
+            "<h3>Complex & Advanced Options Reference Guide</h3>"
+            "<hr>"
+            "<p><b>FFmpeg Location:</b> Custom path to <code>ffmpeg.exe</code> for merging audio/video streams, converting containers, and re-encoding.</p>"
+            "<p><b>Browser Cookies:</b> Load authenticated session cookies directly from Chrome, Firefox, Edge, Brave, etc., to bypass age limits or login screens.</p>"
+            "<p><b>Proxy:</b> Route HTTP/HTTPS/SOCKS traffic through a proxy server (format: <code>http://user:pass@host:port</code>).</p>"
+            "<p><b>Subtitles:</b> Select language codes (e.g. <code>en.*, es</code>) to download and embed closed captions or auto-generated tracks.</p>"
+            "<p><b>Exact Format IDs:</b> Specify raw yt-dlp format codes (e.g. <code>137+140</code>) after running <i>List Formats</i>.</p>"
+            "<p><b>Video Codec & Bitrate:</b> Re-encode video using H.264, H.265, VP9, or AV1 with custom bitrate targets (e.g. <code>8000k</code>).</p>"
+            "<p><b>Resolution & FPS:</b> Override output video dimensions (e.g. <code>1920x1080</code>, <code>1080p</code>) and frame rates (e.g. <code>60 FPS</code>).</p>"
+            "<p><b>Sample Rate & Channels:</b> Override audio frequency (e.g. <code>48000 Hz</code>) and channel layout (Mono/Stereo).</p>"
+        )
+
     def _show_key_bindings_dialog(self):
         dlg = KeyBindingsDialog(self._config.get("key_bindings"), self._config.get("scroll_speed", SCROLL_SPEED_DEFAULT), self)
         if dlg.exec() == QDialog.DialogCode.Accepted:

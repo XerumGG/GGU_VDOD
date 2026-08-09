@@ -59,7 +59,7 @@ Change themes with **Edit > Preferences > Themes and colors**. The preference pa
 resizable and scrollable; pick a preset or choose **Custom**, edit the hex colors, and click
 **Apply and save** at the top.
 
-If a link needs sign-in, select an authorized browser cookie source or a `cookies.txt` file.
+If a link needs sign-in, select an authorized browser cookie source or use **Import and validate** for a Netscape-format `cookies.txt` file. The app shows the cookie domains and asks for confirmation before use.
 The app does not bypass DRM, private access, age checks, bot checks, or regional blocks.
 
 ## Useful one-line commands

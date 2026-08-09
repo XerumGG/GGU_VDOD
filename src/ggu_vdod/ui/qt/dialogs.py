@@ -298,50 +298,179 @@ class UpdateCheckDialog(QDialog):
 
 
 class HelpCenterDialog(QDialog):
-    """Help center dialog containing guide and troubleshooting info."""
+    """Modern Help Center & User Guide Dialog."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("GGU_VDOD Help Center")
-        self.resize(720, 520)
+        self.setWindowTitle("GGU_VDOD Help Center & Quick Guide")
+        self.resize(780, 580)
+        self.setMinimumSize(700, 500)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
 
-        title = QLabel(f"{APP_NAME} User Guide & Help")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
-        layout.addWidget(title)
+        # Header Title Banner
+        hdr_box = QFrame()
+        hdr_box.setObjectName("panel")
+        hdr_box.setStyleSheet("QFrame#panel { background: #141414; border: 1px solid #333333; border-radius: 8px; }")
+        hdr_layout = QVBoxLayout(hdr_box)
+        hdr_layout.setContentsMargins(16, 12, 16, 12)
 
-        help_text = QPlainTextEdit()
-        help_text.setReadOnly(True)
-        help_text.setPlainText(
-            f"=== {APP_NAME} Desktop Guide ===\n\n"
-            "1. How to Download Media:\n"
-            "   - Copy one or more media links from YouTube, Vimeo, Twitter/X, TikTok, etc.\n"
-            "   - Paste the links into the top text box (one URL per line).\n"
-            "   - Select 'Video' or 'Audio only' and choose your preferred quality.\n"
-            "   - Click the 'Download' button.\n\n"
-            "2. Advanced Conversion Options:\n"
-            "   - Expand the 'Advanced' options drawer to select custom Video Codecs (H.264, HEVC, VP9, AV1),\n"
-            "     custom bitrates, resolution overrides, frame rates, audio sample rates, and channels.\n"
-            "   - Configure browser cookies (Chrome, Firefox, Edge, etc.) if downloading age-restricted videos.\n"
-            "   - Enter proxy credentials if accessing region-locked content.\n\n"
-            "3. Keyboard & Mouse Shortcuts:\n"
-            "   - Ctrl + + / Ctrl + - : Zoom interface in/out.\n"
-            "   - Ctrl + 0 : Reset zoom.\n"
-            "   - Ctrl + Mouse Wheel : Dynamic zoom scaling.\n"
-            "   - Ctrl + N : Clear and prepare a new link list.\n\n"
-            "4. Subtitles & Metadata:\n"
-            "   - Enable 'Embed Subtitles' in Advanced options to mux subtitle tracks directly into video files."
-        )
-        layout.addWidget(help_text, 1)
+        title = QLabel(f"{APP_NAME} Documentation & User Guide", self)
+        title.setStyleSheet("font-size: 17px; font-weight: 700; color: #ffffff;")
+        subtitle = QLabel("Reference guide for account sessions, local mailpit testing, media downloads, and conversion options.", self)
+        subtitle.setStyleSheet("font-size: 12px; color: #a0a0a0; margin-top: 2px;")
+        hdr_layout.addWidget(title)
+        hdr_layout.addWidget(subtitle)
+        layout.addWidget(hdr_box)
 
+        # Main Help Tab Widget
+        from PySide6.QtWidgets import QTabWidget
+
+        self.tabs = QTabWidget(self)
+        self.tabs.setStyleSheet("""
+            QTabWidget::pane { border: 1px solid #303030; border-radius: 8px; background: #0a0a0a; }
+            QTabBar::tab {
+                background: #121212; color: #a0a0a0; border: 1px solid #303030;
+                padding: 9px 18px; font-size: 12px; font-weight: 600; border-top-left-radius: 6px; border-top-right-radius: 6px;
+                margin-right: 4px;
+            }
+            QTabBar::tab:selected { background: #1c1c1c; color: #ffffff; border-bottom: 2px solid #e5484d; font-weight: 700; }
+            QTabBar::tab:hover { color: #ffffff; background: #181818; }
+        """)
+
+        # Tab 1: Account Sessions & Local Test Inbox (Extreme Top / First Tab!)
+        self.tabs.addTab(self._build_account_mailpit_tab(), "Account Sessions & Local Inbox")
+        # Tab 2: How to Download Media
+        self.tabs.addTab(self._build_download_tab(), "Downloading Media")
+        # Tab 3: Complex Conversion Options
+        self.tabs.addTab(self._build_complex_tab(), "Complex Options Guide")
+        # Tab 4: Shortcuts
+        self.tabs.addTab(self._build_shortcuts_tab(), "Keyboard Shortcuts")
+
+        layout.addWidget(self.tabs, 1)
+
+        # Action bar
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton("Close Help", self)
+        close_btn.setMinimumWidth(110)
+        close_btn.setMinimumHeight(34)
         close_btn.clicked.connect(self.close)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
+
+    def _build_account_mailpit_tab(self) -> QWidget:
+        from PySide6.QtWidgets import QTextBrowser
+        browser = QTextBrowser(self)
+        browser.setOpenExternalLinks(True)
+        browser.setStyleSheet("QTextBrowser { background: #0a0a0a; color: #e2e2e2; border: none; padding: 16px; font-size: 13px; line-height: 1.6; }")
+        
+        html = """
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif;">
+            <div style="background: #141414; border: 1px solid #e5484d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                <h3 style="margin-top: 0; color: #e5484d; font-size: 16px;">1. Account Sessions & Local Test Inbox Overview</h3>
+                <p style="color: #a7a7a7; font-size: 12px; margin-top: -6px;"><i>Quick Example Scenario: Protected staging site <b>happyadults.com</b></i></p>
+                
+                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">A. Account Sessions (Bypass Logins & Password Gates)</h4>
+                <ol style="margin-top: 4px; padding-left: 20px;">
+                    <li>Click the <b>Account Sessions</b> tab at the top of the main window.</li>
+                    <li>Enter target domain: <code>happyadults.com</code> (or <code>staging.happyadults.com</code>).</li>
+                    <li>Provide account credentials or session cookies and click <b>Save Session</b>.</li>
+                    <li>Credentials are stored securely using Windows DPAPI encryption. When downloading media from <code>happyadults.com</code>, GGU_VDOD automatically injects session cookies to bypass login restrictions.</li>
+                </ol>
+
+                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">B. Local Test Inbox (Mailpit Verification Capture)</h4>
+                <ol style="margin-top: 4px; padding-left: 20px;">
+                    <li>Click the <b>Local Test Inbox (Mailpit)</b> tab.</li>
+                    <li>Click <b>Open Mailpit Web UI (127.0.0.1:8025)</b> to open the local email capture dashboard in your browser.</li>
+                    <li>When triggering account registration or confirmation emails on <code>happyadults.com</code>, Mailpit captures emails locally on port 8025.</li>
+                    <li>Click <b>Verify Session</b> inside the captured email table to confirm your account link automatically!</li>
+                </ol>
+            </div>
+        </div>
+        """
+        browser.setHtml(html)
+        return browser
+
+    def _build_download_tab(self) -> QWidget:
+        from PySide6.QtWidgets import QTextBrowser
+        browser = QTextBrowser(self)
+        browser.setStyleSheet("QTextBrowser { background: #0a0a0a; color: #e2e2e2; border: none; padding: 16px; font-size: 13px; line-height: 1.6; }")
+        html = """
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif;">
+            <h3 style="color: #ffffff; margin-top: 0; font-size: 16px;">2. How to Download Media</h3>
+            <ol style="padding-left: 20px;">
+                <li>Paste video or audio links into the main URL text box (one link per line).</li>
+                <li>Select media format: <b>Video</b> or <b>Audio only</b>.</li>
+                <li>Choose target resolution (2160p 4K, 1080p, 720p, 480p) or audio quality (320k, 256k, FLAC, WAV).</li>
+                <li>Select destination folder under <b>Save to:</b>.</li>
+                <li>Click <b>Download</b> to begin parallel downloading.</li>
+            </ol>
+        </div>
+        """
+        browser.setHtml(html)
+        return browser
+
+    def _build_complex_tab(self) -> QWidget:
+        from PySide6.QtWidgets import QTextBrowser
+        browser = QTextBrowser(self)
+        browser.setStyleSheet("QTextBrowser { background: #0a0a0a; color: #e2e2e2; border: none; padding: 16px; font-size: 13px; line-height: 1.6; }")
+        html = """
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif;">
+            <h3 style="color: #ffffff; margin-top: 0; font-size: 16px;">3. Complex Conversion & Advanced Options</h3>
+            <ul style="padding-left: 20px;">
+                <li><b>Expand [+] Button:</b> Located on the <i>Complex & Advanced Conversion Options</i> section header to reveal granular FFmpeg controls.</li>
+                <li><b>FFmpeg Location:</b> Custom path to <code>ffmpeg.exe</code> binary for local re-encoding and audio extraction.</li>
+                <li><b>Browser Cookies:</b> Import authenticated cookies directly from Chrome, Firefox, Edge, or Brave.</li>
+                <li><b>Proxy Settings:</b> Route network traffic through HTTP, HTTPS, or SOCKS5 proxies.</li>
+                <li><b>Video Codec & Bitrate:</b> Select H.264, HEVC (H.265), VP9, AV1, or ProRes with custom bitrates.</li>
+                <li><b>Resolution Scaling & FPS:</b> Force aspect-ratio safe resolution overrides and frame rates (e.g. 60 FPS).</li>
+                <li><b>Audio Sampling & Channels:</b> Override audio frequency (44100 Hz, 48000 Hz) and channel layouts (Mono, Stereo).</li>
+            </ul>
+        </div>
+        """
+        browser.setHtml(html)
+        return browser
+
+    def _build_shortcuts_tab(self) -> QWidget:
+        from PySide6.QtWidgets import QTextBrowser
+        browser = QTextBrowser(self)
+        browser.setStyleSheet("QTextBrowser { background: #0a0a0a; color: #e2e2e2; border: none; padding: 16px; font-size: 13px; line-height: 1.6; }")
+        html = """
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif;">
+            <h3 style="color: #ffffff; margin-top: 0; font-size: 16px;">4. Keyboard & Mouse Shortcuts</h3>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                <tr style="border-bottom: 1px solid #333; text-align: left;">
+                    <th style="padding: 8px; color: #888;">Shortcut</th>
+                    <th style="padding: 8px; color: #888;">Action</th>
+                </tr>
+                <tr style="border-bottom: 1px solid #222;">
+                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + + / Ctrl + -</td>
+                    <td style="padding: 8px;">Zoom interface in or out uniformly</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #222;">
+                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + 0</td>
+                    <td style="padding: 8px;">Reset zoom to 100% baseline</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #222;">
+                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + Mouse Wheel</td>
+                    <td style="padding: 8px;">Dynamic zoom scaling</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #222;">
+                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + N</td>
+                    <td style="padding: 8px;">Clear text area and prepare new link list</td>
+                </tr>
+                <tr style="border-bottom: 1px solid #222;">
+                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + H</td>
+                    <td style="padding: 8px;">Open Link History dialog</td>
+                </tr>
+            </table>
+        </div>
+        """
+        browser.setHtml(html)
+        return browser
 
 
 class LinkHistoryDialog(QDialog):
@@ -589,3 +718,58 @@ class FontPreferencesDialog(QDialog):
 
     def get_font_choice(self):
         return self.family_combo.currentText(), self.size_spin.value()
+
+
+class SignInPromptDialog(QDialog):
+    """Modal dialog displayed when protected media requires sign-in or authentication."""
+
+    def __init__(self, domain: str = "", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Sign In Required to Continue")
+        self.setMinimumWidth(450)
+        self.domain = domain
+
+        layout = QVBoxLayout(self)
+        layout.setSpacing(12)
+
+        info_label = QLabel(
+            f"🔒 Content on <b>{domain or 'this website'}</b> requires sign-in or account verification.",
+            self,
+        )
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        sub_label = QLabel(
+            "Select how you want GGU_VDOD to authenticate for this download:",
+            self,
+        )
+        sub_label.setStyleSheet("color: #aaaaaa;")
+        layout.addWidget(sub_label)
+
+        form = QFormLayout()
+        self.browser_combo = QComboBox(self)
+        self.browser_combo.addItems(["Chrome", "Firefox", "Edge", "Brave", "Opera", "Safari", "Vivaldi"])
+        form.addRow("Browser Session:", self.browser_combo)
+
+        self.account_input = QLineEdit(self)
+        self.account_input.setPlaceholderText("Account Label (e.g. user@domain.com)")
+        form.addRow("Account Label:", self.account_input)
+
+        layout.addLayout(form)
+
+        btn_box = QHBoxLayout()
+        self.browser_btn = QPushButton("Use Selected Browser Session", self)
+        self.browser_btn.clicked.connect(self.accept)
+        btn_box.addWidget(self.browser_btn)
+
+        self.cancel_btn = QPushButton("Cancel", self)
+        self.cancel_btn.clicked.connect(self.reject)
+        btn_box.addWidget(self.cancel_btn)
+
+        layout.addLayout(btn_box)
+
+    def get_selected_browser(self) -> str:
+        return self.browser_combo.currentText()
+
+    def get_account_label(self) -> str:
+        return self.account_input.text().strip()

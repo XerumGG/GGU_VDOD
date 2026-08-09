@@ -7,6 +7,7 @@ __pycache__/
 
 # Per-user application preferences and secrets
 settings.json
+auth_sessions.json
 .env
 *.cookies.txt
 
