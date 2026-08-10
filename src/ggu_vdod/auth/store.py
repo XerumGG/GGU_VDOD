@@ -10,7 +10,7 @@ from ..config.paths import get_app_dir
 from .credman import (
     delete_windows_credential, read_windows_credential, write_windows_credential,
 )
-from .crypto import decrypt_string, encrypt_string
+from .crypto import decrypt_string, encrypt_string, protect_bytes, unprotect_bytes
 
 
 def get_auth_store_path() -> Path:
@@ -19,8 +19,23 @@ def get_auth_store_path() -> Path:
 
 
 def load_auth_sessions() -> dict:
-    """Load all saved domain sessions from auth_sessions.json."""
+    """Load all saved domain sessions from auth_sessions.json (or dat fallback)."""
     store_path = get_auth_store_path()
+    dat_path = Path(get_app_dir()) / "auth_sessions.dat"
+
+    # Fallback to dat file if json doesn't exist yet
+    if not store_path.is_file() and dat_path.is_file():
+        try:
+            raw_bytes = dat_path.read_bytes()
+            if raw_bytes:
+                decrypted_bytes = unprotect_bytes(raw_bytes)
+                data = json.loads(decrypted_bytes.decode("utf-8"))
+                if isinstance(data, dict):
+                    save_auth_sessions(data)
+                    return data
+        except Exception:
+            pass
+
     if not store_path.is_file():
         return {}
     try:

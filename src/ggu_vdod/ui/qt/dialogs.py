@@ -368,26 +368,50 @@ class HelpCenterDialog(QDialog):
         browser.setStyleSheet("QTextBrowser { background: #0a0a0a; color: #e2e2e2; border: none; padding: 16px; font-size: 13px; line-height: 1.6; }")
         
         html = """
-        <div style="font-family: 'Segoe UI', system-ui, sans-serif;">
-            <div style="background: #141414; border: 1px solid #e5484d; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                <h3 style="margin-top: 0; color: #e5484d; font-size: 16px;">1. Account Sessions & Local Test Inbox Overview</h3>
-                <p style="color: #a7a7a7; font-size: 12px; margin-top: -6px;"><i>Quick Example Scenario: Protected staging site <b>happyadults.com</b></i></p>
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6;">
+            <div style="background: #141414; border: 1px solid #e5484d; border-radius: 8px; padding: 16px; margin-bottom: 18px;">
+                <h3 style="margin-top: 0; color: #e5484d; font-size: 16px;">1. Account Sessions & 18+ Age Gate Bypass Guide</h3>
+                <p style="color: #a7a7a7; font-size: 12px; margin-top: -6px;"><i>Example Targets: Protected media platforms (e.g. <b>example.com</b> or <b>staging.local</b>)</i></p>
                 
-                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">A. Account Sessions (Bypass Logins & Password Gates)</h4>
+                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">A. Age-Gated Media Link Detection</h4>
                 <ol style="margin-top: 4px; padding-left: 20px;">
-                    <li>Click the <b>Account Sessions</b> tab at the top of the main window.</li>
-                    <li>Enter target domain: <code>happyadults.com</code> (or <code>staging.happyadults.com</code>).</li>
-                    <li>Provide account credentials or session cookies and click <b>Save Session</b>.</li>
-                    <li>Credentials are stored securely using Windows DPAPI encryption. When downloading media from <code>happyadults.com</code>, GGU_VDOD automatically injects session cookies to bypass login restrictions.</li>
+                    <li>When pasting an age-restricted or protected link (e.g. <code>https://example.com/watch?v=12345</code> or <code>staging.local</code>), GGU_VDOD automatically detects the domain restriction.</li>
+                    <li>An <b>Age Verification Required (18+)</b> modal pops up asking you to confirm you are 18 years of age or older.</li>
+                    <li>Click <b>I am 18 or older (Confirm)</b> to open the authentication setup dialog.</li>
                 </ol>
 
-                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">B. Local Test Inbox (Mailpit Verification Capture)</h4>
+                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">B. Authentication Options for Age-Restricted Sites</h4>
+                <ul style="margin-top: 4px; padding-left: 20px;">
+                    <li><b>Option 1 (Auto-Import Browser Cookies):</b> Imports active session cookies from Chrome, Firefox, Edge, Brave, Vivaldi, etc., to bypass age verification gates automatically.</li>
+                    <li><b>Option 2 (Account Sessions Tab):</b> Registers stored account credentials (username/password/token) under DPAPI encryption for the domain.</li>
+                    <li><b>Option 3 (Local Test Inbox Mailpit):</b> Opens local email capture dashboard on <code>127.0.0.1:8025</code> for staging account signups.</li>
+                    <li><b>Option 4 (Continue as Guest):</b> Sets native <code>age_limit: 99</code> bypass flags in yt-dlp to extract public age-restricted streams without login.</li>
+                </ul>
+            </div>
+
+            <div style="background: #141414; border: 1px solid #303030; border-radius: 8px; padding: 16px; margin-bottom: 18px;">
+                <h3 style="margin-top: 0; color: #ffffff; font-size: 16px;">2. Elaborate Local Mailpit Test Inbox Guide</h3>
+                <p style="color: #a7a7a7; font-size: 12px; margin-top: -6px;"><i>Complete walkthrough for testing local registration & email verification workflows</i></p>
+
+                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">What is Mailpit?</h4>
+                <p style="color: #cccccc; margin-top: 4px;">Mailpit is a lightweight, zero-dependency local email capture server running directly inside GGU_VDOD on <code>127.0.0.1:8025</code>. It intercepts all outgoing emails sent to test domains (e.g. <code>localhost</code>, <code>127.0.0.1</code>, <code>*.local</code>, <code>*.test</code>, <code>happyadults.com</code>) without sending real messages over the internet.</p>
+
+                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">Step-by-Step Mailpit Workflow</h4>
                 <ol style="margin-top: 4px; padding-left: 20px;">
-                    <li>Click the <b>Local Test Inbox (Mailpit)</b> tab.</li>
-                    <li>Click <b>Open Mailpit Web UI (127.0.0.1:8025)</b> to open the local email capture dashboard in your browser.</li>
-                    <li>When triggering account registration or confirmation emails on <code>happyadults.com</code>, Mailpit captures emails locally on port 8025.</li>
-                    <li>Click <b>Verify Session</b> inside the captured email table to confirm your account link automatically!</li>
+                    <li><b>Open Local Inbox:</b> Switch to the <b>Local Test Inbox (Mailpit)</b> tab at the top of GGU_VDOD or click <i>Open Mailpit Web UI (127.0.0.1:8025)</i> to launch the web dashboard in Chrome, Firefox, or Edge.</li>
+                    <li><b>Trigger Signup / Verification Email:</b> On your staging platform (e.g. <code>happyadults.com</code> or local auth server), register a new test user account or trigger a password reset email.</li>
+                    <li><b>Instant Email Capture:</b> The email is captured in-memory by GGU_VDOD's Mailpit server on port 8025. It appears instantly in the live inbox table.</li>
+                    <li><b>One-Click Session Verification:</b> Click <b>Verify Session</b> next to the captured message row. GGU_VDOD automatically extracts verification links (e.g. <code>https://staging.local/verify?token=...</code>) and confirms your session link!</li>
+                    <li><b>Clear Mailbox:</b> Click <b>Clear Test Mailbox</b> at any time to purge captured test messages.</li>
                 </ol>
+
+                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">Mailpit Technical Details & Port Specs</h4>
+                <ul style="margin-top: 4px; padding-left: 20px;">
+                    <li><b>Web Dashboard URL:</b> <code>http://127.0.0.1:8025/</code> or <code>http://localhost:8025/</code></li>
+                    <li><b>REST API Endpoint:</b> <code>http://127.0.0.1:8025/api/v1/messages</code></li>
+                    <li><b>Supported Domains:</b> <code>localhost</code>, <code>127.0.0.1</code>, <code>*.local</code>, <code>*.test</code>, <code>*.staging</code>, <code>*.dev</code>, <code>happyadults.com</code></li>
+                    <li><b>Automatic Fallback:</b> If an external Mailpit binary is not running, GGU_VDOD automatically launches its built-in in-memory Mailpit server fallback on port 8025.</li>
+                </ul>
             </div>
         </div>
         """
@@ -831,26 +855,26 @@ class AgeVerificationDialog(QDialog):
 
 
 class AgeGateAuthDialog(QDialog):
-    """Sign-in & Cookie import choice dialog for verified adult links."""
+    """Sign-in & Cookie import choice dialog for protected links."""
 
-    def __init__(self, target_domain: str = "pornhub.org", parent=None):
+    def __init__(self, target_domain: str = "this domain", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Age-Gated Authentication & Session Setup")
+        self.setWindowTitle("Authentication & Session Setup Options")
         self.resize(580, 340)
         self.setMinimumSize(500, 300)
-        self.target_domain = target_domain
+        self.target_domain = target_domain or "this domain"
         self.user_action = "guest"  # "guest", "cookies", "account_sessions", "mailpit"
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        title = QLabel(f"Authentication Options for {target_domain}", self)
+        title = QLabel(f"Authentication Options for {self.target_domain}", self)
         title.setStyleSheet("font-size: 15px; font-weight: 700; color: #ffffff;")
         layout.addWidget(title)
 
         desc = QLabel(
-            f"Some adult platforms require authenticated session cookies or stored credentials for {target_domain}.\nSelect how you would like to authenticate:",
+            f"Some protected platforms require authenticated session cookies or stored credentials for {self.target_domain}.\nSelect how you would like to authenticate:",
             self
         )
         desc.setWordWrap(True)
@@ -860,7 +884,7 @@ class AgeGateAuthDialog(QDialog):
         card_layout = QVBoxLayout()
         card_layout.setSpacing(10)
 
-        self.cookie_btn = QPushButton(f"Import Browser Cookies for {target_domain}", self)
+        self.cookie_btn = QPushButton(f"Import Browser Cookies for {self.target_domain}", self)
         self.cookie_btn.setMinimumHeight(38)
         self.cookie_btn.clicked.connect(self._on_cookies_chosen)
 
@@ -872,7 +896,7 @@ class AgeGateAuthDialog(QDialog):
         self.mailpit_btn.setMinimumHeight(38)
         self.mailpit_btn.clicked.connect(self._on_mailpit_chosen)
 
-        self.guest_btn = QPushButton("Continue as Guest (Use Age Bypass Flag)", self)
+        self.guest_btn = QPushButton("Continue as Guest (Use Impersonate & Bypass Flags)", self)
         self.guest_btn.setObjectName("primary")
         self.guest_btn.setMinimumHeight(38)
         self.guest_btn.clicked.connect(self._on_guest_chosen)

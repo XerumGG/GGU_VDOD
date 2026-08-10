@@ -20,20 +20,20 @@ class AgeVerificationTests(unittest.TestCase):
     """Test suite verifying 18+ adult URL detection and age gate dialogs."""
 
     def test_adult_url_detection(self):
-        self.assertTrue(is_adult_or_age_restricted_url("https://www.pornhub.org/view_video.php?viewkey=6a55fdfebcdaa"))
-        self.assertTrue(is_adult_or_age_restricted_url("http://xvideos.com/video123"))
-        self.assertTrue(is_adult_or_age_restricted_url("https://stripchat.com/user"))
+        self.assertTrue(is_adult_or_age_restricted_url("https://example.com/video?age-gate=true"))
+        self.assertTrue(is_adult_or_age_restricted_url("http://staging.local/18+content"))
+        self.assertTrue(is_adult_or_age_restricted_url("https://restricted.site/nsfw"))
         self.assertFalse(is_adult_or_age_restricted_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ"))
         self.assertFalse(is_adult_or_age_restricted_url("https://vimeo.com/76979871"))
         self.assertFalse(is_adult_or_age_restricted_url(""))
 
     def test_age_verification_dialog_builds(self):
-        dlg = AgeVerificationDialog("https://www.pornhub.org/view_video.php?viewkey=6a55fdfebcdaa")
+        dlg = AgeVerificationDialog("https://example.com/video?age-gate=true")
         self.assertEqual(dlg.windowTitle(), "Age Verification Required (18+)")
         dlg.close()
 
     def test_age_gate_auth_dialog_choices(self):
-        dlg = AgeGateAuthDialog("pornhub.org")
+        dlg = AgeGateAuthDialog("example.com")
         self.assertEqual(dlg.user_action, "guest")
         dlg._on_cookies_chosen()
         self.assertEqual(dlg.user_action, "cookies")

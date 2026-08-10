@@ -52,7 +52,12 @@ def explain_download_error(error):
 
 def looks_like_cookie_database_error(error):
     text = str(error).lower()
-    return ("could not copy" in text and "cookie" in text) or "cookie database" in text
+    return (
+        ("could not copy" in text and "cookie" in text)
+        or "cookie database" in text
+        or "failed to decrypt with dpapi" in text
+        or "dpapi" in text
+    )
 
 
 def looks_like_subtitle_rate_limit(error):

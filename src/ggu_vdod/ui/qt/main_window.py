@@ -170,21 +170,51 @@ class DownloadCancelled(Exception):
     """Raised from a progress hook to stop the active yt-dlp operation."""
 
 
+def format_eta_clean(eta_seconds) -> str:
+    """Format ETA seconds into clean rounded figures (e.g. '5m 49s' or '45s')."""
+    if not eta_seconds or float(eta_seconds) <= 0:
+        return "—"
+    try:
+        secs = int(round(float(eta_seconds)))
+        if secs < 60:
+            return f"{secs}s"
+        mins = secs // 60
+        rem_secs = secs % 60
+        if mins < 60:
+            return f"{mins}m {rem_secs:02d}s"
+        hours = mins // 60
+        rem_mins = mins % 60
+        return f"{hours}h {rem_mins:02d}m"
+    except Exception:
+        return f"{eta_seconds}s"
+
+
 class QtYTDLPLogger:
-    """Forward useful yt-dlp messages into the Qt log without noisy debug lines."""
+    """Forward status messages into the Qt log box, throttled every 10 seconds without tool prefixes."""
 
     def __init__(self, emit):
         self._emit = emit
+        self._last_log_time = 0
 
     def debug(self, message):
-        if message and not str(message).startswith("[debug]"):
-            self._emit(f"[yt-dlp] {message}")
+        if not message:
+            return
+        text = str(message).strip()
+        if text.startswith("[download]") or text.startswith("[debug]") or "frag" in text.lower():
+            return
+        now = time.time()
+        if now - self._last_log_time >= 10.0:
+            self._last_log_time = now
+            clean_msg = re.sub(r"^\[[^\]]+\]\s*", "", text)
+            self._emit(f"[STATUS] {clean_msg}")
 
     def warning(self, message):
-        self._emit(f"[yt-dlp warning] {message}")
+        clean_msg = re.sub(r"^\[[^\]]+\]\s*", "", str(message or "").strip())
+        self._emit(f"[WARNING] {clean_msg}")
 
     def error(self, message):
-        self._emit(f"[yt-dlp error] {message}")
+        clean_msg = re.sub(r"^\[[^\]]+\]\s*", "", str(message or "").strip())
+        self._emit(f"[ERROR] {clean_msg}")
 
 
 class QtDownloadWorker(QThread):
@@ -312,7 +342,7 @@ class QtDownloadWorker(QThread):
                     "download_rate": format_rate(speed),
                     "upload_rate": "0 B/s",
                     "transferred": f"{format_bytes(downloaded)} / {format_bytes(total)}" if total else format_bytes(downloaded),
-                    "eta": f"{eta}s" if eta else "—",
+                    "eta": format_eta_clean(eta),
                 })
             elif status == "finished":
                 self.log_emitted.emit("[INFO] Primary download complete. Finalizing media file...")
@@ -324,6 +354,7 @@ class QtDownloadWorker(QThread):
             "quiet": True,
             "no_warnings": False,
             "age_limit": 99,
+            "extractor_args": {"generic": ["impersonate"]},
             "logger": QtYTDLPLogger(self.log_emitted.emit),
             "retries": MAX_RETRIES,
             "fragment_retries": MAX_RETRIES,
@@ -335,6 +366,30 @@ class QtDownloadWorker(QThread):
             },
             "postprocessors": [],
         }
+
+        try:
+            from yt_dlp.networking.impersonate import ImpersonateTarget
+            ydl_opts["impersonate"] = ImpersonateTarget.from_str("chrome")
+        except Exception:
+            pass
+
+        # Automatic DPAPI Account & Session Injection for current target URL
+        try:
+            target_domain = urllib.parse.urlparse(url).netloc
+            if target_domain:
+                from ...auth.manager import AuthManager
+                session = AuthManager.resolve_domain_session(target_domain)
+                if session:
+                    account_lbl = session.get("account_label")
+                    sec = session.get("secret")
+                    if account_lbl and sec:
+                        ydl_opts["username"] = account_lbl
+                        ydl_opts["password"] = sec
+                        self.log_emitted.emit(f"[INFO] Injected stored DPAPI account credentials for domain: {target_domain} ({account_lbl})")
+                    else:
+                        self.log_emitted.emit(f"[INFO] Injected active domain session for: {target_domain}")
+        except Exception as auth_err:
+            pass
 
         ffmpeg_path = settings.get("ffmpeg_path") or get_default_ffmpeg_path()
         if ffmpeg_path and os.path.exists(ffmpeg_path):
@@ -663,6 +718,7 @@ class QtMainWindow(QMainWindow):
 
         self.preview_status = QLabel("Waiting for a link")
         self.preview_status.setObjectName("muted")
+        self.preview_status.setWordWrap(True)
 
         preview_text_vbox.addWidget(self.preview_title)
         preview_text_vbox.addWidget(self.preview_source)
@@ -1421,9 +1477,9 @@ class QtMainWindow(QMainWindow):
 
         # Step 2: Sign-in / Cookie / Session Setup Dialog
         try:
-            domain = urllib.parse.urlparse(first_adult_url).netloc or "pornhub.org"
+            domain = urllib.parse.urlparse(first_adult_url).netloc or "this site"
         except Exception:
-            domain = "pornhub.org"
+            domain = "this site"
 
         auth_dlg = AgeGateAuthDialog(domain, self)
         if auth_dlg.exec() == QDialog.DialogCode.Accepted:
@@ -1531,10 +1587,20 @@ class QtMainWindow(QMainWindow):
     def _on_status_update(self, status):
         self.transfer_status.status_label.setText(f"Status: {status}")
 
+    def _play_notification_sound(self):
+        """Play Windows default notification sound chime when a download finishes."""
+        if sys.platform == "win32":
+            try:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
+            except Exception:
+                pass
+
     def _on_download_complete(self, success_count, failure_count):
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.log_box.appendPlainText(f"\n[FINISHED] Queue finished: {success_count} succeeded, {failure_count} failed.")
+        self._play_notification_sound()
 
     def _on_item_finished(self, url, succeeded, format_type):
         update_history_entry(
@@ -1542,6 +1608,8 @@ class QtMainWindow(QMainWindow):
             "Completed" if succeeded else "Failed or cancelled",
             format_type=format_type,
         )
+        if succeeded:
+            self._play_notification_sound()
 
     def closeEvent(self, event):
         """Stop timers, purge temporary cookies, and give active workers a safe shutdown window."""

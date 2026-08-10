@@ -8,6 +8,7 @@ __pycache__/
 # Per-user application preferences and secrets
 settings.json
 auth_sessions.json
+auth_sessions.dat
 .env
 *.cookies.txt
 
@@ -17,12 +18,10 @@ venv/
 # Build output
 build/
 dist/
+dist_v*/
 
-# Local FFmpeg binary kept beside releases; copied into dist by build scripts
+# Local FFmpeg binary
 ffmpeg/
-
-# Python build metadata
-*.egg-info/
 
 # IDE
 .vscode/

@@ -31,7 +31,26 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
         "socket_timeout": 12,
         "extractor_retries": 1,
         "age_limit": 99,
+        "extractor_args": {"generic": ["impersonate"]},
     }
+
+    try:
+        from yt_dlp.networking.impersonate import ImpersonateTarget
+        options["impersonate"] = ImpersonateTarget.from_str("chrome")
+    except Exception:
+        pass
+
+    try:
+        parsed_domain = urllib.parse.urlparse(target_url).netloc
+        if parsed_domain:
+            from ..auth.manager import AuthManager
+            session = AuthManager.resolve_domain_session(parsed_domain)
+            if session and session.get("account_label") and session.get("secret"):
+                options["username"] = session["account_label"]
+                options["password"] = session["secret"]
+    except Exception:
+        pass
+
     if browser != "None":
         options["cookiesfrombrowser"] = (browser.lower(), None, None, None)
     if cookies_file:
@@ -44,15 +63,28 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
             info = downloader.extract_info(target_url, download=False)
     except Exception as error:
         final_error = error
-        if browser != "None" and looks_like_cookie_database_error(error):
+        # Fallback 1: Retry without impersonate if TLS/curl_cffi connect error occurs
+        if "impersonate" in options:
+            clean_opts = dict(options)
+            clean_opts.pop("impersonate", None)
+            clean_opts.pop("extractor_args", None)
+            try:
+                with yt_dlp.YoutubeDL(clean_opts) as downloader:
+                    info = downloader.extract_info(target_url, download=False)
+                    final_error = None
+            except Exception as retry_err:
+                final_error = retry_err
+
+        if final_error is not None and browser != "None" and looks_like_cookie_database_error(final_error):
             options.pop("cookiesfrombrowser", None)
+            options.pop("impersonate", None)
             try:
                 with yt_dlp.YoutubeDL(options) as downloader:
                     info = downloader.extract_info(target_url, download=False)
+                    final_error = None
             except Exception as retry_error:
                 final_error = retry_error
-            else:
-                final_error = None
+
         if final_error is not None:
             public_preview = get_public_title_preview(target_url)
             if public_preview:

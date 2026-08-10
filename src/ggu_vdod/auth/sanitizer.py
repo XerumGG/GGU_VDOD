@@ -35,18 +35,15 @@ def sanitize_headers(headers: dict) -> dict:
     return clean_headers
 
 
-ADULT_SITE_DOMAINS = [
-    "pornhub.com", "pornhub.org", "xvideos.com", "xnxx.com",
-    "redtube.com", "youporn.com", "xhamster.com", "stripchat.com",
-    "onlyfans.com", "brazzers.com", "eporner.com", "spankbang.com",
-    "tnaflix.com", "tube8.com", "chaturbate.com", "cam4.com",
-    "livejasmin.com", "myfreecams.com", "fansly.com", "fetlife.com",
+UNIVERSAL_AGE_KEYWORDS = [
+    "adult", "18+", "nsfw", "over18", "age-gate", "age_limit",
+    "mature", "restricted", "verify-age", "private-stream",
 ]
 
 
 def is_adult_or_age_restricted_url(url: str) -> bool:
-    """Check if URL points to an adult/18+ age-restricted domain."""
+    """Check if URL matches general age-restricted keywords or auth gates."""
     if not url:
         return False
     lower_url = str(url).lower()
-    return any(domain in lower_url for domain in ADULT_SITE_DOMAINS)
+    return any(k in lower_url for k in UNIVERSAL_AGE_KEYWORDS)
