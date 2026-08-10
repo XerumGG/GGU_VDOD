@@ -60,7 +60,7 @@ from .test_inbox import MailpitTestInboxWidget
 from .dialogs import (
     AboutDialog, AgeGateAuthDialog, AgeVerificationDialog, DeepMediaInspectorDialog,
     FontPreferencesDialog, HelpCenterDialog, KeyBindingsDialog, LibraryDialog,
-    LinkHistoryDialog, SignInPromptDialog, SupportedPlatformsDialog, UpdateCheckDialog,
+    LinkHistoryDialog, SignInPromptDialog, SubtitleLanguagesDialog, SupportedPlatformsDialog, UpdateCheckDialog,
 )
 from .theme import apply_dark_theme
 from .widgets import TransferStatusBar
@@ -943,10 +943,14 @@ class QtMainWindow(QMainWindow):
         self.sub_lang_input = QLineEdit("en.*")
         self.sub_lang_input.setFixedWidth(100)
         self.sub_lang_input.setToolTip("Comma-separated language codes or regex patterns (e.g. en.*, es, fr).")
+        self.sub_lang_pick_btn = QPushButton("Select Languages...")
+        self.sub_lang_pick_btn.setToolTip("Open searchable multi-select dialog for choosing subtitle language codes.")
+        self.sub_lang_pick_btn.clicked.connect(self._choose_subtitle_languages)
         sub_row.addWidget(self.download_subs_check)
         sub_row.addWidget(self.auto_subs_check)
         sub_row.addWidget(QLabel("Languages:"))
         sub_row.addWidget(self.sub_lang_input)
+        sub_row.addWidget(self.sub_lang_pick_btn)
         sub_row.addStretch(1)
         auth_grid.addLayout(sub_row, 3, 0, 1, 3)
 
@@ -1053,8 +1057,25 @@ class QtMainWindow(QMainWindow):
         conv_grid.addWidget(QLabel("Clip end time:"), 4, 2)
         conv_grid.addWidget(self.end_time_input, 4, 3)
 
+        self.pattern_preset_combo = QComboBox()
+        self.pattern_preset_combo.addItems([
+            "Preset Organization Templates...",
+            "Standard: %(title)s [%(height)sp]",
+            "By Uploader / Channel: %(uploader)s/%(title)s",
+            "By Upload Date: %(upload_date)s/%(title)s",
+            "By Resolution Subfolder: %(height)sp/%(title)s",
+            "By Playlist Name: %(playlist_title)s/%(playlist_index)s - %(title)s",
+            "Title & Video ID: %(title)s (%(id)s)",
+        ])
+        self.pattern_preset_combo.setToolTip("Pick dynamic folder structure or filename template presets.")
+        self.pattern_preset_combo.currentIndexChanged.connect(self._on_pattern_preset_changed)
+
+        pattern_row = QHBoxLayout()
+        pattern_row.addWidget(self.pattern_input, 1)
+        pattern_row.addWidget(self.pattern_preset_combo)
+
         conv_grid.addWidget(QLabel("Filename pattern (optional):"), 5, 0)
-        conv_grid.addWidget(self.pattern_input, 5, 1, 1, 3)
+        conv_grid.addLayout(pattern_row, 5, 1, 1, 3)
 
         conv_grid.addWidget(self.clean_sidecars_check, 6, 0, 1, 4)
 
@@ -1770,6 +1791,25 @@ class QtMainWindow(QMainWindow):
 
         dlg = DeepMediaInspectorDialog(target_path, self)
         dlg.exec()
+
+    def _choose_subtitle_languages(self):
+        dlg = SubtitleLanguagesDialog(self.sub_lang_input.text().strip(), self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            self.sub_lang_input.setText(dlg.get_selected_string())
+
+    def _on_pattern_preset_changed(self, idx: int):
+        if idx == 1:
+            self.pattern_input.setText("%(title)s [%(height)sp]")
+        elif idx == 2:
+            self.pattern_input.setText("%(uploader)s/%(title)s")
+        elif idx == 3:
+            self.pattern_input.setText("%(upload_date)s/%(title)s")
+        elif idx == 4:
+            self.pattern_input.setText("%(height)sp/%(title)s")
+        elif idx == 5:
+            self.pattern_input.setText("%(playlist_title)s/%(playlist_index)s - %(title)s")
+        elif idx == 6:
+            self.pattern_input.setText("%(title)s (%(id)s)")
 
     def _show_font_dialog(self):
         dlg = FontPreferencesDialog(parent=self)

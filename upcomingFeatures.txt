@@ -39,3 +39,7 @@ Multiple video(.mp4, .mkv, .mov and so on...) and audio(.mp3, .wav etc...) forma
 Addition and improvements in UI themes --> Dark theme, fainted theme, orange theme, green-hacker theme, Custom theme with save option( expose all the parameters of UI color elements) #Done
 
 Video Time-stamp Cutter (Limited) #Done
+
+Show all supported languages (ISO Subtitle Language Picker) #Done
+
+Advanced file, folder, path organization (Preset Templates) #Done

@@ -1040,6 +1040,136 @@ class LibraryDialog(QDialog):
                 QMessageBox.warning(self, "File Missing", f"The selected file does not exist:\n{path}")
 
 
+COMMON_SUBTITLE_LANGUAGES = [
+    ("en", "English", "Global / Primary"),
+    ("es", "Spanish (Español)", "International"),
+    ("fr", "French (Français)", "International"),
+    ("de", "German (Deutsch)", "International"),
+    ("ja", "Japanese (日本語)", "Anime / East Asia"),
+    ("zh-Hans", "Chinese Simplified (简体中文)", "East Asia"),
+    ("zh-Hant", "Chinese Traditional (繁體中文)", "East Asia"),
+    ("hi", "Hindi (हिन्दी)", "South Asia"),
+    ("ru", "Russian (Русский)", "Eurasia"),
+    ("pt", "Portuguese (Português)", "International"),
+    ("it", "Italian (Italiano)", "Europe"),
+    ("ar", "Arabic (العربية)", "Middle East"),
+    ("ko", "Korean (한국어)", "East Asia"),
+    ("tr", "Turkish (Türkçe)", "Eurasia"),
+    ("nl", "Dutch (Nederlands)", "Europe"),
+    ("pl", "Polish (Polski)", "Europe"),
+    ("uk", "Ukrainian (Українська)", "Europe"),
+    ("vi", "Vietnamese (Tiếng Việt)", "Southeast Asia"),
+    ("th", "Thai (ไทย)", "Southeast Asia"),
+    ("id", "Indonesian (Bahasa Indonesia)", "Southeast Asia"),
+    ("all", "All Available Languages", "Wildcard"),
+]
+
+
+class SubtitleLanguagesDialog(QDialog):
+    """Searchable multi-select dialog for choosing subtitle language codes."""
+
+    def __init__(self, current_selection: str = "en.*", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Select Subtitle Languages")
+        self.resize(600, 480)
+        self.selected_codes = []
+        self._current_input = current_selection
+
+        self._build_ui()
+        self._preselect_current()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(12)
+
+        hdr = QHBoxLayout()
+        hdr.addWidget(QLabel("Filter Language:"))
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Filter (e.g. english, es, ja, hindi)...")
+        self.search_input.textChanged.connect(self._filter_table)
+        hdr.addWidget(self.search_input, 1)
+        layout.addLayout(hdr)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["Select", "Language Code", "Language Name / Region"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.table.setColumnWidth(0, 70)
+        self.table.setColumnWidth(1, 140)
+        layout.addWidget(self.table, 1)
+
+        btn_row = QHBoxLayout()
+        select_all_btn = QPushButton("Select All")
+        select_all_btn.clicked.connect(lambda: self._set_all_checks(True))
+        deselect_all_btn = QPushButton("Clear All")
+        deselect_all_btn.clicked.connect(lambda: self._set_all_checks(False))
+        btn_row.addWidget(select_all_btn)
+        btn_row.addWidget(deselect_all_btn)
+        btn_row.addStretch(1)
+
+        ok_btn = QPushButton("Apply Selection")
+        ok_btn.setObjectName("primary")
+        ok_btn.clicked.connect(self._accept_selection)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(ok_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+        self._populate_table(COMMON_SUBTITLE_LANGUAGES)
+
+    def _populate_table(self, languages):
+        self.table.setRowCount(len(languages))
+        for row, (code, name, region) in enumerate(languages):
+            chk_item = QTableWidgetItem()
+            chk_item.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            chk_item.setCheckState(Qt.CheckState.Unchecked)
+            chk_item.setData(Qt.ItemDataRole.UserRole, code)
+
+            self.table.setItem(row, 0, chk_item)
+            self.table.setItem(row, 1, QTableWidgetItem(code))
+            self.table.setItem(row, 2, QTableWidgetItem(f"{name} ({region})"))
+
+    def _preselect_current(self):
+        curr_tokens = [t.strip().lower() for t in self._current_input.split(",") if t.strip()]
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            code = item.data(Qt.ItemDataRole.UserRole)
+            if any(token in code.lower() or code.lower() in token for token in curr_tokens):
+                item.setCheckState(Qt.CheckState.Checked)
+
+    def _filter_table(self, query):
+        query = query.strip().lower()
+        for row in range(self.table.rowCount()):
+            code = self.table.item(row, 1).text().lower()
+            name = self.table.item(row, 2).text().lower()
+            match = not query or query in code or query in name
+            self.table.setRowHidden(row, not match)
+
+    def _set_all_checks(self, checked: bool):
+        state = Qt.CheckState.Checked if checked else Qt.CheckState.Unchecked
+        for row in range(self.table.rowCount()):
+            if not self.table.isRowHidden(row):
+                self.table.item(row, 0).setCheckState(state)
+
+    def _accept_selection(self):
+        selected = []
+        for row in range(self.table.rowCount()):
+            item = self.table.item(row, 0)
+            if item.checkState() == Qt.CheckState.Checked:
+                selected.append(item.data(Qt.ItemDataRole.UserRole))
+        self.selected_codes = selected
+        self.accept()
+
+    def get_selected_string(self) -> str:
+        if not self.selected_codes:
+            return "en.*"
+        return ",".join(self.selected_codes)
+
+
 class FontPreferencesDialog(QDialog):
     """Preferences dialog to choose UI font family and size."""
 
