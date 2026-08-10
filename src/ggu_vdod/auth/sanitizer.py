@@ -33,3 +33,20 @@ def sanitize_headers(headers: dict) -> dict:
         else:
             clean_headers[k] = sanitize_log_text(str(v))
     return clean_headers
+
+
+ADULT_SITE_DOMAINS = [
+    "pornhub.com", "pornhub.org", "xvideos.com", "xnxx.com",
+    "redtube.com", "youporn.com", "xhamster.com", "stripchat.com",
+    "onlyfans.com", "brazzers.com", "eporner.com", "spankbang.com",
+    "tnaflix.com", "tube8.com", "chaturbate.com", "cam4.com",
+    "livejasmin.com", "myfreecams.com", "fansly.com", "fetlife.com",
+]
+
+
+def is_adult_or_age_restricted_url(url: str) -> bool:
+    """Check if URL points to an adult/18+ age-restricted domain."""
+    if not url:
+        return False
+    lower_url = str(url).lower()
+    return any(domain in lower_url for domain in ADULT_SITE_DOMAINS)

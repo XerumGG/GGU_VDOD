@@ -773,3 +773,129 @@ class SignInPromptDialog(QDialog):
 
     def get_account_label(self) -> str:
         return self.account_input.text().strip()
+
+
+class AgeVerificationDialog(QDialog):
+    """Modal dialog for 18+ adult content age verification."""
+
+    def __init__(self, target_url: str = "", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Age Verification Required (18+)")
+        self.resize(520, 240)
+        self.setMinimumSize(460, 200)
+
+        domain = ""
+        if target_url:
+            try:
+                domain = urllib.parse.urlparse(target_url).netloc
+            except Exception:
+                domain = target_url
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        hdr_frame = QFrame()
+        hdr_frame.setObjectName("panel")
+        hdr_frame.setStyleSheet("QFrame#panel { background: #1a1a1a; border: 1px solid #e5484d; border-radius: 8px; }")
+        hdr_layout = QVBoxLayout(hdr_frame)
+        hdr_layout.setContentsMargins(16, 14, 16, 14)
+
+        title = QLabel("Age Verification Required (18+)", self)
+        title.setStyleSheet("font-size: 16px; font-weight: 700; color: #e5484d;")
+
+        msg_text = f"The URL ({domain or 'this site'}) contains adult or age-restricted media.\n\nYou must be 18 years of age or older to view, preview, or download content from this platform."
+        msg = QLabel(msg_text, self)
+        msg.setWordWrap(True)
+        msg.setStyleSheet("font-size: 13px; color: #e2e2e2;")
+
+        hdr_layout.addWidget(title)
+        hdr_layout.addWidget(msg)
+        layout.addWidget(hdr_frame)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(12)
+
+        self.confirm_btn = QPushButton("I am 18 or older (Confirm)", self)
+        self.confirm_btn.setObjectName("primary")
+        self.confirm_btn.setMinimumHeight(36)
+        self.confirm_btn.clicked.connect(self.accept)
+
+        self.cancel_btn = QPushButton("Cancel / Under 18", self)
+        self.cancel_btn.setMinimumHeight(36)
+        self.cancel_btn.clicked.connect(self.reject)
+
+        btn_row.addWidget(self.confirm_btn)
+        btn_row.addWidget(self.cancel_btn)
+        layout.addLayout(btn_row)
+
+
+class AgeGateAuthDialog(QDialog):
+    """Sign-in & Cookie import choice dialog for verified adult links."""
+
+    def __init__(self, target_domain: str = "pornhub.org", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Age-Gated Authentication & Session Setup")
+        self.resize(580, 340)
+        self.setMinimumSize(500, 300)
+        self.target_domain = target_domain
+        self.user_action = "guest"  # "guest", "cookies", "account_sessions", "mailpit"
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        title = QLabel(f"Authentication Options for {target_domain}", self)
+        title.setStyleSheet("font-size: 15px; font-weight: 700; color: #ffffff;")
+        layout.addWidget(title)
+
+        desc = QLabel(
+            f"Some adult platforms require authenticated session cookies or stored credentials for {target_domain}.\nSelect how you would like to authenticate:",
+            self
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet("font-size: 12px; color: #a0a0a0;")
+        layout.addWidget(desc)
+
+        card_layout = QVBoxLayout()
+        card_layout.setSpacing(10)
+
+        self.cookie_btn = QPushButton(f"Import Browser Cookies for {target_domain}", self)
+        self.cookie_btn.setMinimumHeight(38)
+        self.cookie_btn.clicked.connect(self._on_cookies_chosen)
+
+        self.session_btn = QPushButton("Open Account Sessions Tab (Save Encrypted Credentials)", self)
+        self.session_btn.setMinimumHeight(38)
+        self.session_btn.clicked.connect(self._on_sessions_chosen)
+
+        self.mailpit_btn = QPushButton("Open Local Test Inbox (Mailpit Web UI on 127.0.0.1:8025)", self)
+        self.mailpit_btn.setMinimumHeight(38)
+        self.mailpit_btn.clicked.connect(self._on_mailpit_chosen)
+
+        self.guest_btn = QPushButton("Continue as Guest (Use Age Bypass Flag)", self)
+        self.guest_btn.setObjectName("primary")
+        self.guest_btn.setMinimumHeight(38)
+        self.guest_btn.clicked.connect(self._on_guest_chosen)
+
+        card_layout.addWidget(self.cookie_btn)
+        card_layout.addWidget(self.session_btn)
+        card_layout.addWidget(self.mailpit_btn)
+        card_layout.addWidget(self.guest_btn)
+
+        layout.addLayout(card_layout)
+
+    def _on_cookies_chosen(self):
+        self.user_action = "cookies"
+        self.accept()
+
+    def _on_sessions_chosen(self):
+        self.user_action = "account_sessions"
+        self.accept()
+
+    def _on_mailpit_chosen(self):
+        self.user_action = "mailpit"
+        self.accept()
+
+    def _on_guest_chosen(self):
+        self.user_action = "guest"
+        self.accept()

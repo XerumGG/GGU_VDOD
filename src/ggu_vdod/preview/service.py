@@ -30,6 +30,7 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
         "noplaylist": True,
         "socket_timeout": 12,
         "extractor_retries": 1,
+        "age_limit": 99,
     }
     if browser != "None":
         options["cookiesfrombrowser"] = (browser.lower(), None, None, None)
