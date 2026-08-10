@@ -1573,6 +1573,12 @@ class QtMainWindow(QMainWindow):
             self._download_worker.cancel()
             self.cancel_button.setEnabled(False)
             self.log_box.appendPlainText("[INFO] Cancellation requested...")
+            if sys.platform == "win32":
+                try:
+                    import subprocess
+                    subprocess.run(["taskkill", "/F", "/IM", "ffmpeg.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except Exception:
+                    pass
 
     def _on_progress_update(self, data):
         self.transfer_status.set_transfer_state(
@@ -1626,6 +1632,9 @@ class QtMainWindow(QMainWindow):
             from ...auth.manager import AuthManager
             purge_all_temporary_cookie_files()
             AuthManager.purge_expired_sessions()
+            if sys.platform == "win32":
+                import subprocess
+                subprocess.run(["taskkill", "/F", "/IM", "ffmpeg.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         except Exception:
             pass
         super().closeEvent(event)
