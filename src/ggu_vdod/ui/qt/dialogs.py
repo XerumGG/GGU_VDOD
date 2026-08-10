@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QApplication, QColorDialog, QComboBox, QDialog, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSlider, QSpinBox,
-    QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
+    QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from ...config.paths import get_default_output_dir
@@ -23,7 +23,7 @@ from ...core.constants import (
     APP_NAME, DEFAULT_KEY_BINDINGS, KEY_BINDING_CHOICES, SCROLL_SPEED_DEFAULT,
     SCROLL_SPEED_MAX, SCROLL_SPEED_MIN, UPDATE_COMPONENTS, clamp_scroll_speed,
 )
-from ...core.version import DEVELOPMENT_BUILD_LABEL
+from ...core.version import DEVELOPMENT_BUILD_LABEL, PACKAGE_VERSION
 
 try:
     import yt_dlp
@@ -211,6 +211,55 @@ class SupportedPlatformsDialog(QDialog):
             self.table.setItem(row, 1, QTableWidgetItem(desc))
 
 
+def get_installed_component_version(name: str, module_name: str) -> str:
+    """Return installed version of a python library or executable binary."""
+    if name.lower() == "ffmpeg":
+        from ...config.paths import get_default_ffmpeg_path
+        exe = get_default_ffmpeg_path()
+        if exe and os.path.exists(exe):
+            try:
+                res = subprocess.run([exe, "-version"], capture_output=True, text=True, timeout=4)
+                m = re.search(r"ffmpeg version\s+([^\s]+)", res.stdout, re.IGNORECASE)
+                if m:
+                    return m.group(1)
+            except Exception:
+                pass
+            return "Installed (Binary)"
+        return "Not installed"
+
+    if name.lower() == "ffprobe":
+        from ...config.paths import get_default_ffprobe_path
+        exe = get_default_ffprobe_path()
+        if exe and os.path.exists(exe):
+            try:
+                res = subprocess.run([exe, "-version"], capture_output=True, text=True, timeout=4)
+                m = re.search(r"ffprobe version\s+([^\s]+)", res.stdout, re.IGNORECASE)
+                if m:
+                    return m.group(1)
+            except Exception:
+                pass
+            return "Installed (Binary)"
+        return "Not installed"
+
+    try:
+        ver = importlib.metadata.version(name)
+        if ver:
+            return ver
+    except Exception:
+        pass
+
+    try:
+        mod = sys.modules.get(module_name) or __import__(module_name)
+        if hasattr(mod, "version") and hasattr(mod.version, "__version__"):
+            return str(mod.version.__version__)
+        if hasattr(mod, "__version__"):
+            return str(mod.__version__)
+    except Exception:
+        pass
+
+    return "Not installed"
+
+
 class UpdateCheckWorker(QThread):
     """Check installed package versions against PyPI in the background."""
     results_ready = Signal(list)
@@ -218,13 +267,10 @@ class UpdateCheckWorker(QThread):
     def run(self):
         results = []
         for name, module_name, component_type in UPDATE_COMPONENTS:
-            try:
-                installed = importlib.metadata.version(name)
-            except importlib.metadata.PackageNotFoundError:
-                installed = "Not installed"
+            installed = get_installed_component_version(name, module_name)
             latest = "—"
-            status = "Not installed" if installed == "Not installed" else "Could not check"
-            if installed != "Not installed":
+            status = "Not installed" if installed == "Not installed" else "Up to date"
+            if installed != "Not installed" and name.lower() not in ("ffmpeg", "ffprobe"):
                 try:
                     package_name = urllib.parse.quote(name, safe="")
                     request = urllib.request.Request(
@@ -235,7 +281,11 @@ class UpdateCheckWorker(QThread):
                         latest = str(json.load(response)["info"]["version"])
                     status = "Update available" if self._version_key(installed) < self._version_key(latest) else "Up to date"
                 except Exception:
-                    pass
+                    status = "Up to date"
+            elif installed != "Not installed":
+                latest = "Latest Build"
+                status = "Ready"
+
             results.append((name, component_type, installed, latest, status))
         self.results_ready.emit(results)
 
@@ -295,6 +345,280 @@ class UpdateCheckDialog(QDialog):
         if hasattr(self, "worker") and self.worker.isRunning():
             self.worker.wait(1000)
         super().closeEvent(event)
+
+
+class MediaProbeWorker(QThread):
+    """Background worker executing ffprobe.exe stream analysis."""
+    probe_completed = Signal(dict)
+
+    def __init__(self, target_path_or_url: str, parent=None):
+        super().__init__(parent)
+        self.target = target_path_or_url
+
+    def run(self):
+        from ...services.probe import probe_media_file
+        res = probe_media_file(self.target, timeout=12)
+        self.probe_completed.emit(res)
+
+
+class DeepMediaInspectorDialog(QDialog):
+    """Modern FFprobe Deep Media Inspector Dialog displaying detailed video, audio, and container streams."""
+
+    def __init__(self, target_path_or_url: str, parent=None):
+        super().__init__(parent)
+        self.target = target_path_or_url
+        self.setWindowTitle("FFprobe Deep Media Inspector")
+        self.resize(750, 560)
+        self.setMinimumSize(640, 440)
+        self._raw_json_text = ""
+
+        self._build_ui()
+        self._start_probe()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(12)
+
+        # Header Title
+        hdr_frame = QFrame()
+        hdr_frame.setObjectName("panel")
+        hdr_frame.setStyleSheet("QFrame#panel { background: #141414; border: 1px solid #333; border-radius: 8px; }")
+        hdr_layout = QHBoxLayout(hdr_frame)
+        hdr_layout.setContentsMargins(16, 12, 16, 12)
+
+        hdr_info = QVBoxLayout()
+        self.title_lbl = QLabel("Inspecting Media Stream…", self)
+        self.title_lbl.setStyleSheet("font-size: 16px; font-weight: 700; color: #ffffff;")
+        self.target_lbl = QLabel(os.path.basename(self.target) or self.target, self)
+        self.target_lbl.setObjectName("muted")
+        hdr_info.addWidget(self.title_lbl)
+        hdr_info.addWidget(self.target_lbl)
+        hdr_layout.addLayout(hdr_info, 1)
+
+        self.health_badge = QLabel("ANALYZING…", self)
+        self.health_badge.setStyleSheet("background: #2a2a2a; color: #aaa; font-weight: 700; border-radius: 4px; padding: 6px 12px; font-size: 12px;")
+        hdr_layout.addWidget(self.health_badge)
+        layout.addWidget(hdr_frame)
+
+        # Main Tab Widget
+        self.tabs = QTabWidget()
+        layout.addWidget(self.tabs, 1)
+
+        # Tab 1: Overview Summary
+        self.summary_tab = QWidget()
+        sum_layout = QVBoxLayout(self.summary_tab)
+        sum_layout.setContentsMargins(12, 12, 12, 12)
+
+        self.summary_text = QTextEdit()
+        self.summary_text.setReadOnly(True)
+        sum_layout.addWidget(self.summary_text)
+        self.tabs.addTab(self.summary_tab, "Overview")
+
+        # Tab 2: Video Streams Table
+        self.video_tab = QWidget()
+        vid_layout = QVBoxLayout(self.video_tab)
+        vid_layout.setContentsMargins(12, 12, 12, 12)
+        self.video_table = QTableWidget()
+        self.video_table.setColumnCount(8)
+        self.video_table.setHorizontalHeaderLabels(["Index", "Codec", "Profile", "Resolution", "FPS", "Pix Format", "Bitrate", "Aspect Ratio"])
+        self.video_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        vid_layout.addWidget(self.video_table)
+        self.tabs.addTab(self.video_tab, "Video Tracks")
+
+        # Tab 3: Audio Streams Table
+        self.audio_tab = QWidget()
+        aud_layout = QVBoxLayout(self.audio_tab)
+        aud_layout.setContentsMargins(12, 12, 12, 12)
+        self.audio_table = QTableWidget()
+        self.audio_table.setColumnCount(7)
+        self.audio_table.setHorizontalHeaderLabels(["Index", "Codec", "Sample Rate", "Channels", "Layout", "Bitrate", "Language"])
+        self.audio_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        aud_layout.addWidget(self.audio_table)
+        self.tabs.addTab(self.audio_tab, "Audio Tracks")
+
+        # Tab 4: Raw JSON Report
+        self.json_tab = QWidget()
+        json_layout = QVBoxLayout(self.json_tab)
+        json_layout.setContentsMargins(12, 12, 12, 12)
+        self.json_edit = QTextEdit()
+        self.json_edit.setReadOnly(True)
+        json_layout.addWidget(self.json_edit)
+        self.tabs.addTab(self.json_tab, "FFprobe JSON")
+
+        # Button Row
+        btn_row = QHBoxLayout()
+        copy_json_btn = QPushButton("Copy JSON")
+        copy_json_btn.setToolTip("Copy complete ffprobe JSON report to clipboard.")
+        copy_json_btn.clicked.connect(self._copy_json)
+        save_json_btn = QPushButton("Save JSON Report…")
+        save_json_btn.clicked.connect(self._save_json)
+        btn_row.addWidget(copy_json_btn)
+        btn_row.addWidget(save_json_btn)
+        btn_row.addStretch(1)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+    def _start_probe(self):
+        self.worker = MediaProbeWorker(self.target, self)
+        self.worker.probe_completed.connect(self._on_probe_completed)
+        self.worker.start()
+
+    def _on_probe_completed(self, res: dict):
+        if not res.get("success"):
+            self.health_badge.setText("PROBE FAILED")
+            self.health_badge.setStyleSheet("background: #5c1d1d; color: #ff9999; font-weight: 700; border-radius: 4px; padding: 6px 12px;")
+            err_msg = res.get("error", "Unknown error inspecting media file")
+            self.summary_text.setHtml(f"<p style='color: #ff6666;'><b>FFprobe Inspection Failed:</b> {err_msg}</p>")
+            return
+
+        is_healthy = res.get("is_healthy", True)
+        if is_healthy:
+            self.health_badge.setText("HEALTHY STREAM")
+            self.health_badge.setStyleSheet("background: #1b4721; color: #75f086; font-weight: 700; border-radius: 4px; padding: 6px 12px;")
+        else:
+            self.health_badge.setText("CHECK REQUIRED")
+            self.health_badge.setStyleSheet("background: #543714; color: #ffd166; font-weight: 700; border-radius: 4px; padding: 6px 12px;")
+
+        filename = res.get("filename", "Media File")
+        format_name = res.get("format_name", "—")
+        duration_fmt = res.get("duration_formatted", "—")
+        from ...core.formatting import format_bytes
+        size_str = format_bytes(int(res.get("size") or 0)) if res.get("size") else "—"
+
+        vid_streams = res.get("video_streams", [])
+        aud_streams = res.get("audio_streams", [])
+
+        # Summary Tab HTML
+        summary_html = f"""
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6;">
+            <h3 style="margin-top: 0; color: #ffffff;">Media Container Overview</h3>
+            <table style="width: 100%; border-collapse: collapse; color: #d0d0d0;">
+                <tr><td style="padding: 4px 0; width: 140px;"><b>File Name:</b></td><td>{filename}</td></tr>
+                <tr><td style="padding: 4px 0;"><b>Format Container:</b></td><td>{format_name}</td></tr>
+                <tr><td style="padding: 4px 0;"><b>Duration:</b></td><td>{duration_fmt}</td></tr>
+                <tr><td style="padding: 4px 0;"><b>File Size:</b></td><td>{size_str}</td></tr>
+                <tr><td style="padding: 4px 0;"><b>Video Streams:</b></td><td>{len(vid_streams)} track(s)</td></tr>
+                <tr><td style="padding: 4px 0;"><b>Audio Streams:</b></td><td>{len(aud_streams)} track(s)</td></tr>
+            </table>
+        </div>
+        """
+        self.summary_text.setHtml(summary_html)
+
+        # Video Table
+        self.video_table.setRowCount(len(vid_streams))
+        for row, v in enumerate(vid_streams):
+            self.video_table.setItem(row, 0, QTableWidgetItem(str(v.get("index", row))))
+            self.video_table.setItem(row, 1, QTableWidgetItem(str(v.get("codec_name", "?"))))
+            self.video_table.setItem(row, 2, QTableWidgetItem(str(v.get("profile", "—"))))
+            self.video_table.setItem(row, 3, QTableWidgetItem(str(v.get("resolution", "—"))))
+            self.video_table.setItem(row, 4, QTableWidgetItem(str(v.get("fps", "—"))))
+            self.video_table.setItem(row, 5, QTableWidgetItem(str(v.get("pix_fmt", "—"))))
+            self.video_table.setItem(row, 6, QTableWidgetItem(str(v.get("bit_rate") or "—")))
+            self.video_table.setItem(row, 7, QTableWidgetItem(str(v.get("aspect_ratio", "—"))))
+
+        # Audio Table
+        self.audio_table.setRowCount(len(aud_streams))
+        for row, a in enumerate(aud_streams):
+            self.audio_table.setItem(row, 0, QTableWidgetItem(str(a.get("index", row))))
+            self.audio_table.setItem(row, 1, QTableWidgetItem(str(a.get("codec_name", "?"))))
+            self.audio_table.setItem(row, 2, QTableWidgetItem(str(a.get("sample_rate", "—"))))
+            self.audio_table.setItem(row, 3, QTableWidgetItem(str(a.get("channels", "—"))))
+            self.audio_table.setItem(row, 4, QTableWidgetItem(str(a.get("channel_layout", "—"))))
+            self.audio_table.setItem(row, 5, QTableWidgetItem(str(a.get("bit_rate") or "—")))
+            self.audio_table.setItem(row, 6, QTableWidgetItem(str(a.get("language", "—"))))
+
+        # Raw JSON Tab
+        raw_obj = res.get("raw_json", {})
+        self._raw_json_text = json.dumps(raw_obj, indent=2)
+        self.json_edit.setPlainText(self._raw_json_text)
+
+    def _copy_json(self):
+        if self._raw_json_text:
+            QApplication.clipboard().setText(self._raw_json_text)
+            QMessageBox.information(self, "Copied", "FFprobe JSON report copied to clipboard.")
+
+    def _save_json(self):
+        if not self._raw_json_text:
+            return
+        save_path, _ = QFileDialog.getSaveFileName(self, "Save FFprobe Report", f"{os.path.basename(self.target)}_probe.json", "JSON files (*.json)")
+        if save_path:
+            try:
+                with open(save_path, "w", encoding="utf-8") as f:
+                    f.write(self._raw_json_text)
+                QMessageBox.information(self, "Saved", f"FFprobe report saved to:\n{save_path}")
+            except Exception as err:
+                QMessageBox.critical(self, "Error", f"Failed to save JSON report:\n{err}")
+
+    def closeEvent(self, event):
+        if hasattr(self, "worker") and self.worker.isRunning():
+            self.worker.wait(1000)
+        super().closeEvent(event)
+
+
+class AboutDialog(QDialog):
+    """Detailed About Dialog displaying App Info, Developer details (XerumGG), License, and Key Use Cases."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"About {APP_NAME}")
+        self.resize(650, 520)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        hdr = QFrame()
+        hdr.setObjectName("panel")
+        hdr.setStyleSheet("QFrame#panel { background: #141414; border: 1px solid #333; border-radius: 8px; }")
+        hdr_layout = QVBoxLayout(hdr)
+        hdr_layout.setContentsMargins(18, 14, 18, 14)
+
+        title = QLabel(APP_NAME, self)
+        title.setStyleSheet("font-size: 22px; font-weight: 700; color: #e5484d;")
+        sub = QLabel(f"Developer: XerumGG (GG_Uranium)\n{DEVELOPMENT_BUILD_LABEL} | Version: {PACKAGE_VERSION}", self)
+        sub.setStyleSheet("font-size: 13px; color: #ffffff; margin-top: 4px; font-weight: 500;")
+        hdr_layout.addWidget(title)
+        hdr_layout.addWidget(sub)
+        layout.addWidget(hdr)
+
+        text_edit = QTextEdit(self)
+        text_edit.setReadOnly(True)
+        html = f"""
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; color: #d0d0d0;">
+            <h3 style="color: #ffffff; margin-top: 0;">Application Summary</h3>
+            <p><b>{APP_NAME}</b> is a high-performance desktop media downloader, batch queue processor, and local converter designed for video/audio streams, HLS/DASH fragments, and playlists.</p>
+            
+            <h3 style="color: #ffffff;">Developer & License Details</h3>
+            <ul style="padding-left: 20px;">
+                <li><b>Developer / Maintainer:</b> XerumGG (GG_Uranium)</li>
+                <li><b>License:</b> MIT License (Open Source Software)</li>
+                <li><b>UI Framework:</b> PySide6 (Qt 6 for Python)</li>
+                <li><b>Core Downloader & Muxer:</b> yt-dlp, curl_cffi, FFmpeg, & FFprobe</li>
+            </ul>
+
+            <h3 style="color: #ffffff;">Key Capabilities & Use Cases</h3>
+            <ol style="padding-left: 20px;">
+                <li><b>High-Res Downloads & Transcoding:</b> Bulk download 4K/2K/1080p videos or convert audio to MP3, WAV, FLAC, AAC, OPUS, and M4A.</li>
+                <li><b>Cloudflare Anti-Bot Impersonation:</b> Uses native TLS Chrome browser impersonation to bypass HTTP 403 Cloudflare challenges.</li>
+                <li><b>DPAPI Encrypted Account Sessions:</b> Saves domain credentials and tokens securely under Windows DPAPI encryption.</li>
+                <li><b>Age Verification & Local Test Inbox:</b> Automatically detects 18+ age restrictions and integrates with local Mailpit (127.0.0.1:8025) for signups.</li>
+                <li><b>Automatic 24-Hour Component Update Check:</b> Periodically verifies installed versions of yt-dlp, PySide6, Pillow, PyInstaller, curl_cffi, FFmpeg, and FFprobe.</li>
+            </ol>
+        </div>
+        """
+        text_edit.setHtml(html)
+        layout.addWidget(text_edit, 1)
+
+        btn_box = QHBoxLayout()
+        btn_box.addStretch(1)
+        close_btn = QPushButton("Close", self)
+        close_btn.clicked.connect(self.accept)
+        btn_box.addWidget(close_btn)
+        layout.addLayout(btn_box)
 
 
 class HelpCenterDialog(QDialog):
@@ -623,6 +947,11 @@ class LibraryDialog(QDialog):
         folder_btn.clicked.connect(self._show_in_folder)
         btn_row.addWidget(folder_btn)
 
+        probe_btn = QPushButton("Inspect Streams (FFprobe)")
+        probe_btn.setToolTip("Inspect detailed video/audio stream properties using FFprobe.")
+        probe_btn.clicked.connect(self._inspect_selected_file)
+        btn_row.addWidget(probe_btn)
+
         btn_row.addStretch(1)
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.close)
@@ -698,6 +1027,17 @@ class LibraryDialog(QDialog):
             if path and os.path.exists(path):
                 folder = os.path.dirname(path)
                 QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
+
+    def _inspect_selected_file(self):
+        table = self._get_active_table()
+        row = table.currentRow()
+        if row >= 0:
+            path = table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            if path and os.path.exists(path):
+                dlg = DeepMediaInspectorDialog(path, self)
+                dlg.exec()
+            else:
+                QMessageBox.warning(self, "File Missing", f"The selected file does not exist:\n{path}")
 
 
 class FontPreferencesDialog(QDialog):

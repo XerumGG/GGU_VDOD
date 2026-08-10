@@ -22,7 +22,10 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
-from ...config.paths import get_app_dir, get_default_ffmpeg_path, get_default_output_dir
+from ...config.paths import (
+    get_app_dir, get_default_ffmpeg_dir, get_default_ffmpeg_path,
+    get_default_ffprobe_path, get_default_output_dir,
+)
 from ...config.store import add_history_entry, load_config, save_config, update_history_entry
 from ...conversion.options import (
     FFmpegCustomAudioConvertPP, FFmpegCustomReencodePP, audio_conversion_args,
@@ -55,9 +58,9 @@ from ...auth.sanitizer import is_adult_or_age_restricted_url, sanitize_log_text
 from .account_panel import AccountSessionWidget
 from .test_inbox import MailpitTestInboxWidget
 from .dialogs import (
-    AgeGateAuthDialog, AgeVerificationDialog, FontPreferencesDialog,
-    HelpCenterDialog, KeyBindingsDialog, LibraryDialog, LinkHistoryDialog,
-    SignInPromptDialog, SupportedPlatformsDialog, UpdateCheckDialog,
+    AboutDialog, AgeGateAuthDialog, AgeVerificationDialog, DeepMediaInspectorDialog,
+    FontPreferencesDialog, HelpCenterDialog, KeyBindingsDialog, LibraryDialog,
+    LinkHistoryDialog, SignInPromptDialog, SupportedPlatformsDialog, UpdateCheckDialog,
 )
 from .theme import apply_dark_theme
 from .widgets import TransferStatusBar
@@ -391,8 +394,13 @@ class QtDownloadWorker(QThread):
         except Exception as auth_err:
             pass
 
+        ffmpeg_dir = get_default_ffmpeg_dir()
         ffmpeg_path = settings.get("ffmpeg_path") or get_default_ffmpeg_path()
-        if ffmpeg_path and os.path.exists(ffmpeg_path):
+        if os.path.isdir(ffmpeg_dir) and os.path.exists(os.path.join(ffmpeg_dir, "ffmpeg.exe")):
+            ydl_opts["ffmpeg_location"] = ffmpeg_dir
+            ffprobe_status = "(ffmpeg.exe & ffprobe.exe)" if os.path.exists(os.path.join(ffmpeg_dir, "ffprobe.exe")) else "(ffmpeg.exe)"
+            self.log_emitted.emit(f"[INFO] Using FFmpeg directory: {ffmpeg_dir} {ffprobe_status}")
+        elif ffmpeg_path and os.path.exists(ffmpeg_path):
             ydl_opts["ffmpeg_location"] = ffmpeg_path
             self.log_emitted.emit(f"[INFO] Using FFmpeg binary: {ffmpeg_path}")
         else:
@@ -431,6 +439,23 @@ class QtDownloadWorker(QThread):
         # Live stream option
         if settings.get("live_start_from_beginning"):
             ydl_opts["live_from_start"] = True
+
+        # Timestamp Cutter (start & end time range clipping)
+        start_time_str = settings.get("start_time")
+        end_time_str = settings.get("end_time")
+        from ...services.probe import parse_time_str_to_seconds
+        start_sec = parse_time_str_to_seconds(start_time_str)
+        end_sec = parse_time_str_to_seconds(end_time_str)
+        if start_sec is not None or end_sec is not None:
+            s_val = start_sec if start_sec is not None else 0.0
+            e_val = end_sec if end_sec is not None else float("inf")
+            try:
+                if HAS_YTDLP and hasattr(yt_dlp, "utils") and hasattr(yt_dlp.utils, "download_range_func"):
+                    ydl_opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [(s_val, e_val)])
+                    ydl_opts["force_keyframes_at_cuts"] = True
+                    self.log_emitted.emit(f"[INFO] Video Timestamp Cutter active: Clipping range [{start_time_str or '00:00'} -> {end_time_str or 'END'}]")
+            except Exception as err:
+                self.log_emitted.emit(f"[WARNING] Failed to set download range cutter: {err}")
 
         # Format & Quality selection
         exact_format_id = settings.get("exact_format_id")
@@ -608,6 +633,13 @@ class QtMainWindow(QMainWindow):
         pref_font_act.triggered.connect(self._show_font_dialog)
         edit_menu.addAction(pref_font_act)
 
+        edit_menu.addSeparator()
+        restart_act = QAction("Force restart application (reboot)", self)
+        restart_act.setShortcut(QKeySequence("Ctrl+Shift+`"))
+        restart_act.setToolTip("Saves state, kills lingering background processes, and cleanly restarts the application.")
+        restart_act.triggered.connect(self._force_restart_app)
+        edit_menu.addAction(restart_act)
+
         # View Menu
         view_menu = menubar.addMenu("View")
         library_act = QAction("Downloaded content library...", self)
@@ -615,16 +647,30 @@ class QtMainWindow(QMainWindow):
         library_act.triggered.connect(self._show_library_dialog)
         view_menu.addAction(library_act)
 
+        inspect_act = QAction("Inspect local file / stream details...", self)
+        inspect_act.setShortcut(QKeySequence("Ctrl+I"))
+        inspect_act.setToolTip("Inspect video, audio, and container streams using FFprobe.")
+        inspect_act.triggered.connect(self._show_media_inspector)
+        view_menu.addAction(inspect_act)
+
         view_menu.addSeparator()
         zoom_in_act = QAction("Zoom in", self)
+        zoom_in_act.setShortcut(QKeySequence("Ctrl++"))
         zoom_in_act.triggered.connect(lambda: self._change_zoom(ZOOM_STEP_PERCENT))
         view_menu.addAction(zoom_in_act)
 
+        zoom_in_eq_act = QAction("Zoom in (=)", self)
+        zoom_in_eq_act.setShortcut(QKeySequence("Ctrl+="))
+        zoom_in_eq_act.triggered.connect(lambda: self._change_zoom(ZOOM_STEP_PERCENT))
+        self.addAction(zoom_in_eq_act)
+
         zoom_out_act = QAction("Zoom out", self)
+        zoom_out_act.setShortcut(QKeySequence("Ctrl+-"))
         zoom_out_act.triggered.connect(lambda: self._change_zoom(-ZOOM_STEP_PERCENT))
         view_menu.addAction(zoom_out_act)
 
         zoom_reset_act = QAction("Reset zoom", self)
+        zoom_reset_act.setShortcut(QKeySequence("Ctrl+0"))
         zoom_reset_act.triggered.connect(lambda: self._apply_zoom(ZOOM_DEFAULT_PERCENT))
         view_menu.addAction(zoom_reset_act)
         self._zoom_actions = {
@@ -991,13 +1037,26 @@ class QtMainWindow(QMainWindow):
         conv_grid.addWidget(QLabel("Channels:"), 2, 2)
         conv_grid.addWidget(self.channel_combo, 2, 3)
 
+        self.start_time_input = QLineEdit()
+        self.start_time_input.setPlaceholderText("00:00:00 or 90s")
+        self.start_time_input.setToolTip("Clip start timestamp (e.g. 00:01:30 or 90s).")
+
+        self.end_time_input = QLineEdit()
+        self.end_time_input.setPlaceholderText("00:05:00 or 300s")
+        self.end_time_input.setToolTip("Clip end timestamp (e.g. 00:03:45 or 225s).")
+
         conv_grid.addWidget(QLabel("Compression:"), 3, 0)
         conv_grid.addWidget(self.compression_combo, 3, 1)
 
-        conv_grid.addWidget(QLabel("Filename pattern (optional):"), 4, 0)
-        conv_grid.addWidget(self.pattern_input, 4, 1, 1, 3)
+        conv_grid.addWidget(QLabel("Clip start time:"), 4, 0)
+        conv_grid.addWidget(self.start_time_input, 4, 1)
+        conv_grid.addWidget(QLabel("Clip end time:"), 4, 2)
+        conv_grid.addWidget(self.end_time_input, 4, 3)
 
-        conv_grid.addWidget(self.clean_sidecars_check, 5, 0, 1, 4)
+        conv_grid.addWidget(QLabel("Filename pattern (optional):"), 5, 0)
+        conv_grid.addWidget(self.pattern_input, 5, 1, 1, 3)
+
+        conv_grid.addWidget(self.clean_sidecars_check, 6, 0, 1, 4)
 
         adv_vbox.addWidget(conv_box)
 
@@ -1117,8 +1176,34 @@ class QtMainWindow(QMainWindow):
         self._set_combo_value(self.sample_rate_combo, self._config.get("sample_rate"))
         self._set_combo_value(self.channel_combo, self._config.get("channels"))
         self._set_combo_value(self.compression_combo, self._config.get("compression_level"))
+        self.start_time_input.setText(self._config.get("start_time", ""))
+        self.end_time_input.setText(self._config.get("end_time", ""))
         self.pattern_input.setText(self._config.get("filename_pattern", ""))
         self.clean_sidecars_check.setChecked(self._config.get("clean_sidecars", True))
+
+        # Check 24-hour scheduled update check
+        last_check = self._config.get("last_update_check", 0)
+        now = int(time.time())
+        if now - last_check >= 86400:
+            self._config["last_update_check"] = now
+            if self._persist_settings:
+                save_config(self._config)
+            QTimer.singleShot(2000, self._run_scheduled_update_check)
+
+    def _run_scheduled_update_check(self):
+        self.log_box.appendPlainText("[INFO] Performing scheduled 24-hour component and dependency update check...")
+        from .dialogs import UpdateCheckWorker
+        self._scheduled_update_worker = UpdateCheckWorker(self)
+        self._scheduled_update_worker.results_ready.connect(self._on_scheduled_update_results)
+        self._scheduled_update_worker.start()
+
+    def _on_scheduled_update_results(self, results):
+        updates = [f"{name} (Installed: {inst}, Latest: {lat})" for name, ctype, inst, lat, status in results if status == "Update available"]
+        if updates:
+            msg = f"[NOTICE] Scheduled 24-hr update check: {len(updates)} update(s) available -> " + ", ".join(updates)
+            self.log_box.appendPlainText(msg)
+        else:
+            self.log_box.appendPlainText("[INFO] Scheduled 24-hr update check complete: All frameworks, libraries, and binaries are up to date.")
 
     def _choose_ffmpeg_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select ffmpeg.exe", "", "Executables (*.exe);;All files (*.*)")
@@ -1546,6 +1631,8 @@ class QtMainWindow(QMainWindow):
                 "sample_rate": self.sample_rate_combo.currentText(),
                 "channels": self.channel_combo.currentText(),
                 "compression_level": self.compression_combo.currentText(),
+                "start_time": self.start_time_input.text().strip(),
+                "end_time": self.end_time_input.text().strip(),
                 "clean_sidecars": self.clean_sidecars_check.isChecked(),
             }
             self._save_settings()
@@ -1674,6 +1761,16 @@ class QtMainWindow(QMainWindow):
         dlg = LibraryDialog(self.output_path.text().strip() or get_default_output_dir(), self)
         dlg.exec()
 
+    def _show_media_inspector(self, target_path: str = None):
+        if not target_path or not isinstance(target_path, str):
+            file_path, _ = QFileDialog.getOpenFileName(self, "Select Media File to Inspect", "", "Media Files (*.mp4 *.mkv *.mov *.avi *.webm *.mp3 *.flac *.wav *.m4a *.aac *.ogg *.opus);;All Files (*.*)")
+            if not file_path:
+                return
+            target_path = file_path
+
+        dlg = DeepMediaInspectorDialog(target_path, self)
+        dlg.exec()
+
     def _show_font_dialog(self):
         dlg = FontPreferencesDialog(parent=self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
@@ -1695,8 +1792,20 @@ class QtMainWindow(QMainWindow):
         dlg.exec()
 
     def _show_about_dialog(self):
-        QMessageBox.about(
-            self, f"About {APP_NAME}",
-            f"{APP_NAME}\n{DEVELOPMENT_BUILD_LABEL}\nVersion: {PACKAGE_VERSION}\n\n"
-            "High-performance media downloader and local converter.\nBuilt with PySide6 & yt-dlp."
-        )
+        dlg = AboutDialog(self)
+        dlg.exec()
+
+    def _force_restart_app(self):
+        """Force restart application (reboot) on Ctrl+Shift+` or menu selection."""
+        self.log_box.appendPlainText("[INFO] Force restart requested. Terminating processes and relaunching...")
+        self._save_settings()
+        if sys.platform == "win32":
+            try:
+                import subprocess
+                subprocess.run(["taskkill", "/F", "/IM", "ffmpeg.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(["taskkill", "/F", "/IM", "ffprobe.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+        from PySide6.QtCore import QProcess
+        QProcess.startDetached(sys.executable, sys.argv)
+        QApplication.quit()

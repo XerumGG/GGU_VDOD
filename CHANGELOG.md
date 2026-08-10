@@ -2,6 +2,19 @@
 
 All notable changes to GGU_VDOD are documented in this file.
 
+## v0.001.045 - 2026-08-10
+
+### Added
+- Cloudflare HTTP 403 anti-bot challenge bypass via `curl_cffi` Chrome TLS impersonation.
+- Automatic DPAPI domain session credential resolution and parameter injection for media downloads.
+- 18+ Adult Age Verification gate modal and universal auth setup dialogs.
+- Automatic 24-hour component and dependency update check verifying yt-dlp, PySide6, Pillow, PyInstaller, curl_cffi, FFmpeg, and FFprobe.
+- Permanent FFmpeg & FFprobe directory integration (`D:\GGU_VDOD\ffmpeg\`).
+- Force Application Restart option in Edit menu (`Ctrl+Shift+` `) and process tree termination (`taskkill`).
+- Detailed `AboutDialog` with developer info (XerumGG / GG_Uranium), MIT License, and comprehensive use cases.
+- Clean rounded ETA formatting (`5m 49s`) and 10-second throttled log stream updates.
+- Automated clean build script (`build_exe.ps1`) targeting standard `dist/GGU_VDOD/`.
+
 ## 0.1.30-dev.30 - 2026-08-09
 
 ### Added

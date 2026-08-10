@@ -4,9 +4,12 @@ APP_NAME = "GGU_VDOD"
 
 UPDATE_COMPONENTS = (
     ("yt-dlp", "yt_dlp", "runtime dependency"),
-    ("Pillow", "PIL", "runtime dependency"),
-    ("PySide6", "PySide6", "primary runtime UI dependency"),
-    ("PyInstaller", "PyInstaller", "build dependency"),
+    ("curl_cffi", "curl_cffi", "anti-bot impersonation dependency"),
+    ("Pillow", "PIL", "runtime image dependency"),
+    ("PySide6", "PySide6", "primary runtime UI framework"),
+    ("PyInstaller", "PyInstaller", "binary build dependency"),
+    ("FFmpeg", "ffmpeg", "multimedia encoder binary"),
+    ("FFprobe", "ffprobe", "multimedia analyzer binary"),
 )
 
 VIDEO_QUALITIES = ["Best available", "2160p (4K)", "1440p (2K)", "1080p", "720p", "480p", "360p"]

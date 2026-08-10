@@ -32,40 +32,57 @@ def get_app_dir():
     return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 
-def get_default_ffmpeg_path():
-    r"""Return the default FFmpeg executable path (D:\GGU_VDOD\ffmpeg\ffmpeg.exe)."""
+def get_default_ffmpeg_dir():
+    r"""Return the permanent FFmpeg & FFprobe directory (D:\GGU_VDOD\ffmpeg)."""
     if getattr(sys, "frozen", False):
         exe_dir = os.path.dirname(sys.executable)
         meipass = getattr(sys, "_MEIPASS", exe_dir)
-        bundled_candidates = [
-            os.path.join(exe_dir, "ffmpeg", "ffmpeg.exe"),
-            os.path.join(exe_dir, "ffmpeg.exe"),
-            os.path.join(meipass, "ffmpeg", "ffmpeg.exe"),
-            os.path.join(meipass, "ffmpeg.exe"),
-        ]
-        for c in bundled_candidates:
-            if os.path.exists(c):
-                return c
+        for folder in [
+            os.path.join(exe_dir, "ffmpeg"),
+            exe_dir,
+            os.path.join(meipass, "ffmpeg"),
+            meipass,
+        ]:
+            if os.path.isdir(folder) and (
+                os.path.exists(os.path.join(folder, "ffmpeg.exe"))
+                or os.path.exists(os.path.join(folder, "ffprobe.exe"))
+            ):
+                return folder
 
-    candidates = [
-        r"D:\GGU_VDOD\ffmpeg\ffmpeg.exe",
-        os.path.join(get_app_dir(), "ffmpeg", "ffmpeg.exe"),
-        os.path.join(get_app_dir(), "dist", "GGU_VDOD", "ffmpeg", "ffmpeg.exe"),
-        os.path.join(get_app_dir(), "dist", "GGU_VDOD", "ffmpeg.exe"),
-    ]
-    for candidate in candidates:
-        if os.path.exists(candidate):
-            return candidate
+    perm_dir = r"D:\GGU_VDOD\ffmpeg"
+    if os.path.isdir(perm_dir):
+        return perm_dir
+    repo_ffmpeg = os.path.join(get_app_dir(), "ffmpeg")
+    if os.path.isdir(repo_ffmpeg):
+        return repo_ffmpeg
+    return perm_dir
+
+
+def get_default_ffmpeg_path():
+    r"""Return default FFmpeg binary path (D:\GGU_VDOD\ffmpeg\ffmpeg.exe)."""
+    dir_path = get_default_ffmpeg_dir()
+    exe = os.path.join(dir_path, "ffmpeg.exe")
+    if os.path.exists(exe):
+        return exe
 
     try:
         import imageio_ffmpeg
-        exe = imageio_ffmpeg.get_ffmpeg_exe()
-        if exe and os.path.exists(exe):
-            return exe
+        imageio_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if imageio_exe and os.path.exists(imageio_exe):
+            return imageio_exe
     except Exception:
         pass
 
     return r"D:\GGU_VDOD\ffmpeg\ffmpeg.exe"
+
+
+def get_default_ffprobe_path():
+    r"""Return default FFprobe binary path (D:\GGU_VDOD\ffmpeg\ffprobe.exe)."""
+    dir_path = get_default_ffmpeg_dir()
+    exe = os.path.join(dir_path, "ffprobe.exe")
+    if os.path.exists(exe):
+        return exe
+    return r"D:\GGU_VDOD\ffmpeg\ffprobe.exe"
 
 
 CONFIG_DIR = get_config_dir()

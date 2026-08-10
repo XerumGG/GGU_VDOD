@@ -1,24 +1,21 @@
 # GGU_VDOD
 
-Simple Windows media downloader powered by yt-dlp and FFmpeg; created by GG Uranium
+High-performance desktop media downloader and local converter powered by PySide6, yt-dlp, curl_cffi, and FFmpeg; created by **XerumGG** (**GG Uranium**).
 
-> **0.1.25-dev.25:** The PySide6 interface is the active development UI. Media
-> selection, conversion, retry, and settings behavior are covered by local regression tests.
+> **v0.001.045:** Active PySide6 desktop application with Cloudflare anti-bot impersonation, DPAPI encrypted account session management, 18+ age verification detection, Mailpit local test inbox integration, 24-hour automatic update check, and permanent FFmpeg/FFprobe directory integration.
 
-## What it does
+## Key Capabilities & Features
 
-- **Video, Audio, Thumbnail download with all types of fine-tuned controls and quality range**.
-- Media in **single source or Multiple sources or Playlist** can be downloaded all together.
-- Supported video download formats : **MP4, MKV, MOV, AVI, WebM, FLV, MPEG, TS, M4V, OGV, or 3GP**.
-- Supported audio download formats : **MP3, WAV, AAC, FLAC, OGG, Opus, M4A, WMA, AIFF, and ALAC**. ALAC is saved in its standard `.m4a` container.
-- Choose quality, subtitles, metadata, thumbnail embedding, cookies, proxy, and filename pattern.
-- Thumbnail downlaod with title, source, duration, resolution, and preview before downloading.
-- Downloads resume after connection loss.
+- **Universal Video & Audio Downloader:** Download 4K/2K/1080p videos or convert audio to MP3, WAV, AAC, FLAC, OGG, Opus, M4A, WMA, AIFF, or ALAC.
+- **Batch Processing & Playlists:** Single video links, playlist contexts, and multi-line batch URL inputs.
+- **Cloudflare Impersonation (HTTP 403 Bypass):** Integrated `curl_cffi` Chrome TLS fingerprint impersonation to bypass Cloudflare anti-bot challenges.
+- **DPAPI Encrypted Sessions:** Stores domain credentials and tokens securely under Windows DPAPI encryption in `auth_sessions.json`.
+- **18+ Age Gate Detection & Auth Setup:** Detects age-restricted links, prompts for age verification, and connects with browser cookie import or Mailpit local test inbox (`127.0.0.1:8025`).
+- **Permanent FFmpeg & FFprobe Path:** Permanent directory at `D:\GGU_VDOD\ffmpeg\` for `ffmpeg.exe` and `ffprobe.exe`.
+- **Automatic 24-Hour Component Update Check:** Periodically checks versions for yt-dlp, PySide6, Pillow, PyInstaller, curl_cffi, FFmpeg, and FFprobe.
+- **Force Application Restart (Reboot):** Instantly reboot the app and release processes using **Edit > Force restart application** (`Ctrl+Shift+` `).
 
-
-Use this only for media you own or are allowed to download. Follow site rules and local law.
-
-## Project documentation
+## Project Documentation
 
 - [Architecture](docs/Architecture.md)
 - [Installation](docs/Installation.md)
@@ -26,69 +23,6 @@ Use this only for media you own or are allowed to download. Follow site rules an
 - [Roadmap](docs/Roadmap.md)
 - [Changelog](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
-- [Security policy](SECURITY.md)
-
-## Quick setup
-
-Requirements: Python 3.9+, FFmpeg, and Windows for the packaged `.exe`.
-
-One-line setup and build on Windows:
-
-```bat
-build.bat
-```
-
-The executable is created at `dist\GGU_VDOD.exe`. Put FFmpeg at `dist\ffmpeg\ffmpeg.exe`,
-or install it on PATH. The app detects it automatically.
-
-Run from source:
-
-```bat
-venv\Scripts\python.exe app.py
-```
-
-## Download
-
-1. Paste one or more links.
-2. Leave **Video** and **MP4** selected, or choose another format.
-3. Choose a folder and click **Download**.
-4. Open **Advanced** for cookies, subtitles, metadata, FFmpeg, proxy, exact format IDs,
-   and conversion controls.
-
-Change themes with **Edit > Preferences > Themes and colors**. The preference page is
-resizable and scrollable; pick a preset or choose **Custom**, edit the hex colors, and click
-**Apply and save** at the top.
-
-If a link needs sign-in, select an authorized browser cookie source or use **Import and validate** for a Netscape-format `cookies.txt` file. The app shows the cookie domains and asks for confirmation before use.
-The app does not bypass DRM, private access, age checks, bot checks, or regional blocks.
-
-## Useful one-line commands
-
-Update the development libraries:
-
-```bat
-venv\Scripts\python.exe -m pip install --upgrade yt-dlp Pillow PyInstaller
-```
-
-Check versions without changing anything:
-
-```bat
-venv\Scripts\python.exe -m pip list
-```
-
-Build the original executable again:
-
-```bat
-build.bat
-```
-
-Use `$env:GGU_BUILD_MODE='onedir'; .\build.bat` in PowerShell for a folder build.
-
-## Troubleshooting
-
-- **No MP4 or merge error:** install FFmpeg or place `ffmpeg.exe` beside the executable.
-- **Cookie database error:** close the browser, or export and select `cookies.txt`.
-- **Subtitle HTTP 429:** retry with subtitles off; the video download can still work.
 - **Age/private/member-only link:** use valid authorized cookies; there is no bypass.
 - **Old extractor error:** update yt-dlp, then rebuild.
 
