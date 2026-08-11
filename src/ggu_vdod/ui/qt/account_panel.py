@@ -67,6 +67,14 @@ class AccountSessionWidget(QWidget):
         self._refresh_timer.timeout.connect(self.refresh_sessions)
         self._refresh_timer.start(5000)
 
+    def shutdown(self):
+        if hasattr(self, "_refresh_timer"):
+            self._refresh_timer.stop()
+
+    def closeEvent(self, event):
+        self.shutdown()
+        super().closeEvent(event)
+
     def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)

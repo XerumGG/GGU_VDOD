@@ -142,6 +142,10 @@ class AnimatedToolTipFilter(QObject):
 
 def install_animated_tooltips(application: QApplication):
     """Install animated tooltip filter on the global QApplication instance."""
+    existing_filter = getattr(application, "_ggu_tooltip_filter", None)
+    if existing_filter is not None:
+        return existing_filter
     filter_obj = AnimatedToolTipFilter(application)
     application.installEventFilter(filter_obj)
+    application._ggu_tooltip_filter = filter_obj
     return filter_obj

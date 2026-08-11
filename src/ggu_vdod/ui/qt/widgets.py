@@ -26,7 +26,7 @@ class TransferStatusBar(QFrame):
         self.progress.setValue(0)
         self.progress.setMinimumWidth(200)
         self.version_label = QLabel(DEVELOPMENT_BUILD_LABEL)
-        self.version_label.setStyleSheet("color: #e5484d; font-weight: 700; font-size: 13px; padding-left: 10px;")
+        self.version_label.setObjectName("version")
         self.version_label.setToolTip(f"GGU_VDOD Build Version: {DEVELOPMENT_BUILD_LABEL}")
 
         for widget in (

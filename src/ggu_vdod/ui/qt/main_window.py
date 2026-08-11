@@ -59,10 +59,11 @@ from .account_panel import AccountSessionWidget
 from .test_inbox import MailpitTestInboxWidget
 from .dialogs import (
     AboutDialog, AgeGateAuthDialog, AgeVerificationDialog, DeepMediaInspectorDialog,
-    FontPreferencesDialog, HelpCenterDialog, KeyBindingsDialog, LibraryDialog,
-    LinkHistoryDialog, SignInPromptDialog, SubtitleLanguagesDialog, SupportedPlatformsDialog, UpdateCheckDialog,
+    ErrorAlertDialog, FontPreferencesDialog, HelpCenterDialog, KeyBindingsDialog, LibraryDialog,
+    LinkHistoryDialog, SignInPromptDialog, SubtitleLanguagesDialog, SupportedPlatformsDialog,
+    ThemePreferencesDialog, UpdateCheckDialog,
 )
-from .theme import apply_dark_theme
+from .theme import BASE_FONT_SIZE, apply_theme, normalize_theme
 from .widgets import TransferStatusBar
 
 try:
@@ -226,6 +227,7 @@ class QtDownloadWorker(QThread):
     progress_updated = Signal(dict)
     status_updated = Signal(str)
     item_finished = Signal(str, bool, str)
+    error_occurred = Signal(str, str)
     queue_completed = Signal(int, int)
 
     def __init__(self, urls, settings, parent=None):
@@ -239,7 +241,9 @@ class QtDownloadWorker(QThread):
 
     def run(self):
         if not yt_dlp:
-            self.log_emitted.emit("[ERROR] yt-dlp library is missing.")
+            error_message = "yt-dlp library is missing."
+            self.log_emitted.emit(f"[ERROR] {error_message}")
+            self.error_occurred.emit("", error_message)
             self.queue_completed.emit(0, len(self.urls))
             return
 
@@ -315,6 +319,7 @@ class QtDownloadWorker(QThread):
                         self.log_emitted.emit("[WARNING] Internet connection still unavailable; retry will continue when possible.")
                     continue
                 self.log_emitted.emit(f"[ERROR] Failed {url}: {explain_download_error(error)}")
+                self.error_occurred.emit(url, str(error))
                 return False
         return False
 
@@ -450,7 +455,7 @@ class QtDownloadWorker(QThread):
             s_val = start_sec if start_sec is not None else 0.0
             e_val = end_sec if end_sec is not None else float("inf")
             try:
-                if HAS_YTDLP and hasattr(yt_dlp, "utils") and hasattr(yt_dlp.utils, "download_range_func"):
+                if yt_dlp is not None and hasattr(yt_dlp, "utils") and hasattr(yt_dlp.utils, "download_range_func"):
                     ydl_opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [(s_val, e_val)])
                     ydl_opts["force_keyframes_at_cuts"] = True
                     self.log_emitted.emit(f"[INFO] Video Timestamp Cutter active: Clipping range [{start_time_str or '00:00'} -> {end_time_str or 'END'}]")
@@ -545,11 +550,24 @@ class QtMainWindow(QMainWindow):
         self._thumbnail_workers = set()
         self._format_workers = set()
         self._download_worker = None
+        self._pending_error_alerts = []
+        self._active_error_alert = None
         self._current_preview_data = None
         self._cookie_file_approved = False
         self._cookie_summary = None
 
-        self.zoom_percent = ZOOM_DEFAULT_PERCENT
+        self._batch_urls = []
+        self._batch_previews = {}
+        self._current_batch_idx = 0
+        self._ghost_step = 0
+
+        self._ghost_timer = QTimer(self)
+        self._ghost_timer.setInterval(180)
+        self._ghost_timer.timeout.connect(self._on_ghost_pulse)
+
+        self.zoom_percent = clamp_zoom_percent(self._config.get("zoom_percent", ZOOM_DEFAULT_PERCENT))
+        self.base_font_size = self._clamp_font_size(self._config.get("font_size", BASE_FONT_SIZE))
+        self.font_family = self._config.get("font_family") or "Segoe UI"
 
         self._preview_timer = QTimer(self)
         self._preview_timer.setSingleShot(True)
@@ -632,6 +650,10 @@ class QtMainWindow(QMainWindow):
         pref_font_act = QAction("Preferences - UI Font panel...", self)
         pref_font_act.triggered.connect(self._show_font_dialog)
         edit_menu.addAction(pref_font_act)
+
+        pref_theme_act = QAction("Preferences - Themes and colors...", self)
+        pref_theme_act.triggered.connect(self._show_theme_dialog)
+        edit_menu.addAction(pref_theme_act)
 
         edit_menu.addSeparator()
         restart_act = QAction("Force restart application (reboot)", self)
@@ -716,8 +738,8 @@ class QtMainWindow(QMainWindow):
 
         # Header Title
         title = QLabel(APP_NAME)
+        title.setObjectName("pageTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        title.setStyleSheet("font-size: 26px; font-weight: 700;")
         subtitle = QLabel("Paste one or more video links below (one per line)")
         subtitle.setObjectName("muted")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignHCenter)
@@ -736,9 +758,33 @@ class QtMainWindow(QMainWindow):
         preview.setObjectName("panel")
         preview_layout = QVBoxLayout(preview)
         preview_layout.setContentsMargins(16, 12, 16, 12)
+        preview_hdr_row = QHBoxLayout()
         preview_title_lbl = QLabel("Video preview")
-        preview_title_lbl.setStyleSheet("font-weight: 600; color: #a7a7a7;")
-        preview_layout.addWidget(preview_title_lbl)
+        preview_title_lbl.setObjectName("muted")
+        preview_title_lbl.setStyleSheet("font-weight: 600;")
+        preview_hdr_row.addWidget(preview_title_lbl)
+        preview_hdr_row.addStretch(1)
+
+        self.prev_batch_btn = QPushButton("◄ Prev")
+        self.prev_batch_btn.setFixedWidth(75)
+        self.prev_batch_btn.setEnabled(False)
+        self.prev_batch_btn.setToolTip("Show preview for previous link in batch.")
+        self.prev_batch_btn.clicked.connect(self._nav_prev_batch)
+
+        self.batch_counter_lbl = QLabel("Item 0 / 0")
+        self.batch_counter_lbl.setObjectName("muted")
+        self.batch_counter_lbl.setStyleSheet("font-weight: 600; padding: 0 6px;")
+
+        self.next_batch_btn = QPushButton("Next ►")
+        self.next_batch_btn.setFixedWidth(75)
+        self.next_batch_btn.setEnabled(False)
+        self.next_batch_btn.setToolTip("Show preview for next link in batch.")
+        self.next_batch_btn.clicked.connect(self._nav_next_batch)
+
+        preview_hdr_row.addWidget(self.prev_batch_btn)
+        preview_hdr_row.addWidget(self.batch_counter_lbl)
+        preview_hdr_row.addWidget(self.next_batch_btn)
+        preview_layout.addLayout(preview_hdr_row)
 
         preview_body = QHBoxLayout()
         self.preview_image = QLabel("No preview")
@@ -749,7 +795,7 @@ class QtMainWindow(QMainWindow):
 
         preview_text_vbox = QVBoxLayout()
         self.preview_title = QLabel("Paste a link to preview it")
-        self.preview_title.setStyleSheet("font-size: 15px; font-weight: 600;")
+        self.preview_title.setObjectName("sectionTitle")
         self.preview_source = QLabel("Source: waiting for a link")
         self.preview_source.setObjectName("muted")
         self.preview_details = QLabel("Title, duration, uploader, and platform will appear here.")
@@ -835,28 +881,20 @@ class QtMainWindow(QMainWindow):
         # ------------------ Complex & Advanced Options Card Header ------------------
         adv_header_frame = QFrame()
         adv_header_frame.setObjectName("panel")
-        adv_header_frame.setStyleSheet("QFrame#panel { background: #121212; border: 1px solid #333333; border-radius: 6px; padding: 2px 6px; }")
         adv_header_layout = QHBoxLayout(adv_header_frame)
         adv_header_layout.setContentsMargins(10, 4, 10, 4)
 
         adv_title_label = QLabel("Complex & Advanced Conversion Options", self)
-        adv_title_label.setStyleSheet("font-weight: 600; color: #e5e5e5;")
+        adv_title_label.setStyleSheet("font-weight: 600;")
 
         advanced_toggle = QToolButton(self)
         advanced_toggle.setText("Expand [+]")
         advanced_toggle.setCheckable(True)
-        advanced_toggle.setStyleSheet(
-            "QToolButton { background: #1f1f1f; color: #ffffff; border: 1px solid #383838; border-radius: 4px; padding: 4px 10px; font-weight: 600; } "
-            "QToolButton:hover { background: #2a2a2a; border-color: #e5484d; }"
-        )
         advanced_toggle.setToolTip("Expand or collapse advanced FFmpeg, cookie, proxy, subtitle, and codec settings.")
 
         self.complex_help_btn = QToolButton(self)
         self.complex_help_btn.setText("Help [?]")
-        self.complex_help_btn.setStyleSheet(
-            "QToolButton { background: #e5484d; color: #ffffff; border: 1px solid #e5484d; border-radius: 4px; padding: 4px 10px; font-weight: bold; } "
-            "QToolButton:hover { background: #c53f43; }"
-        )
+        self.complex_help_btn.setObjectName("primary")
         self.complex_help_btn.setToolTip("Click to view detailed explanations for all complex video, audio, codec, and network options.")
         self.complex_help_btn.clicked.connect(self._show_complex_options_help)
 
@@ -1129,9 +1167,9 @@ class QtMainWindow(QMainWindow):
         log_layout.addLayout(log_hdr)
 
         self.log_box = QPlainTextEdit()
+        self.log_box.setObjectName("logBox")
         self.log_box.setReadOnly(True)
         self.log_box.setMinimumHeight(150)
-        self.log_box.setStyleSheet("font-family: Consolas, monospace; font-size: 12px; background: #080808;")
         log_layout.addWidget(self.log_box)
         layout.addWidget(log_frame)
 
@@ -1328,6 +1366,11 @@ class QtMainWindow(QMainWindow):
             "clean_sidecars": self.clean_sidecars_check.isChecked(),
             "key_bindings": dict(self._config.get("key_bindings", DEFAULT_KEY_BINDINGS)),
             "scroll_speed": clamp_scroll_speed(self._config.get("scroll_speed", SCROLL_SPEED_DEFAULT)),
+            "zoom_percent": self.zoom_percent,
+            "font_family": self.font_family,
+            "font_size": self.base_font_size,
+            "theme_name": self._config.get("theme_name", "Dark"),
+            "theme_colors": normalize_theme(self._config.get("theme_colors")),
         }
 
     def _save_settings(self):
@@ -1337,6 +1380,7 @@ class QtMainWindow(QMainWindow):
         save_config(self._config)
 
     def _apply_preferences(self):
+        self._apply_ui_theme()
         self._apply_key_bindings(self._config.get("key_bindings", DEFAULT_KEY_BINDINGS))
         speed = clamp_scroll_speed(self._config.get("scroll_speed", SCROLL_SPEED_DEFAULT))
         vbar = self.content_scroll.verticalScrollBar()
@@ -1344,6 +1388,28 @@ class QtMainWindow(QMainWindow):
         vbar.setSingleStep(12 * speed)
         hbar.setSingleStep(12 * speed)
         self.content_scroll.viewport().installEventFilter(self)
+
+    @staticmethod
+    def _clamp_font_size(value):
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = BASE_FONT_SIZE
+        return max(8, min(18, value))
+
+    def _scaled_font_size(self):
+        return self._clamp_font_size(round(self.base_font_size * self.zoom_percent / 100.0))
+
+    def _apply_ui_theme(self):
+        """Apply the saved colors and one proportional font scale to all Qt widgets."""
+        app = QApplication.instance()
+        if not app:
+            return
+        scaled_size = self._scaled_font_size()
+        font = QFont(self.font_family, scaled_size)
+        app.setFont(font)
+        apply_theme(app, normalize_theme(self._config.get("theme_colors")), base_font_size=scaled_size)
+        self.setFont(font)
 
     def _apply_key_bindings(self, bindings):
         sequence_map = {
@@ -1438,16 +1504,9 @@ class QtMainWindow(QMainWindow):
 
     def _apply_zoom(self, percent):
         self.zoom_percent = clamp_zoom_percent(percent)
-        scaled_size = max(7, int(10 * self.zoom_percent / 100.0))
-        app = QApplication.instance()
-        if app:
-            apply_dark_theme(app, base_font_size=scaled_size)
-            font = app.font()
-            font.setPointSize(scaled_size)
-            app.setFont(font)
-            for widget in app.allWidgets():
-                widget.setFont(font)
-                widget.update()
+        self._apply_ui_theme()
+        if self._persist_settings:
+            self._save_settings()
         self.log_box.appendPlainText(f"[INFO] UI Zoom set to {self.zoom_percent}%")
 
     def eventFilter(self, watched, event):
@@ -1463,10 +1522,68 @@ class QtMainWindow(QMainWindow):
                 return True
         return super().eventFilter(watched, event)
 
+    def _preview_urls(self):
+        """Return the distinct, non-empty URLs currently entered for preview."""
+        urls = []
+        seen = set()
+        for line in self.url_text.toPlainText().splitlines():
+            url = line.strip()
+            if url and url not in seen:
+                urls.append(url)
+                seen.add(url)
+        return urls
+
+    def _update_batch_navigation(self):
+        count = len(self._batch_urls)
+        if not count:
+            self.batch_counter_lbl.setText("Item 0 / 0")
+            self.prev_batch_btn.setEnabled(False)
+            self.next_batch_btn.setEnabled(False)
+            return
+        self.batch_counter_lbl.setText(f"Item {self._current_batch_idx + 1} / {count}")
+        self.prev_batch_btn.setEnabled(self._current_batch_idx > 0)
+        self.next_batch_btn.setEnabled(self._current_batch_idx < count - 1)
+
+    def _current_preview_url(self):
+        if self._batch_urls:
+            return self._batch_urls[self._current_batch_idx]
+        return self._first_url()
+
+    def _nav_prev_batch(self):
+        if self._current_batch_idx <= 0:
+            return
+        self._current_batch_idx -= 1
+        self._preview_token += 1
+        self._update_batch_navigation()
+        self._set_preview_loading()
+        self._start_preview()
+
+    def _nav_next_batch(self):
+        if self._current_batch_idx >= len(self._batch_urls) - 1:
+            return
+        self._current_batch_idx += 1
+        self._preview_token += 1
+        self._update_batch_navigation()
+        self._set_preview_loading()
+        self._start_preview()
+
+    def _on_ghost_pulse(self):
+        """Animate the loading placeholder without redrawing the full window."""
+        if not self._ghost_timer.isActive():
+            return
+        self._ghost_step = (self._ghost_step + 1) % 4
+        dots = "." * self._ghost_step
+        self.preview_image.setText(f"Loading thumbnail{dots}")
+        self.preview_status.setText(f"Fetching preview{dots}")
+
     def _schedule_preview(self):
         self._preview_timer.stop()
         self._preview_token += 1
-        if not self._first_url():
+        self._batch_urls = self._preview_urls()
+        self._batch_previews.clear()
+        self._current_batch_idx = 0
+        self._update_batch_navigation()
+        if not self._batch_urls:
             self._clear_preview()
             return
         self._set_preview_loading()
@@ -1476,7 +1593,7 @@ class QtMainWindow(QMainWindow):
         return next((line.strip() for line in self.url_text.toPlainText().splitlines() if line.strip()), "")
 
     def _start_preview(self):
-        url = self._first_url()
+        url = self._current_preview_url()
         if not url:
             return
         token = self._preview_token
@@ -1496,6 +1613,7 @@ class QtMainWindow(QMainWindow):
         worker.start()
 
     def _clear_preview(self):
+        self._ghost_timer.stop()
         self._current_preview_data = None
         self.preview_title.setText("Paste a link to preview it")
         self.preview_source.setText("Source: waiting for a link")
@@ -1506,6 +1624,8 @@ class QtMainWindow(QMainWindow):
         self.preview_image.setText("No preview")
 
     def _set_preview_loading(self):
+        self._ghost_step = 0
+        self._ghost_timer.start()
         self.preview_title.setText("Loading preview…")
         self.preview_source.setText("Source: loading preview…")
         self.preview_details.setText("Fetching public title, source, and thumbnail…")
@@ -1517,6 +1637,7 @@ class QtMainWindow(QMainWindow):
     def _apply_preview_error(self, token, error):
         if token != self._preview_token:
             return
+        self._ghost_timer.stop()
         self._current_preview_data = None
         self.preview_title.setText("Preview unavailable")
         self.preview_source.setText("Source: unavailable")
@@ -1529,7 +1650,10 @@ class QtMainWindow(QMainWindow):
     def _apply_preview(self, token, preview):
         if token != self._preview_token:
             return
+        self._ghost_timer.stop()
         self._current_preview_data = preview
+        if self._batch_urls:
+            self._batch_previews[self._current_preview_url()] = preview
         self.preview_title.setText(preview["title"])
         self.preview_source.setText(f"Source: {preview.get('source') or 'Unknown source'}")
         self.preview_details.setText(preview["details"])
@@ -1627,11 +1751,27 @@ class QtMainWindow(QMainWindow):
             if not self._ensure_cookie_file_consent():
                 return
 
+            out_dir = self.output_path.text().strip() or get_default_output_dir()
+            try:
+                import shutil
+                du = shutil.disk_usage(out_dir)
+                free_mb = du.free / (1024 * 1024)
+                if free_mb < 500:
+                    from ...services.errors import classify_error
+                    err_details = classify_error("insufficient disk space free on target drive", context=out_dir)
+                    dlg = ErrorAlertDialog(err_details, self)
+                    res = dlg.exec()
+                    if res == 3:  # Change Dir requested
+                        self._choose_output_dir()
+                    return
+            except Exception:
+                pass
+
             settings = {
                 "format": "video" if self.video_radio.isChecked() else "audio",
                 "quality": self.quality_combo.currentText(),
                 "output_format": self.output_format_combo.currentText(),
-                "output_dir": self.output_path.text().strip() or get_default_output_dir(),
+                "output_dir": out_dir,
                 "ffmpeg_path": self.ffmpeg_path_input.text().strip() or get_default_ffmpeg_path(),
                 "single_only": self.single_only_check.isChecked(),
                 "filename_pattern": self.pattern_input.text().strip(),
@@ -1670,11 +1810,15 @@ class QtMainWindow(QMainWindow):
             self._download_worker.progress_updated.connect(self._on_progress_update)
             self._download_worker.status_updated.connect(self._on_status_update)
             self._download_worker.item_finished.connect(self._on_item_finished)
+            self._download_worker.error_occurred.connect(self._queue_error_alert)
             self._download_worker.queue_completed.connect(self._on_download_complete)
             self._download_worker.start()
         except Exception as err:
             self.log_box.appendPlainText(f"[ERROR] Could not start download: {err}")
-            QMessageBox.critical(self, "Download Error", f"Failed to start download operation:\n{err}")
+            from ...services.errors import classify_error
+            err_details = classify_error(err)
+            dlg = ErrorAlertDialog(err_details, self)
+            dlg.exec()
 
     def _cancel_download(self):
         if self._download_worker:
@@ -1714,7 +1858,40 @@ class QtMainWindow(QMainWindow):
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.log_box.appendPlainText(f"\n[FINISHED] Queue finished: {success_count} succeeded, {failure_count} failed.")
-        self._play_notification_sound()
+        if failure_count > 0:
+            self.transfer_status.status_label.setText(
+                f"Status: Finished with {failure_count} error(s). Review the alerts or log."
+            )
+        else:
+            from ...services.audio import play_success_sound
+            play_success_sound()
+
+    def _queue_error_alert(self, url, error_message):
+        """Show the original classified failure on the UI thread, one alert at a time."""
+        from ...services.errors import classify_error
+
+        details = classify_error(error_message, context=url)
+        self._pending_error_alerts.append(details)
+        self._show_next_error_alert()
+
+    def _show_next_error_alert(self):
+        if self._active_error_alert is not None:
+            return
+        if not self._pending_error_alerts:
+            return
+
+        dialog = ErrorAlertDialog(self._pending_error_alerts.pop(0), self)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self._active_error_alert = dialog
+        dialog.finished.connect(self._on_error_alert_closed)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    def _on_error_alert_closed(self, _result):
+        self._active_error_alert = None
+        QTimer.singleShot(0, self._show_next_error_alert)
 
     def _on_item_finished(self, url, succeeded, format_type):
         update_history_entry(
@@ -1727,7 +1904,12 @@ class QtMainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Stop timers, purge temporary cookies, and give active workers a safe shutdown window."""
+        self._ghost_timer.stop()
         self._preview_timer.stop()
+        for child_name in ("account_widget", "test_inbox_widget"):
+            child = getattr(self, child_name, None)
+            if child and hasattr(child, "shutdown"):
+                child.shutdown()
         if self._download_worker and self._download_worker.isRunning():
             self._download_worker.cancel()
             self._download_worker.wait(1500)
@@ -1812,12 +1994,24 @@ class QtMainWindow(QMainWindow):
             self.pattern_input.setText("%(title)s (%(id)s)")
 
     def _show_font_dialog(self):
-        dlg = FontPreferencesDialog(parent=self)
+        dlg = FontPreferencesDialog(QFont(self.font_family, self.base_font_size), self)
         if dlg.exec() == QDialog.DialogCode.Accepted:
             family, size = dlg.get_font_choice()
-            font = QFont(family, size)
-            QApplication.setFont(font)
-            self.setFont(font)
+            self.font_family = family
+            self.base_font_size = self._clamp_font_size(size)
+            self._apply_ui_theme()
+            if self._persist_settings:
+                self._save_settings()
+
+    def _show_theme_dialog(self):
+        dlg = ThemePreferencesDialog(self._config.get("theme_colors"), self)
+        if dlg.exec() == QDialog.DialogCode.Accepted:
+            name, colors = dlg.get_theme_settings()
+            self._config["theme_name"] = name
+            self._config["theme_colors"] = colors
+            self._apply_ui_theme()
+            if self._persist_settings:
+                self._save_settings()
 
     def _show_supported_platforms_dialog(self):
         dlg = SupportedPlatformsDialog(self)

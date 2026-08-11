@@ -32,13 +32,19 @@ class MailpitIntegrationTests(unittest.TestCase):
 
     def test_mailpit_test_inbox_widget_instantiation(self):
         widget = MailpitTestInboxWidget()
-        self.assertIsNotNone(widget.table)
-        self.assertEqual(widget.table.columnCount(), 4)
+        try:
+            self.assertIsNotNone(widget.table)
+            self.assertEqual(widget.table.columnCount(), 4)
+        finally:
+            widget.close()
 
     def test_main_window_has_three_tabs(self):
         window = QtMainWindow()
-        self.assertTrue(hasattr(window, "test_inbox_widget"))
-        self.assertEqual(window.main_tab_widget.count(), 3)
+        try:
+            self.assertTrue(hasattr(window, "test_inbox_widget"))
+            self.assertEqual(window.main_tab_widget.count(), 3)
+        finally:
+            window.close()
 
 
 if __name__ == "__main__":

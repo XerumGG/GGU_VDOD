@@ -8,10 +8,6 @@ Changeable key binds and Zoom-in-out in boundary (Ctrl+"+"/"-"+scroll) #Keybind
 
 Ghost interface of Loading : Ghosting on thumbnail loader (ghosting is not done properly) #Internal
 
-History of video links.. #Feat
-
-Show all supported languages #Feat
-
 Font panel for changing fonts #UI
 
 Have to  bypass DRM, private access, age checks, bot checks, or regional blocks.  #USP
@@ -28,11 +24,12 @@ In-app video streaming with advanced fine tuned controls. #Feat
 
 Standalone audio player for audio downloaded with playlist level organization. #Feat
 
+Background Action : Runs in bg silently after main screen termination #Feat
 -----------------------------------------------------------------------------------------------------
 
 Video thumbnail download : mention the source such as Youtube/x/Facebook and download the thumbnail in high quality in Thumbnail Preview section #Done
 
-Update option : Checking every library is up-to-date or not ?? #Done
+Update Library : Checking every library is up-to-date or not ?? #Done
 
 Multiple video(.mp4, .mkv, .mov and so on...) and audio(.mp3, .wav etc...) formats support and inter conversion #Done
 
@@ -42,4 +39,103 @@ Video Time-stamp Cutter (Limited) #Done
 
 Show all supported languages (ISO Subtitle Language Picker) #Done
 
+Show all supported languages #Done
+
 Advanced file, folder, path organization (Preset Templates) #Done
+
+History of video links.. #Done
+
+Simple error explanations & Natural Language Error Alert Dialogs #Done
+
+Pre-flight Disk Space Check #Done
+
+Master Error Specification Dictionary (errors.txt) #Done
+
+-----------------------------------------------------------------------------------------------------
+Reliable format selection : If user selects 2160p MP4, download that exact quality or clearly show the closest available option instead of silently falling back. #Fix
+
+Available qualities preview : After link preview, show actual video/audio qualities, codecs, containers, file size, and bitrate from yt-dlp. #Feat
+
+Download plan preview : Before download, show exactly what will happen: video quality, audio quality, merge format, conversion format, and final filename. #Feat
+
+Simple error explanations : Convert raw yt-dlp/ffmpeg errors into simple messages with a Details button for raw logs. #Fix
+
+No duplicate converted output by default : If the selected output is already correct, do not create both normal and .ggu-converted files. #Fix
+
+Download history upgrade : Show title, source, date, format, folder, status, open file, open folder, retry, and copy URL. #Feat
+
+Retry failed downloads : Add one-click retry with delay for 429, timeout, network, and temporary extractor errors. #Feat
+
+Proper queue manager : Playlist links should expand into individual queue rows with title, source, quality, progress, speed, ETA, and status. #Feat
+
+Pause, resume, cancel, retry controls : Resume partial files where platform and yt-dlp support it. #Feat
+
+Log filters : Simple, Details, and Errors-only views so normal users are not forced to read huge raw logs. #UI
+
+Smart preset buttons : Best MP4, Small File, Audio MP3, Archive Quality, Mobile Friendly, and Editing Friendly. #Feat
+
+Creator export presets : Premiere Pro, DaVinci Resolve, Unreal Engine, Blender, and FL Studio friendly codec/audio presets. #Feat
+
+Filename organizer : Templates like source/channel/title/quality/ext to keep output folders clean automatically. #Feat
+
+Duplicate detection : If the same video already exists, ask to skip, overwrite, rename, or download better quality only. #Feat
+
+Disk-space check : Warn before download if estimated size is larger than available free space. #Feat
+
+Clipboard watcher : Optional mode that detects copied video links and offers preview automatically. #Feat
+
+Batch import and export : Import links from txt/csv/clipboard and export failed links as txt. #Feat
+
+Manual update checker : Check app version, yt-dlp, ffmpeg, Python packages, and show clear update status without annoying popups. #Feat
+
+Portable mode : Keep config, logs, sessions, temp files, and downloads inside the app folder for USB/offline use. #Feat
+
+Cleaner advanced panel : Split advanced settings into Download, Authentication, Conversion, Naming, Network, and Logs sections. #UI
+
+Better status bar : Show ready/downloading state, active jobs, failed jobs, total speed, current ETA, and development build version clearly. #UI
+
+Consistent font and spacing system : Define global font sizes, margins, and spacing once so every screen has the same proportion. #UI
+
+Theme stability : Dark default, validated custom colors, Reset theme button, and safe fallback if saved theme is broken. #UI
+
+Separate download engine from UI : UI should send a job request; engine should return structured progress, status, and errors. #Refactor
+
+Structured download job model : Track URL, title, selected format, output path, status, error, progress, and final file for every item. #Refactor
+
+Central settings manager : No scattered hardcoded paths; config should control defaults, paths, quality, UI, and user preferences. #Config
+
+Structured logging : Keep the visible log simple and write full debug logs to file with no cookies, passwords, or tokens. #Fix
+
+Crash report file : On crash, save app version, OS, traceback, last action, and sanitized settings. #Fix
+
+Regression test matrix : Test YouTube single video, playlist, audio-only, MP4, unavailable quality, cookie-required content, network failure, and conversion on/off. #Test
+
+In-app format compare : Let users compare two available formats by size, codec, resolution, FPS, and estimated quality before choosing. #Feat
+
+Speed limit option : Allow optional download speed limit so downloads do not consume the whole connection. #Feat
+
+Auto shutdown after queue : Optional action after all downloads finish: do nothing, sleep PC, shutdown PC, or open folder. #Feat
+
+Chapter-aware downloads : Detect chapters and optionally split output by chapters with clean filenames. #Feat
+
+Sponsor/intro segment tools : Optional chapter/segment skipping only when metadata is publicly available and user enables it. #Feat
+
+Audio loudness normalization : Optional local audio normalization for MP3/WAV/FLAC exports. #Feat
+
+Thumbnail gallery : Save thumbnails and show downloaded thumbnail history by source and video title. #Feat
+
+Broken link checker : Validate a pasted batch before starting download and mark unavailable/private/region-blocked links early. #Feat
+
+Per-site rules : Remember preferred format, folder, filename pattern, cookies choice, and proxy for each source domain. #Feat
+
+Authorized session helper : Guide users through legal sign-in/cookies import when a site requires login; no DRM/private-access bypass. #Security
+
+Privacy cleanup center : One screen to clear cookies, temp files, logs, previews, history, and cached thumbnails. #Security
+
+Import from browser bookmarks/history : Optional tool to pick copied/saved media links from browser exports. #Feat
+
+Failed download recovery report : After a batch, generate a simple report listing failed links, reason, and recommended next action. #Feat
+
+File integrity check : Verify final file exists, has playable duration, and is not a tiny broken placeholder. #Fix
+
+Output preview after download : Show final filename, size, duration, format, and quick open/open folder buttons. #UI

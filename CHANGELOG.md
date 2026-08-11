@@ -2,6 +2,16 @@
 
 All notable changes to GGU_VDOD are documented in this file.
 
+## v0.002.004 (049) - 2026-08-11
+
+### Fixed
+
+- Route final download failures from the background worker to visible, classified Qt alerts.
+- Preserve the real yt-dlp error in each alert instead of replacing it with a generic queue summary.
+- Use distinct sound patterns for error categories, including rate limits, authentication, network, disk, and format failures.
+- Recognize Chrome and Edge cookie-database copy failures as a clear browser-cookie issue.
+- Correct the download-range availability check used by timestamp trimming.
+
 ## v0.001.045 - 2026-08-10
 
 ### Added

@@ -2,7 +2,7 @@
 
 High-performance desktop media downloader and local converter powered by PySide6, yt-dlp, curl_cffi, and FFmpeg; created by **XerumGG** (**GG Uranium**).
 
-> **v0.001.045:** Active PySide6 desktop application with Cloudflare anti-bot impersonation, DPAPI encrypted account session management, 18+ age verification detection, Mailpit local test inbox integration, 24-hour automatic update check, and permanent FFmpeg/FFprobe directory integration.
+> **Development build v0.002.004 (049):** Active PySide6 desktop application with classified download-error alerts, distinct error sounds, DPAPI encrypted account session management, 18+ age verification detection, Mailpit local test inbox integration, and permanent FFmpeg/FFprobe directory integration.
 
 ## Key Capabilities & Features
 

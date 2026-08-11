@@ -24,6 +24,7 @@ from ...core.constants import (
     SCROLL_SPEED_MAX, SCROLL_SPEED_MIN, UPDATE_COMPONENTS, clamp_scroll_speed,
 )
 from ...core.version import DEVELOPMENT_BUILD_LABEL, PACKAGE_VERSION
+from .theme import THEME_COLOR_FIELDS, THEME_PRESETS, is_valid_theme_color, normalize_theme, theme_name
 
 try:
     import yt_dlp
@@ -1040,6 +1041,117 @@ class LibraryDialog(QDialog):
                 QMessageBox.warning(self, "File Missing", f"The selected file does not exist:\n{path}")
 
 
+class ErrorAlertDialog(QDialog):
+    """Interactive, user-friendly Error Alert Dialog with natural language explanations and actions."""
+
+    def __init__(self, error_details, parent=None):
+        super().__init__(parent)
+        from ...services.errors import ErrorDetails
+        self.details: ErrorDetails = error_details
+        self.setWindowTitle(f"Alert: {self.details.title}")
+        self.resize(640, 460)
+        self.setMinimumSize(540, 360)
+
+        from ...services.audio import play_error_sound
+        play_error_sound(self.details.sound_type, self.details.code)
+
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(14)
+
+        # Header Title Banner
+        hdr_frame = QFrame()
+        hdr_frame.setObjectName("panel")
+
+        # Color accent based on severity
+        border_color = "#e5484d" if self.details.severity == "CRITICAL" else ("#f5a623" if self.details.severity == "WARNING" else "#3b82f6")
+        hdr_frame.setStyleSheet(f"QFrame#panel {{ background: #141414; border: 1px solid {border_color}; border-radius: 8px; }}")
+
+        hdr_layout = QHBoxLayout(hdr_frame)
+        hdr_layout.setContentsMargins(16, 12, 16, 12)
+
+        hdr_info = QVBoxLayout()
+        title_lbl = QLabel(self.details.title, self)
+        title_lbl.setStyleSheet(f"font-size: 18px; font-weight: 700; color: {border_color};")
+        code_lbl = QLabel(f"Category: {self.details.code}  |  Severity: {self.details.severity}", self)
+        code_lbl.setObjectName("muted")
+        hdr_info.addWidget(title_lbl)
+        hdr_info.addWidget(code_lbl)
+        hdr_layout.addLayout(hdr_info, 1)
+
+        layout.addWidget(hdr_frame)
+
+        # Simple Message & Recommended Solution Box
+        msg_box = QTextEdit(self)
+        msg_box.setReadOnly(True)
+        html_content = f"""
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; color: #e0e0e0;">
+            <h4 style="margin-top: 0; color: #ffffff;">What Happened?</h4>
+            <p style="font-size: 14px; color: #ffffff;">{self.details.simple_message}</p>
+
+            <h4 style="color: #ffffff; margin-top: 14px;">Recommended Fix Action</h4>
+            <p style="font-size: 13px; color: #75f086; font-weight: 600;">{self.details.recommendation}</p>
+        </div>
+        """
+        msg_box.setHtml(html_content)
+        layout.addWidget(msg_box, 1)
+
+        # Collapsible Raw Log Section
+        self.raw_log_edit = QPlainTextEdit(self)
+        self.raw_log_edit.setPlainText(self.details.raw_log)
+        self.raw_log_edit.setReadOnly(True)
+        self.raw_log_edit.setVisible(False)
+        layout.addWidget(self.raw_log_edit, 1)
+
+        # Button Bar
+        btn_row = QHBoxLayout()
+        self.toggle_log_btn = QPushButton("Show Technical Log [+]")
+        self.toggle_log_btn.clicked.connect(self._toggle_raw_log)
+        btn_row.addWidget(self.toggle_log_btn)
+
+        copy_btn = QPushButton("Copy Technical Details")
+        copy_btn.clicked.connect(self._copy_details)
+        btn_row.addWidget(copy_btn)
+
+        btn_row.addStretch(1)
+
+        # Contextual Action Button if available
+        if self.details.action_type == "retry":
+            action_btn = QPushButton("Retry Download")
+            action_btn.setObjectName("primary")
+            action_btn.clicked.connect(lambda: self.done(2))  # 2 = Retry requested
+            btn_row.addWidget(action_btn)
+        elif self.details.action_type == "change_dir":
+            action_btn = QPushButton("Change Save Folder")
+            action_btn.setObjectName("primary")
+            action_btn.clicked.connect(lambda: self.done(3))  # 3 = Change Dir requested
+            btn_row.addWidget(action_btn)
+        elif self.details.action_type == "auth_setup":
+            action_btn = QPushButton("Setup Verification / Auth")
+            action_btn.setObjectName("primary")
+            action_btn.clicked.connect(lambda: self.done(4))  # 4 = Auth Setup requested
+            btn_row.addWidget(action_btn)
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        btn_row.addWidget(close_btn)
+
+        layout.addLayout(btn_row)
+
+    def _toggle_raw_log(self):
+        show = not self.raw_log_edit.isVisible()
+        self.raw_log_edit.setVisible(show)
+        self.toggle_log_btn.setText("Hide Technical Log [-]" if show else "Show Technical Log [+#]")
+
+    def _copy_details(self):
+        diag_text = f"=== GGU_VDOD ERROR DIAGNOSTIC REPORT ===\nTitle: {self.details.title}\nCode: {self.details.code}\nSeverity: {self.details.severity}\nMessage: {self.details.simple_message}\nFix Action: {self.details.recommendation}\n\n--- RAW TECHNICAL LOG ---\n{self.details.raw_log}"
+        QApplication.clipboard().setText(diag_text)
+        QMessageBox.information(self, "Copied", "Technical diagnostic details copied to clipboard.")
+
+
 COMMON_SUBTITLE_LANGUAGES = [
     ("en", "English", "Global / Primary"),
     ("es", "Spanish (Español)", "International"),
@@ -1177,8 +1289,8 @@ class FontPreferencesDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Preferences - UI Font Panel")
         self.resize(480, 260)
-        self.font_family = "Segoe UI"
-        self.font_size = 10
+        self.font_family = current_font.family() if current_font and current_font.family() else "Segoe UI"
+        self.font_size = current_font.pointSize() if current_font and current_font.pointSize() > 0 else 10
         self._build_ui()
 
     def _build_ui(self):
@@ -1189,11 +1301,14 @@ class FontPreferencesDialog(QDialog):
 
         self.family_combo = QComboBox()
         self.family_combo.addItems(["Segoe UI", "Roboto", "Inter", "Arial", "Consolas", "Segoe UI Variable Display"])
+        if self.family_combo.findText(self.font_family) < 0:
+            self.family_combo.addItem(self.font_family)
+        self.family_combo.setCurrentText(self.font_family)
         form.addRow(QLabel("Font Family:"), self.family_combo)
 
         self.size_spin = QSpinBox()
         self.size_spin.setRange(8, 18)
-        self.size_spin.setValue(10)
+        self.size_spin.setValue(max(8, min(18, self.font_size)))
         form.addRow(QLabel("Base Size (pt):"), self.size_spin)
 
         layout.addLayout(form)
@@ -1212,6 +1327,133 @@ class FontPreferencesDialog(QDialog):
 
     def get_font_choice(self):
         return self.family_combo.currentText(), self.size_spin.value()
+
+
+class ThemePreferencesDialog(QDialog):
+    """Edit a safe, persistent Qt color theme without allowing malformed colors."""
+
+    def __init__(self, current_theme=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Preferences - Themes and Colors")
+        self.resize(620, 680)
+        self.setMinimumSize(520, 500)
+        self._draft = normalize_theme(current_theme)
+        self._color_inputs = {}
+        self._building = False
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 18, 20, 18)
+        layout.setSpacing(12)
+
+        title = QLabel("Themes and colors")
+        title.setStyleSheet("font-weight: 700;")
+        layout.addWidget(title)
+
+        summary = QLabel(
+            "Choose a preset or edit individual colors. Invalid values are rejected, and Reset restores the pitch-black Dark theme."
+        )
+        summary.setObjectName("muted")
+        summary.setWordWrap(True)
+        layout.addWidget(summary)
+
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(QLabel("Theme:"))
+        self.preset_combo = QComboBox()
+        self.preset_combo.addItems([*THEME_PRESETS.keys(), "Custom"])
+        self.preset_combo.setCurrentText(theme_name(self._draft))
+        self.preset_combo.currentTextChanged.connect(self._load_preset)
+        preset_row.addWidget(self.preset_combo, 1)
+        reset_btn = QPushButton("Reset theme")
+        reset_btn.clicked.connect(self._reset_theme)
+        preset_row.addWidget(reset_btn)
+        layout.addLayout(preset_row)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        form_widget = QWidget()
+        form = QFormLayout(form_widget)
+        form.setContentsMargins(0, 0, 8, 0)
+        form.setHorizontalSpacing(12)
+        form.setVerticalSpacing(8)
+
+        for key, label in THEME_COLOR_FIELDS:
+            row = QWidget()
+            row_layout = QHBoxLayout(row)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(8)
+            entry = QLineEdit(self._draft[key])
+            entry.setMaxLength(7)
+            entry.setPlaceholderText("#RRGGBB")
+            entry.editingFinished.connect(self._mark_custom)
+            choose = QPushButton("Choose")
+            choose.clicked.connect(lambda _checked=False, field=key: self._choose_color(field))
+            row_layout.addWidget(entry, 1)
+            row_layout.addWidget(choose)
+            form.addRow(QLabel(f"{label}:"), row)
+            self._color_inputs[key] = entry
+
+        scroll.setWidget(form_widget)
+        layout.addWidget(scroll, 1)
+
+        button_row = QHBoxLayout()
+        button_row.addStretch(1)
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        apply_btn = QPushButton("Apply and save")
+        apply_btn.setObjectName("primary")
+        apply_btn.clicked.connect(self._accept_theme)
+        button_row.addWidget(cancel_btn)
+        button_row.addWidget(apply_btn)
+        layout.addLayout(button_row)
+
+    def _load_preset(self, preset_name):
+        if self._building or preset_name not in THEME_PRESETS:
+            return
+        self._draft = normalize_theme(THEME_PRESETS[preset_name])
+        self._set_inputs(self._draft)
+
+    def _set_inputs(self, colors):
+        self._building = True
+        try:
+            for key, _label in THEME_COLOR_FIELDS:
+                self._color_inputs[key].setText(colors[key])
+        finally:
+            self._building = False
+
+    def _mark_custom(self):
+        if not self._building:
+            self.preset_combo.setCurrentText("Custom")
+
+    def _choose_color(self, key):
+        current = self._color_inputs[key].text().strip()
+        chosen = QColorDialog.getColor(QColor(current), self, f"Choose {key.replace('_', ' ')}")
+        if chosen.isValid():
+            self._color_inputs[key].setText(chosen.name().lower())
+            self._mark_custom()
+
+    def _reset_theme(self):
+        self._draft = normalize_theme(THEME_PRESETS["Dark"])
+        self._set_inputs(self._draft)
+        self.preset_combo.setCurrentText("Dark")
+
+    def _accept_theme(self):
+        colors = {}
+        for key, label in THEME_COLOR_FIELDS:
+            value = self._color_inputs[key].text().strip()
+            if not is_valid_theme_color(value):
+                QMessageBox.warning(self, "Invalid color", f"{label} must be a color in the form #RRGGBB.")
+                self._color_inputs[key].setFocus()
+                return
+            colors[key] = value.lower()
+        self._draft = normalize_theme(colors)
+        self.accept()
+
+    def get_theme_settings(self):
+        """Return the selected name and a complete validated theme dictionary."""
+        return theme_name(self._draft), dict(self._draft)
 
 
 class SignInPromptDialog(QDialog):

@@ -43,6 +43,16 @@ class MailpitTestInboxWidget(QWidget):
         self._poll_timer.timeout.connect(self.trigger_poll)
         self._poll_timer.start(5000)
 
+    def shutdown(self):
+        if hasattr(self, "_poll_timer"):
+            self._poll_timer.stop()
+        if self._active_poll_thread and self._active_poll_thread.isRunning():
+            self._active_poll_thread.wait(1000)
+
+    def closeEvent(self, event):
+        self.shutdown()
+        super().closeEvent(event)
+
     def _init_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
