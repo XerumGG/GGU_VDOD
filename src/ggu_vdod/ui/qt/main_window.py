@@ -473,19 +473,17 @@ class QtDownloadWorker(QThread):
         end_sec = parse_time_str_to_seconds(end_time_str)
         if start_sec is not None or end_sec is not None:
             s_val = start_sec if start_sec is not None else 0.0
-            e_val = end_sec if end_sec is not None else float("inf")
-            try:
-                if yt_dlp is not None and hasattr(yt_dlp, "utils") and hasattr(yt_dlp.utils, "download_range_func"):
-                    ydl_opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [(s_val, e_val)])
-                    ydl_opts["external_downloader_args"] = {
-                        "ffmpeg_i": [
-                            "-user_agent",
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                        ]
-                    }
-                    self.log_emitted.emit(f"[INFO] Video Timestamp Cutter active: Clipping range [{start_time_str or '00:00'} -> {end_time_str or 'END'}]")
-            except Exception as err:
-                self.log_emitted.emit(f"[WARNING] Failed to set download range cutter: {err}")
+            e_val = end_sec if end_sec is not None else None
+
+            ffmpeg_trim_args = []
+            if s_val > 0:
+                ffmpeg_trim_args.extend(["-ss", str(s_val)])
+            if e_val is not None:
+                ffmpeg_trim_args.extend(["-to", str(e_val)])
+
+            if ffmpeg_trim_args:
+                ydl_opts["postprocessor_args"] = {"ffmpeg": ffmpeg_trim_args}
+                self.log_emitted.emit(f"[INFO] Video Timestamp Cutter active: Clipping range [{start_time_str or '00:00'} -> {end_time_str or 'END'}]")
 
         # Format & Quality selection
         exact_format_id = settings.get("exact_format_id")
