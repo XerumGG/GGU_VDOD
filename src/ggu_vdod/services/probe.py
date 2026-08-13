@@ -19,24 +19,42 @@ def get_ffprobe_binary_path() -> Optional[str]:
 
 
 def parse_time_str_to_seconds(time_str: str) -> Optional[float]:
-    """Parse time string like '90', '1:30', '01:30', or '00:01:30' into float seconds."""
+    """Parse time string like '10s', '180s', '90', '1:30', '01:30', '1m30s', or '00:01:30' into float seconds."""
     if not time_str or not isinstance(time_str, str):
         return None
-    time_str = time_str.strip()
-    if not time_str:
+    s = time_str.strip().lower()
+    if not s:
         return None
+
     try:
-        parts = time_str.split(":")
+        # 1. Handle h/m/s pattern like '1h20m15s', '1m30s', '10s', '180s', '2.5m'
+        if re.search(r"[hms]", s) and ":" not in s:
+            h_match = re.search(r"(\d+(?:\.\d+)?)\s*h", s)
+            m_match = re.search(r"(\d+(?:\.\d+)?)\s*m", s)
+            s_match = re.search(r"(\d+(?:\.\d+)?)\s*s", s)
+            if h_match or m_match or s_match:
+                hrs = float(h_match.group(1)) if h_match else 0.0
+                mins = float(m_match.group(1)) if m_match else 0.0
+                secs = float(s_match.group(1)) if s_match else 0.0
+                return hrs * 3600.0 + mins * 60.0 + secs
+
+        # 2. Clean off trailing 's', 'sec', 'secs', 'second', 'seconds'
+        clean_s = re.sub(r"\s*(?:sec|secs|seconds|second|s)$", "", s).strip()
+
+        # 3. Handle colon notation HH:MM:SS, MM:SS, or simple integer/float
+        parts = clean_s.split(":")
         if len(parts) == 1:
-            return float(parts[0])
+            val = float(parts[0])
+            return val if val >= 0 else None
         elif len(parts) == 2:
             mins, secs = float(parts[0]), float(parts[1])
-            return mins * 60 + secs
+            return mins * 60.0 + secs
         elif len(parts) == 3:
             hrs, mins, secs = float(parts[0]), float(parts[1]), float(parts[2])
-            return hrs * 3600 + mins * 60 + secs
+            return hrs * 3600.0 + mins * 60.0 + secs
     except Exception:
         pass
+
     return None
 
 

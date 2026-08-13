@@ -213,7 +213,10 @@ class QtYTDLPLogger:
             self._emit(f"[STATUS] {clean_msg}")
 
     def warning(self, message):
-        clean_msg = re.sub(r"^\[[^\]]+\]\s*", "", str(message or "").strip())
+        text = str(message or "").strip()
+        if "No supported JavaScript runtime could be found" in text or "JavaScript runtime has been deprecated" in text:
+            return
+        clean_msg = re.sub(r"^\[[^\]]+\]\s*", "", text)
         self._emit(f"[WARNING] {clean_msg}")
 
     def error(self, message):
@@ -362,7 +365,6 @@ class QtDownloadWorker(QThread):
             "quiet": True,
             "no_warnings": False,
             "age_limit": 99,
-            "extractor_args": {"generic": ["impersonate"]},
             "logger": QtYTDLPLogger(self.log_emitted.emit),
             "retries": MAX_RETRIES,
             "fragment_retries": MAX_RETRIES,
@@ -376,8 +378,25 @@ class QtDownloadWorker(QThread):
         }
 
         try:
+            import shutil
+            js_runtimes = {}
+            for rt in ["node", "deno", "bun", "qjs"]:
+                rt_path = shutil.which(rt)
+                if rt_path:
+                    key = "quickjs" if rt == "qjs" else rt
+                    js_runtimes[key] = {"path": rt_path}
+            if js_runtimes:
+                ydl_opts["js_runtimes"] = js_runtimes
+        except Exception:
+            pass
+
+        try:
             from yt_dlp.networking.impersonate import ImpersonateTarget
-            ydl_opts["impersonate"] = ImpersonateTarget.from_str("chrome")
+            target = ImpersonateTarget.from_str("chrome")
+            from yt_dlp.networking._curlcffi import CurlCffiRH
+            if CurlCffiRH.is_supported_target(target):
+                ydl_opts["impersonate"] = target
+                ydl_opts["extractor_args"] = {"generic": ["impersonate"]}
         except Exception:
             pass
 
@@ -401,13 +420,14 @@ class QtDownloadWorker(QThread):
 
         ffmpeg_dir = get_default_ffmpeg_dir()
         ffmpeg_path = settings.get("ffmpeg_path") or get_default_ffmpeg_path()
-        if os.path.isdir(ffmpeg_dir) and os.path.exists(os.path.join(ffmpeg_dir, "ffmpeg.exe")):
-            ydl_opts["ffmpeg_location"] = ffmpeg_dir
-            ffprobe_status = "(ffmpeg.exe & ffprobe.exe)" if os.path.exists(os.path.join(ffmpeg_dir, "ffprobe.exe")) else "(ffmpeg.exe)"
-            self.log_emitted.emit(f"[INFO] Using FFmpeg directory: {ffmpeg_dir} {ffprobe_status}")
-        elif ffmpeg_path and os.path.exists(ffmpeg_path):
-            ydl_opts["ffmpeg_location"] = ffmpeg_path
-            self.log_emitted.emit(f"[INFO] Using FFmpeg binary: {ffmpeg_path}")
+        target_ffmpeg_dir = ffmpeg_dir if (os.path.isdir(ffmpeg_dir) and os.path.exists(os.path.join(ffmpeg_dir, "ffmpeg.exe"))) else (os.path.dirname(ffmpeg_path) if (ffmpeg_path and os.path.exists(ffmpeg_path)) else None)
+
+        if target_ffmpeg_dir:
+            if target_ffmpeg_dir not in os.environ.get("PATH", ""):
+                os.environ["PATH"] = target_ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
+            ydl_opts["ffmpeg_location"] = target_ffmpeg_dir
+            ffprobe_status = "(ffmpeg.exe & ffprobe.exe)" if os.path.exists(os.path.join(target_ffmpeg_dir, "ffprobe.exe")) else "(ffmpeg.exe)"
+            self.log_emitted.emit(f"[INFO] Using FFmpeg directory: {target_ffmpeg_dir} {ffprobe_status}")
         else:
             self.log_emitted.emit("[WARNING] FFmpeg binary not found! Video merging and container conversion may be limited.")
 
@@ -457,7 +477,12 @@ class QtDownloadWorker(QThread):
             try:
                 if yt_dlp is not None and hasattr(yt_dlp, "utils") and hasattr(yt_dlp.utils, "download_range_func"):
                     ydl_opts["download_ranges"] = yt_dlp.utils.download_range_func(None, [(s_val, e_val)])
-                    ydl_opts["force_keyframes_at_cuts"] = True
+                    ydl_opts["external_downloader_args"] = {
+                        "ffmpeg_i": [
+                            "-user_agent",
+                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+                        ]
+                    }
                     self.log_emitted.emit(f"[INFO] Video Timestamp Cutter active: Clipping range [{start_time_str or '00:00'} -> {end_time_str or 'END'}]")
             except Exception as err:
                 self.log_emitted.emit(f"[WARNING] Failed to set download range cutter: {err}")

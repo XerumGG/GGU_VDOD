@@ -2,6 +2,23 @@
 
 All notable changes to GGU_VDOD are documented in this file.
 
+## v0.002.006 (051) - 2026-08-13
+
+### Fixed
+- **Video Timestamp Range Cutter**: Fixed time string parser (`parse_time_str_to_seconds`) to handle units like `10s`, `180s`, `1m30s`, `2.5m`, `00:01:30`, and plain numbers.
+- **FFmpeg Header Injection for Section Downloads**: Added `external_downloader_args` (`-headers "User-Agent: ...\r\n"`) to prevent YouTube CDN 403 Forbidden errors or code 3436169992 exit crashes when clipping range streams.
+- **FFmpeg PATH Environment Resolution**: Prepended permanent FFmpeg directory (`D:\GGU_VDOD\ffmpeg`) to `os.environ["PATH"]` so `yt-dlp`'s `FFmpegFD` section downloader resolves `ffmpeg.exe` instantly.
+- **TLS Impersonation Compatibility**: Replaced `curl_cffi` with version `0.15.0` to preserve `yt-dlp` compatibility, and added safe fallback checks for impersonation targets.
+- **JS Runtime Warning Silencing**: Filtered out `No supported JavaScript runtime could be found` deprecation warnings from logger box and added automatic discovery for system `node`, `deno`, `bun`, and `quickjs` runtimes.
+
+## v0.002.005 (050) - 2026-08-12
+
+### Added
+
+- Added an in-app button that updates available Python dependencies through the project virtual environment.
+- Added a visible rebuild reminder after dependency updates so the packaged EXE stays in sync.
+- Applied an application-wide popup policy: custom Qt dialogs now use normal Windows minimize, maximize/restore, resize, and close controls.
+
 ## v0.002.004 (049) - 2026-08-11
 
 ### Fixed

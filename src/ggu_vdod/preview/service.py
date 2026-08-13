@@ -31,12 +31,15 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
         "socket_timeout": 12,
         "extractor_retries": 1,
         "age_limit": 99,
-        "extractor_args": {"generic": ["impersonate"]},
     }
 
     try:
         from yt_dlp.networking.impersonate import ImpersonateTarget
-        options["impersonate"] = ImpersonateTarget.from_str("chrome")
+        target = ImpersonateTarget.from_str("chrome")
+        from yt_dlp.networking._curlcffi import CurlCffiRH
+        if CurlCffiRH.is_supported_target(target):
+            options["impersonate"] = target
+            options["extractor_args"] = {"generic": ["impersonate"]}
     except Exception:
         pass
 

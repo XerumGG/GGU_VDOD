@@ -3,6 +3,7 @@
 import importlib.metadata
 import json
 import os
+from pathlib import Path
 import re
 import subprocess
 import sys
@@ -18,7 +19,7 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from ...config.paths import get_default_output_dir
+from ...config.paths import get_app_dir, get_default_output_dir
 from ...core.constants import (
     APP_NAME, DEFAULT_KEY_BINDINGS, KEY_BINDING_CHOICES, SCROLL_SPEED_DEFAULT,
     SCROLL_SPEED_MAX, SCROLL_SPEED_MIN, UPDATE_COMPONENTS, clamp_scroll_speed,
@@ -295,6 +296,75 @@ class UpdateCheckWorker(QThread):
         return tuple(int(part) for part in re.findall(r"\d+", version or "0"))
 
 
+UPDATEABLE_PACKAGES = {
+    "yt-dlp": "yt-dlp",
+    "curl_cffi": "curl_cffi",
+    "Pillow": "Pillow",
+    "PySide6": "PySide6",
+    "PyInstaller": "PyInstaller",
+}
+
+
+def find_project_python() -> str | None:
+    """Find the project virtual-environment interpreter used for package updates."""
+    candidates = []
+    if not getattr(sys, "frozen", False):
+        candidates.append(sys.executable)
+
+    app_dir = Path(get_app_dir()).resolve()
+    for folder in (app_dir, *app_dir.parents):
+        candidates.append(str(folder / "venv" / "Scripts" / "python.exe"))
+
+    for candidate in candidates:
+        if candidate and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+class PackageUpdateWorker(QThread):
+    """Update checked Python packages without blocking the Qt interface."""
+
+    package_completed = Signal(str, bool, str)
+    all_completed = Signal(int, int)
+
+    def __init__(self, packages, parent=None):
+        super().__init__(parent)
+        self.packages = list(packages)
+
+    def run(self):
+        python_executable = find_project_python()
+        if not python_executable:
+            message = "Could not find the project's venv\\Scripts\\python.exe interpreter."
+            for package in self.packages:
+                self.package_completed.emit(package, False, message)
+            self.all_completed.emit(0, len(self.packages))
+            return
+
+        succeeded = 0
+        failed = 0
+        creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
+        for package in self.packages:
+            try:
+                result = subprocess.run(
+                    [python_executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", package],
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                    creationflags=creation_flags,
+                )
+                output = (result.stdout or result.stderr or "Package installer returned no details.").strip()
+                if result.returncode == 0:
+                    succeeded += 1
+                    self.package_completed.emit(package, True, output)
+                else:
+                    failed += 1
+                    self.package_completed.emit(package, False, output)
+            except Exception as error:
+                failed += 1
+                self.package_completed.emit(package, False, str(error))
+        self.all_completed.emit(succeeded, failed)
+
+
 class UpdateCheckDialog(QDialog):
     """Dialog showing runtime component versions and update check."""
 
@@ -302,6 +372,10 @@ class UpdateCheckDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Check for Updates & Dependencies")
         self.resize(600, 400)
+        self.setMinimumSize(540, 360)
+        self._results = []
+        self._row_for_component = {}
+        self._update_worker = None
 
         self._build_ui()
         self._check_versions()
@@ -315,6 +389,13 @@ class UpdateCheckDialog(QDialog):
         title.setStyleSheet("font-size: 17px; font-weight: bold;")
         layout.addWidget(title)
 
+        self.update_note = QLabel(
+            "Updates apply to this project's Python environment. Rebuild GGU_VDOD after updating to include them in the EXE."
+        )
+        self.update_note.setObjectName("muted")
+        self.update_note.setWordWrap(True)
+        layout.addWidget(self.update_note)
+
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["Component", "Type", "Installed", "Latest", "Status"])
@@ -322,6 +403,16 @@ class UpdateCheckDialog(QDialog):
         layout.addWidget(self.table, 1)
 
         btn_row = QHBoxLayout()
+        self.update_btn = QPushButton("Update available components")
+        self.update_btn.setObjectName("primary")
+        self.update_btn.setEnabled(False)
+        self.update_btn.clicked.connect(self._update_available_components)
+        btn_row.addWidget(self.update_btn)
+
+        self.refresh_btn = QPushButton("Check again")
+        self.refresh_btn.clicked.connect(self._check_versions)
+        btn_row.addWidget(self.refresh_btn)
+
         btn_row.addStretch(1)
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.close)
@@ -329,22 +420,90 @@ class UpdateCheckDialog(QDialog):
         layout.addLayout(btn_row)
 
     def _check_versions(self):
+        if hasattr(self, "worker") and self.worker.isRunning():
+            return
+        self.refresh_btn.setEnabled(False)
         self.worker = UpdateCheckWorker(self)
         self.worker.results_ready.connect(self._populate_results)
         self.worker.start()
 
     def _populate_results(self, results):
+        self._results = list(results)
+        self._row_for_component = {}
         self.table.setRowCount(len(results))
         for row, (name, comp_type, installed, latest, status) in enumerate(results):
+            self._row_for_component[name] = row
             self.table.setItem(row, 0, QTableWidgetItem(name))
             self.table.setItem(row, 1, QTableWidgetItem(comp_type))
             self.table.setItem(row, 2, QTableWidgetItem(installed))
             self.table.setItem(row, 3, QTableWidgetItem(latest))
             self.table.setItem(row, 4, QTableWidgetItem(status))
+        available = [name for name, _kind, _installed, _latest, status in results if status == "Update available" and name in UPDATEABLE_PACKAGES]
+        self.update_btn.setEnabled(bool(available))
+        self.update_btn.setText(
+            f"Update {len(available)} available component(s)" if available else "Everything is up to date"
+        )
+        self.refresh_btn.setEnabled(True)
+
+    def _update_available_components(self):
+        packages = [
+            UPDATEABLE_PACKAGES[name]
+            for name, _kind, _installed, _latest, status in self._results
+            if status == "Update available" and name in UPDATEABLE_PACKAGES
+        ]
+        if not packages:
+            return
+
+        answer = QMessageBox.question(
+            self,
+            "Update components",
+            "Update the available Python components now?\n\n"
+            "The app will stay open. Rebuild GGU_VDOD afterwards so the updated libraries are bundled into the EXE.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        self.update_btn.setEnabled(False)
+        self.refresh_btn.setEnabled(False)
+        for name, _kind, _installed, _latest, status in self._results:
+            if status == "Update available" and name in UPDATEABLE_PACKAGES:
+                row = self._row_for_component.get(name)
+                if row is not None:
+                    self.table.setItem(row, 4, QTableWidgetItem("Updating..."))
+
+        self._update_worker = PackageUpdateWorker(packages, self)
+        self._update_worker.package_completed.connect(self._on_package_updated)
+        self._update_worker.all_completed.connect(self._on_updates_completed)
+        self._update_worker.start()
+
+    def _on_package_updated(self, package, succeeded, output):
+        component = next((name for name, pip_name in UPDATEABLE_PACKAGES.items() if pip_name == package), package)
+        row = self._row_for_component.get(component)
+        if row is not None:
+            self.table.setItem(row, 4, QTableWidgetItem("Updated - rebuild required" if succeeded else "Update failed"))
+        if output:
+            self.update_note.setText(
+                f"{component}: {'updated successfully' if succeeded else 'update failed'}. "
+                f"{output.splitlines()[-1]}"
+            )
+
+    def _on_updates_completed(self, succeeded, failed):
+        self.refresh_btn.setEnabled(True)
+        self.update_btn.setEnabled(False)
+        QMessageBox.information(
+            self,
+            "Component updates finished",
+            f"Updated: {succeeded}\nFailed: {failed}\n\nRebuild GGU_VDOD to bundle successful updates into the EXE.",
+        )
+        self._check_versions()
 
     def closeEvent(self, event):
         if hasattr(self, "worker") and self.worker.isRunning():
             self.worker.wait(1000)
+        if self._update_worker and self._update_worker.isRunning():
+            self._update_worker.wait(1000)
         super().closeEvent(event)
 
 

@@ -2,11 +2,37 @@
 
 import sys
 
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtWidgets import QApplication, QDialog
 
 from .main_window import QtMainWindow
 from .theme import apply_dark_theme
 from .tooltip import install_animated_tooltips
+
+
+class PopupWindowPolicy(QObject):
+    """Give every custom Qt popup native Windows window controls and resizing."""
+
+    def eventFilter(self, watched, event):
+        if isinstance(watched, QDialog) and event.type() == QEvent.Type.Polish:
+            flags = watched.windowFlags()
+            watched.setWindowFlags(
+                flags
+                | Qt.WindowType.WindowSystemMenuHint
+                | Qt.WindowType.WindowMinimizeButtonHint
+                | Qt.WindowType.WindowMaximizeButtonHint
+                | Qt.WindowType.WindowCloseButtonHint
+            )
+            watched.setSizeGripEnabled(True)
+        return super().eventFilter(watched, event)
+
+
+def install_popup_window_policy(application):
+    """Install the dialog policy once so future popups receive normal title bars."""
+    if application.property("ggu_popup_window_policy") is None:
+        policy = PopupWindowPolicy(application)
+        application.installEventFilter(policy)
+        application.setProperty("ggu_popup_window_policy", policy)
 
 
 def create_qt_application(arguments=None):
@@ -19,6 +45,7 @@ def create_qt_application(arguments=None):
     application.setApplicationName("GGU_VDOD")
     apply_dark_theme(application)
     install_animated_tooltips(application)
+    install_popup_window_policy(application)
     return application
 
 
