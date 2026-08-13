@@ -281,7 +281,11 @@ class UpdateCheckWorker(QThread):
                     )
                     with urllib.request.urlopen(request, timeout=8) as response:
                         latest = str(json.load(response)["info"]["version"])
-                    status = "Update available" if self._version_key(installed) < self._version_key(latest) else "Up to date"
+                    if name == "curl_cffi" and self._version_key(latest) > (0, 15, 0):
+                        latest = "0.15.0 (Max for yt-dlp)"
+                        status = "Up to date"
+                    else:
+                        status = "Update available" if self._version_key(installed) < self._version_key(latest) else "Up to date"
                 except Exception:
                     status = "Up to date"
             elif installed != "Not installed":
@@ -345,8 +349,10 @@ class PackageUpdateWorker(QThread):
         creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0
         for package in self.packages:
             try:
+                target_pkg = "curl_cffi==0.15.0" if package == "curl_cffi" else package
+                cmd = [python_executable, "-m", "pip", "install", "--upgrade" if package != "curl_cffi" else "--force-reinstall", "--disable-pip-version-check", target_pkg]
                 result = subprocess.run(
-                    [python_executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", package],
+                    cmd,
                     capture_output=True,
                     text=True,
                     timeout=180,
