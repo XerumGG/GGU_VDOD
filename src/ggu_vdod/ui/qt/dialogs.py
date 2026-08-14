@@ -144,7 +144,9 @@ class SupportedPlatformsDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Supported Platforms & Extractors")
+        from ...services.i18n import t
+
+        self.setWindowTitle(t("menu.platforms", "Supported Platforms & Extractors"))
         self.resize(750, 550)
         self.setMinimumSize(600, 400)
         self.all_extractors = []
@@ -153,21 +155,26 @@ class SupportedPlatformsDialog(QDialog):
         self._start_loading()
 
     def _build_ui(self):
+        from ...services.i18n import t
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 16, 18, 16)
         layout.setSpacing(12)
 
         header = QHBoxLayout()
-        header.addWidget(QLabel("Search Platform / Extractor:"))
+        header.addWidget(QLabel(t("platforms.search_lbl", "Search Platform / Extractor:")))
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Filter platforms (e.g. youtube, vimeo, twitter, twitch)...")
+        self.search_input.setPlaceholderText(t("platforms.search_placeholder", "Filter platforms (e.g. youtube, vimeo, twitter, twitch)..."))
         self.search_input.textChanged.connect(self._filter_table)
         header.addWidget(self.search_input, 1)
         layout.addLayout(header)
 
         self.table = QTableWidget()
         self.table.setColumnCount(2)
-        self.table.setHorizontalHeaderLabels(["Extractor / Platform Name", "Description"])
+        self.table.setHorizontalHeaderLabels([
+            t("platforms.table_name", "Extractor / Platform Name"),
+            t("platforms.table_desc", "Description"),
+        ])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.setColumnWidth(0, 240)
@@ -176,11 +183,11 @@ class SupportedPlatformsDialog(QDialog):
         layout.addWidget(self.table, 1)
 
         btn_row = QHBoxLayout()
-        self.count_label = QLabel("Loading extractors...")
+        self.count_label = QLabel(t("platforms.loading", "Loading extractors..."))
         self.count_label.setObjectName("muted")
         btn_row.addWidget(self.count_label)
         btn_row.addStretch(1)
-        close_btn = QPushButton("Close")
+        close_btn = QPushButton(t("dialogs.close", "Close"))
         close_btn.clicked.connect(self.close)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
@@ -730,7 +737,9 @@ class AboutDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle(f"About {APP_NAME}")
+        from ...services.i18n import t
+
+        self.setWindowTitle(t("menu.about_app", "About GGU_VDOD"))
         self.resize(650, 520)
 
         layout = QVBoxLayout(self)
@@ -755,10 +764,10 @@ class AboutDialog(QDialog):
         text_edit.setReadOnly(True)
         html = f"""
         <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; color: #d0d0d0;">
-            <h3 style="color: #ffffff; margin-top: 0;">Application Summary</h3>
-            <p><b>{APP_NAME}</b> is a high-performance desktop media downloader, batch queue processor, and local converter designed for video/audio streams, HLS/DASH fragments, and playlists.</p>
+            <h3 style="color: #ffffff; margin-top: 0;">{t('about.summary_header', 'Application Summary')}</h3>
+            <p><b>{APP_NAME}</b> {t('about.summary_body', 'is a high-performance desktop media downloader, batch queue processor, and local converter designed for video/audio streams, HLS/DASH fragments, and playlists.')}</p>
             
-            <h3 style="color: #ffffff;">Developer & License Details</h3>
+            <h3 style="color: #ffffff;">{t('about.dev_header', 'Developer & License Details')}</h3>
             <ul style="padding-left: 20px;">
                 <li><b>Developer / Maintainer:</b> XerumGG (GG_Uranium)</li>
                 <li><b>License:</b> MIT License (Open Source Software)</li>
@@ -766,13 +775,13 @@ class AboutDialog(QDialog):
                 <li><b>Core Downloader & Muxer:</b> yt-dlp, curl_cffi, FFmpeg, & FFprobe</li>
             </ul>
 
-            <h3 style="color: #ffffff;">Key Capabilities & Use Cases</h3>
+            <h3 style="color: #ffffff;">{t('about.cap_header', 'Key Capabilities & Use Cases')}</h3>
             <ol style="padding-left: 20px;">
-                <li><b>High-Res Downloads & Transcoding:</b> Bulk download 4K/2K/1080p videos or convert audio to MP3, WAV, FLAC, AAC, OPUS, and M4A.</li>
-                <li><b>Cloudflare Anti-Bot Impersonation:</b> Uses native TLS Chrome browser impersonation to bypass HTTP 403 Cloudflare challenges.</li>
-                <li><b>DPAPI Encrypted Account Sessions:</b> Saves domain credentials and tokens securely under Windows DPAPI encryption.</li>
-                <li><b>Age Verification & Local Test Inbox:</b> Automatically detects 18+ age restrictions and integrates with local Mailpit (127.0.0.1:8025) for signups.</li>
-                <li><b>Automatic 24-Hour Component Update Check:</b> Periodically verifies installed versions of yt-dlp, PySide6, Pillow, PyInstaller, curl_cffi, FFmpeg, and FFprobe.</li>
+                <li><b>{t('about.cap1_title', 'High-Res Downloads & Transcoding:')}</b> {t('about.cap1_body', 'Bulk download 4K/2K/1080p videos or convert audio to MP3, WAV, FLAC, AAC, OPUS, and M4A.')}</li>
+                <li><b>{t('about.cap2_title', 'Cloudflare Anti-Bot Impersonation:')}</b> {t('about.cap2_body', 'Uses native TLS Chrome browser impersonation to bypass HTTP 403 Cloudflare challenges.')}</li>
+                <li><b>{t('about.cap3_title', 'DPAPI Encrypted Account Sessions:')}</b> {t('about.cap3_body', 'Saves domain credentials and tokens securely under Windows DPAPI encryption.')}</li>
+                <li><b>{t('about.cap4_title', 'Age Verification & Local Test Inbox:')}</b> {t('about.cap4_body', 'Automatically detects 18+ age restrictions and integrates with local Mailpit (127.0.0.1:8025) for signups.')}</li>
+                <li><b>{t('about.cap5_title', 'Automatic Component Update Check:')}</b> {t('about.cap5_body', 'Periodically verifies installed versions of yt-dlp, PySide6, Pillow, PyInstaller, curl_cffi, FFmpeg, and FFprobe.')}</li>
             </ol>
         </div>
         """
@@ -781,7 +790,7 @@ class AboutDialog(QDialog):
 
         btn_box = QHBoxLayout()
         btn_box.addStretch(1)
-        close_btn = QPushButton("Close", self)
+        close_btn = QPushButton(t("dialogs.close", "Close"), self)
         close_btn.clicked.connect(self.accept)
         btn_box.addWidget(close_btn)
         layout.addLayout(btn_box)
@@ -792,7 +801,9 @@ class HelpCenterDialog(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("GGU_VDOD Help Center & Quick Guide")
+        from ...services.i18n import t
+
+        self.setWindowTitle(t("help.center_title", "GGU_VDOD Help Center & Quick Guide"))
         self.resize(780, 580)
         self.setMinimumSize(700, 500)
 
@@ -807,9 +818,9 @@ class HelpCenterDialog(QDialog):
         hdr_layout = QVBoxLayout(hdr_box)
         hdr_layout.setContentsMargins(16, 12, 16, 12)
 
-        title = QLabel(f"{APP_NAME} Documentation & User Guide", self)
+        title = QLabel(t("help.doc_header", f"{APP_NAME} Documentation & User Guide"), self)
         title.setStyleSheet("font-size: 17px; font-weight: 700; color: #ffffff;")
-        subtitle = QLabel("Reference guide for account sessions, local mailpit testing, media downloads, and conversion options.", self)
+        subtitle = QLabel(t("help.doc_subtitle", "Reference guide for account sessions, local mailpit testing, media downloads, and conversion options."), self)
         subtitle.setStyleSheet("font-size: 12px; color: #a0a0a0; margin-top: 2px;")
         hdr_layout.addWidget(title)
         hdr_layout.addWidget(subtitle)
@@ -831,20 +842,20 @@ class HelpCenterDialog(QDialog):
         """)
 
         # Tab 1: Account Sessions & Local Test Inbox (Extreme Top / First Tab!)
-        self.tabs.addTab(self._build_account_mailpit_tab(), "Account Sessions & Local Inbox")
+        self.tabs.addTab(self._build_account_mailpit_tab(), t("help.tab_account", "Account Sessions & Local Inbox"))
         # Tab 2: How to Download Media
-        self.tabs.addTab(self._build_download_tab(), "Downloading Media")
+        self.tabs.addTab(self._build_download_tab(), t("help.tab_download", "Downloading Media"))
         # Tab 3: Complex Conversion Options
-        self.tabs.addTab(self._build_complex_tab(), "Complex Options Guide")
+        self.tabs.addTab(self._build_complex_tab(), t("help.tab_complex", "Complex Options Guide"))
         # Tab 4: Shortcuts
-        self.tabs.addTab(self._build_shortcuts_tab(), "Keyboard Shortcuts")
+        self.tabs.addTab(self._build_shortcuts_tab(), t("help.tab_shortcuts", "Keyboard Shortcuts"))
 
         layout.addWidget(self.tabs, 1)
 
         # Action bar
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
-        close_btn = QPushButton("Close Help", self)
+        close_btn = QPushButton(t("dialogs.close", "Close Help"), self)
         close_btn.setMinimumWidth(110)
         close_btn.setMinimumHeight(34)
         close_btn.clicked.connect(self.close)

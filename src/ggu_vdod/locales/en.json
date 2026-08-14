@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "GGU_VDOD - Media Downloader & Converter",
-    "dev_build": "#054 Development build : v0.02.07",
+    "dev_build": "#055 Development build : v0.02.07",
     "subtitle": "Paste one or more video links below (one per line)"
   },
   "nav": {
@@ -96,7 +96,13 @@
     "add_btn": "Add Session...",
     "forget_btn": "Forget Selected",
     "purge_btn": "Purge Expired",
-    "clear_btn": "Clear All Sessions"
+    "clear_btn": "Clear All Sessions",
+    "purge_title": "Purge Complete",
+    "purged_msg": "Purged {count} expired session(s).",
+    "clear_title": "Clear All Sessions",
+    "clear_confirm": "Are you sure you want to delete all stored domain sessions and credentials?",
+    "cleared_title": "Sessions Cleared",
+    "cleared_msg": "Cleared {count} stored session(s)."
   },
   "mailpit": {
     "title": "📬 Local Test Inbox (Mailpit - Owned Staging Only)",
@@ -109,7 +115,9 @@
     "open_link_btn": "Open Verification Link in Browser",
     "refresh_btn": "Refresh Inbox",
     "open_webui_btn": "Open Mailpit Web UI (127.0.0.1:8025)",
-    "clear_btn": "Clear Test Mailbox"
+    "clear_btn": "Clear Test Mailbox",
+    "clear_title": "Clear Mailpit Mailbox",
+    "clear_confirm": "Are you sure you want to delete all captured messages in local Mailpit?"
   },
   "help": {
     "dialog_title": "Complex Options Reference Guide",
@@ -121,7 +129,37 @@
     "fmt_desc": "Specify raw yt-dlp format codes (e.g. 137+140) after running List Formats.",
     "codec_desc": "Re-encode video using H.264, H.265, VP9, or AV1 with custom bitrate targets (e.g. 8000k).",
     "res_desc": "Override output video dimensions (e.g. 1920x1080, 1080p) and frame rates (e.g. 60 FPS).",
-    "sample_desc": "Override audio frequency (e.g. 48000 Hz) and channel layout (Mono/Stereo)."
+    "sample_desc": "Override audio frequency (e.g. 48000 Hz) and channel layout (Mono/Stereo).",
+    "center_title": "GGU_VDOD Help Center & Quick Guide",
+    "doc_header": "GGU_VDOD Documentation & User Guide",
+    "doc_subtitle": "Reference guide for account sessions, local mailpit testing, media downloads, and conversion options.",
+    "tab_account": "Account Sessions & Local Inbox",
+    "tab_download": "Downloading Media",
+    "tab_complex": "Complex Options Guide",
+    "tab_shortcuts": "Keyboard Shortcuts"
+  },
+  "about": {
+    "summary_header": "Application Summary",
+    "summary_body": "is a high-performance desktop media downloader, batch queue processor, and local converter designed for video/audio streams, HLS/DASH fragments, and playlists.",
+    "dev_header": "Developer & License Details",
+    "cap_header": "Key Capabilities & Use Cases",
+    "cap1_title": "High-Res Downloads & Transcoding:",
+    "cap1_body": "Bulk download 4K/2K/1080p videos or convert audio to MP3, WAV, FLAC, AAC, OPUS, and M4A.",
+    "cap2_title": "Cloudflare Anti-Bot Impersonation:",
+    "cap2_body": "Uses native TLS Chrome browser impersonation to bypass HTTP 403 Cloudflare challenges.",
+    "cap3_title": "DPAPI Encrypted Account Sessions:",
+    "cap3_body": "Saves domain credentials and tokens securely under Windows DPAPI encryption.",
+    "cap4_title": "Age Verification & Local Test Inbox:",
+    "cap4_body": "Automatically detects 18+ age restrictions and integrates with local Mailpit (127.0.0.1:8025) for signups.",
+    "cap5_title": "Automatic Component Update Check:",
+    "cap5_body": "Periodically verifies installed versions of yt-dlp, PySide6, Pillow, PyInstaller, curl_cffi, FFmpeg, and FFprobe."
+  },
+  "platforms": {
+    "search_lbl": "Search Platform / Extractor:",
+    "search_placeholder": "Filter platforms (e.g. youtube, vimeo, twitter, twitch)...",
+    "table_name": "Extractor / Platform Name",
+    "table_desc": "Description",
+    "loading": "Loading extractors..."
   },
   "advanced": {
     "ffmpeg_group": "FFmpeg & FFprobe location",

@@ -207,18 +207,22 @@ class AccountSessionWidget(QWidget):
         self.refresh_sessions()
 
     def _purge_expired(self):
+        from ...services.i18n import t
+
         count = AuthManager.purge_expired_sessions()
-        QMessageBox.information(self, "Purge Complete", f"Purged {count} expired session(s).")
+        QMessageBox.information(self, t("auth.purge_title", "Purge Complete"), t("auth.purged_msg", f"Purged {count} expired session(s).", count=count))
         self.refresh_sessions()
 
     def _clear_all(self):
+        from ...services.i18n import t
+
         res = QMessageBox.question(
             self,
-            "Clear All Sessions",
-            "Are you sure you want to delete all stored domain sessions and credentials?",
+            t("auth.clear_title", "Clear All Sessions"),
+            t("auth.clear_confirm", "Are you sure you want to delete all stored domain sessions and credentials?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if res == QMessageBox.StandardButton.Yes:
             count = AuthManager.clear_all()
-            QMessageBox.information(self, "Sessions Cleared", f"Cleared {count} stored session(s).")
+            QMessageBox.information(self, t("auth.cleared_title", "Sessions Cleared"), t("auth.cleared_msg", f"Cleared {count} stored session(s).", count=count))
             self.refresh_sessions()

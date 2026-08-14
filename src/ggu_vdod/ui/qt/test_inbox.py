@@ -247,10 +247,12 @@ class MailpitTestInboxWidget(QWidget):
             QDesktopServices.openUrl(QUrl(target_link))
 
     def _clear_mailbox(self):
+        from ...services.i18n import t
+
         res = QMessageBox.question(
             self,
-            "Clear Mailpit Mailbox",
-            "Are you sure you want to delete all captured messages in local Mailpit?",
+            t("mailpit.clear_title", "Clear Mailpit Mailbox"),
+            t("mailpit.clear_confirm", "Are you sure you want to delete all captured messages in local Mailpit?"),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if res == QMessageBox.StandardButton.Yes:
