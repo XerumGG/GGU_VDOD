@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog,
     QFormLayout, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
-    QPushButton, QRadioButton, QScrollArea, QSlider, QSpinBox, QSplitter,
+    QPushButton, QRadioButton, QScrollArea, QSizePolicy, QSlider, QSpinBox, QSplitter,
     QStyle, QTableWidget, QTableWidgetItem, QTabWidget, QToolButton,
     QVBoxLayout, QWidget,
 )
@@ -803,18 +803,20 @@ class QtMainWindow(QMainWindow):
         preview_hdr_row.addWidget(preview_title_lbl)
         preview_hdr_row.addStretch(1)
 
-        self.prev_batch_btn = QPushButton("◄ Prev")
-        self.prev_batch_btn.setFixedWidth(75)
+        self.prev_batch_btn = QPushButton(t("preview.prev", "◄ Prev"))
+        self.prev_batch_btn.setMinimumWidth(75)
+        self.prev_batch_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.prev_batch_btn.setEnabled(False)
         self.prev_batch_btn.setToolTip("Show preview for previous link in batch.")
         self.prev_batch_btn.clicked.connect(self._nav_prev_batch)
 
-        self.batch_counter_lbl = QLabel("Item 0 / 0")
+        self.batch_counter_lbl = QLabel(t("preview.item_counter", "Item 0 / 0", current=0, total=0))
         self.batch_counter_lbl.setObjectName("muted")
         self.batch_counter_lbl.setStyleSheet("font-weight: 600; padding: 0 6px;")
 
-        self.next_batch_btn = QPushButton("Next ►")
-        self.next_batch_btn.setFixedWidth(75)
+        self.next_batch_btn = QPushButton(t("preview.next", "Next ►"))
+        self.next_batch_btn.setMinimumWidth(75)
+        self.next_batch_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.next_batch_btn.setEnabled(False)
         self.next_batch_btn.setToolTip("Show preview for next link in batch.")
         self.next_batch_btn.clicked.connect(self._nav_next_batch)
@@ -825,24 +827,25 @@ class QtMainWindow(QMainWindow):
         preview_layout.addLayout(preview_hdr_row)
 
         preview_body = QHBoxLayout()
-        self.preview_image = QLabel("No preview")
+        self.preview_image = QLabel(t("preview.no_preview", "No preview"))
         self.preview_image.setFixedSize(PREVIEW_WIDTH, PREVIEW_HEIGHT)
         self.preview_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_image.setStyleSheet("border: 1px solid #303030; border-radius: 6px; background: #111;")
         preview_body.addWidget(self.preview_image)
 
         preview_text_vbox = QVBoxLayout()
-        self.preview_title = QLabel("Paste a link to preview it")
+        self.preview_title = QLabel(t("preview.title_placeholder", "Paste a link to preview it"))
         self.preview_title.setObjectName("sectionTitle")
-        self.preview_source = QLabel("Source: waiting for a link")
+        self.preview_source = QLabel(t("preview.source_waiting", "Source: waiting for a link"))
         self.preview_source.setObjectName("muted")
-        self.preview_details = QLabel("Title, duration, uploader, and platform will appear here.")
+        self.preview_details = QLabel(t("preview.details_placeholder", "Title, duration, uploader, and platform will appear here."))
         self.preview_details.setObjectName("muted")
         self.preview_details.setWordWrap(True)
 
-        self.download_thumbnail_btn = QPushButton("Download thumbnail (HQ)")
+        self.download_thumbnail_btn = QPushButton(t("preview.download_thumb_btn", "Download thumbnail (HQ)"))
         self.download_thumbnail_btn.setEnabled(False)
-        self.download_thumbnail_btn.setFixedWidth(180)
+        self.download_thumbnail_btn.setMinimumWidth(180)
+        self.download_thumbnail_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.download_thumbnail_btn.setToolTip("Save high-resolution thumbnail image for the previewed video.")
         self.download_thumbnail_btn.clicked.connect(self._download_thumbnail_file)
 
@@ -1025,7 +1028,7 @@ class QtMainWindow(QMainWindow):
         self.auto_subs_check = QCheckBox("Include auto-generated")
         self.auto_subs_check.setToolTip("Include automatically generated subtitle tracks.")
         self.sub_lang_input = QLineEdit("en.*")
-        self.sub_lang_input.setFixedWidth(100)
+        self.sub_lang_input.setMinimumWidth(100)
         self.sub_lang_input.setToolTip("Comma-separated language codes or regex patterns (e.g. en.*, es, fr).")
         self.sub_lang_pick_btn = QPushButton("Select Languages...")
         self.sub_lang_pick_btn.setToolTip("Open searchable multi-select dialog for choosing subtitle language codes.")
@@ -1222,7 +1225,8 @@ class QtMainWindow(QMainWindow):
         log_hdr.addWidget(self.log_title_lbl)
         log_hdr.addStretch(1)
         self.clear_log_btn = QPushButton(t("home.clear_log", "Clear Log"))
-        self.clear_log_btn.setFixedWidth(90)
+        self.clear_log_btn.setMinimumWidth(90)
+        self.clear_log_btn.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
         self.clear_log_btn.clicked.connect(lambda: self.log_box.clear())
         log_hdr.addWidget(self.clear_log_btn)
         log_layout.addLayout(log_hdr)
