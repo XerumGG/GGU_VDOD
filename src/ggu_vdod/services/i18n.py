@@ -52,7 +52,7 @@ class I18nService(QObject):
 
     def _load_saved_language(self):
         config = load_config()
-        saved_lang = config.get("language", "Auto")
+        saved_lang = config.get("language", "en")
         self.set_language(saved_lang, save_pref=False)
 
     def detect_system_language(self) -> str:

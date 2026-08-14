@@ -1800,3 +1800,117 @@ class AgeGateAuthDialog(QDialog):
     def _on_guest_chosen(self):
         self.user_action = "guest"
         self.accept()
+
+
+class UniversalPreferencesDialog(QDialog):
+    """Universal Preferences & Settings dialog combining Language, Theme, Fonts, Keybindings, and Audio Alerts."""
+
+    def __init__(self, current_config=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Preferences & Settings")
+        self.resize(650, 520)
+        self.setMinimumSize(560, 460)
+        self._config = dict(current_config or {})
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(18, 16, 18, 16)
+
+        self.tabs = QTabWidget()
+
+        # Tab 1: General & Language
+        gen_tab = QWidget()
+        gen_layout = QFormLayout(gen_tab)
+        gen_layout.setContentsMargins(14, 14, 14, 14)
+        gen_layout.setVerticalSpacing(12)
+
+        self.lang_combo = QComboBox()
+        from ...services.i18n import SUPPORTED_LANGUAGES
+        for code, label in SUPPORTED_LANGUAGES.items():
+            self.lang_combo.addItem(label, code)
+        cur_lang = self._config.get("language", "en")
+        idx = self.lang_combo.findData(cur_lang)
+        if idx >= 0:
+            self.lang_combo.setCurrentIndex(idx)
+        gen_layout.addRow(QLabel("Application Language:"), self.lang_combo)
+
+        self.audio_alerts_check = QCheckBox("Enable Windows audio alert sound beeps on errors")
+        self.audio_alerts_check.setChecked(self._config.get("audio_alerts", True))
+        gen_layout.addRow(QLabel("Audio Alerts:"), self.audio_alerts_check)
+
+        self.tabs.addTab(gen_tab, "🌐 General & Language")
+
+        # Tab 2: Typography & Theme
+        theme_tab = QWidget()
+        theme_layout = QFormLayout(theme_tab)
+        theme_layout.setContentsMargins(14, 14, 14, 14)
+        theme_layout.setVerticalSpacing(12)
+
+        self.font_family_combo = QComboBox()
+        self.font_family_combo.addItems(["Segoe UI", "Roboto", "Inter", "Arial", "Consolas", "Segoe UI Variable Display"])
+        cur_font = self._config.get("font_family", "Segoe UI")
+        if self.font_family_combo.findText(cur_font) < 0:
+            self.font_family_combo.addItem(cur_font)
+        self.font_family_combo.setCurrentText(cur_font)
+        theme_layout.addRow(QLabel("Font Family:"), self.font_family_combo)
+
+        self.font_size_spin = QSpinBox()
+        self.font_size_spin.setRange(8, 18)
+        self.font_size_spin.setValue(self._config.get("font_size", 10))
+        theme_layout.addRow(QLabel("Font Size (pt):"), self.font_size_spin)
+
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(["Dark (Pitch-Black)", "Standard Dark", "Nord", "Gruvbox Dark", "Dracula", "Solarized Dark", "Cyberpunk", "Monokai Pro"])
+        self.theme_combo.setCurrentText(self._config.get("theme_name", "Dark (Pitch-Black)"))
+        theme_layout.addRow(QLabel("Theme Preset:"), self.theme_combo)
+
+        self.tabs.addTab(theme_tab, "🎨 Appearance & Theme")
+
+        # Tab 3: Controls & Keybindings
+        ctrl_tab = QWidget()
+        ctrl_layout = QVBoxLayout(ctrl_tab)
+        ctrl_layout.setContentsMargins(14, 14, 14, 14)
+
+        scroll_row = QHBoxLayout()
+        scroll_row.addWidget(QLabel("Mouse Wheel Scroll Speed:"))
+        self.scroll_speed_spin = QSpinBox()
+        self.scroll_speed_spin.setRange(SCROLL_SPEED_MIN, SCROLL_SPEED_MAX)
+        self.scroll_speed_spin.setValue(self._config.get("scroll_speed", SCROLL_SPEED_DEFAULT))
+        scroll_row.addWidget(self.scroll_speed_spin)
+        ctrl_layout.addLayout(scroll_row)
+
+        table = QTableWidget(len(DEFAULT_KEY_BINDINGS), 2)
+        table.setHorizontalHeaderLabels(["Action Command", "Keyboard Shortcut"])
+        table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        for r, (action_name, shortcut) in enumerate(DEFAULT_KEY_BINDINGS.items()):
+            table.setItem(r, 0, QTableWidgetItem(action_name))
+            table.setItem(r, 1, QTableWidgetItem(shortcut))
+        ctrl_layout.addWidget(table)
+
+        self.tabs.addTab(ctrl_tab, "⌨️ Controls & Keybindings")
+
+        layout.addWidget(self.tabs)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+        save_btn = QPushButton("Save Preferences")
+        save_btn.setObjectName("primary")
+        save_btn.clicked.connect(self.accept)
+        btn_row.addWidget(save_btn)
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+    def get_settings(self):
+        return {
+            "language": self.lang_combo.currentData(),
+            "audio_alerts": self.audio_alerts_check.isChecked(),
+            "font_family": self.font_family_combo.currentText(),
+            "font_size": self.font_size_spin.value(),
+            "theme_name": self.theme_combo.currentText(),
+            "scroll_speed": self.scroll_speed_spin.value(),
+        }

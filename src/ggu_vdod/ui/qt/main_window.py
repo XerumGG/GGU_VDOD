@@ -667,17 +667,11 @@ class QtMainWindow(QMainWindow):
         edit_menu.addAction(select_all_act)
 
         edit_menu.addSeparator()
-        pref_bindings_act = QAction("Preferences - Key bindings and scroll speed...", self)
-        pref_bindings_act.triggered.connect(self._show_key_bindings_dialog)
-        edit_menu.addAction(pref_bindings_act)
-
-        pref_font_act = QAction("Preferences - UI Font panel...", self)
-        pref_font_act.triggered.connect(self._show_font_dialog)
-        edit_menu.addAction(pref_font_act)
-
-        pref_theme_act = QAction("Preferences - Themes and colors...", self)
-        pref_theme_act.triggered.connect(self._show_theme_dialog)
-        edit_menu.addAction(pref_theme_act)
+        pref_act = QAction("Preferences...", self)
+        pref_act.setShortcut(QKeySequence("Ctrl+,"))
+        pref_act.setToolTip("Open universal preferences dialog for Language, Theme, Fonts, Keybindings, and Audio Alerts.")
+        pref_act.triggered.connect(self._show_universal_preferences_dialog)
+        edit_menu.addAction(pref_act)
 
         edit_menu.addSeparator()
         restart_act = QAction("Force restart application (reboot)", self)
@@ -2096,3 +2090,17 @@ class QtMainWindow(QMainWindow):
             self.open_folder_button.setText(t("history.open_folder", "Open Save Folder"))
         if hasattr(self, "url_text"):
             self.url_text.setPlaceholderText(t("home.url_placeholder", "https://www.youtube.com/watch?v=..."))
+
+    def _show_universal_preferences_dialog(self):
+        from .dialogs import UniversalPreferencesDialog
+        dlg = UniversalPreferencesDialog(self._config, self)
+        if dlg.exec() == QDialog.Accepted:
+            new_opts = dlg.get_settings()
+            self._config.update(new_opts)
+            if new_opts.get("language"):
+                self._change_language(new_opts["language"])
+            if new_opts.get("font_family") or new_opts.get("font_size"):
+                self.font_family = new_opts.get("font_family", self.font_family)
+                self.base_font_size = new_opts.get("font_size", self.base_font_size)
+            save_config(self._config)
+            self._apply_preferences()
