@@ -32,6 +32,13 @@ class TestI18nService(unittest.TestCase):
         self.service.set_language("ar", save_pref=False)
         self.assertEqual(t("home.download_btn"), "بدء قائمة التنزيل")
 
+    def test_language_switching_all_supported(self):
+        for code in ["fr", "de", "bn", "zh", "ja", "ru", "pt"]:
+            self.service.set_language(code, save_pref=False)
+            translated = t("home.download_btn")
+            self.assertNotEqual(translated, "", f"Empty translation for {code}")
+            self.assertNotEqual(translated, "home.download_btn", f"Missing translation key for {code}")
+
     def tearDown(self):
         self.service.set_language("en", save_pref=False)
 
