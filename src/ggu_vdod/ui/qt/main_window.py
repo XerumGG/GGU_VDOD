@@ -612,148 +612,148 @@ class QtMainWindow(QMainWindow):
         menubar = self.menuBar()
 
         # File Menu
-        file_menu = menubar.addMenu("File")
-        new_list_act = QAction("New link list", self)
-        new_list_act.setShortcut(QKeySequence("Ctrl+N"))
-        new_list_act.triggered.connect(self._new_link_list)
-        file_menu.addAction(new_list_act)
+        self.file_menu = menubar.addMenu(t("menu.file", "File"))
+        self.new_list_act = QAction(t("menu.new_list", "New link list"), self)
+        self.new_list_act.setShortcut(QKeySequence("Ctrl+N"))
+        self.new_list_act.triggered.connect(self._new_link_list)
+        self.file_menu.addAction(self.new_list_act)
 
-        open_folder_act = QAction("Open save folder", self)
-        open_folder_act.triggered.connect(self._open_output_folder)
-        file_menu.addAction(open_folder_act)
+        self.open_folder_act = QAction(t("menu.open_folder", "Open save folder"), self)
+        self.open_folder_act.triggered.connect(self._open_output_folder)
+        self.file_menu.addAction(self.open_folder_act)
 
-        history_act = QAction("Link history...", self)
-        history_act.setShortcut(QKeySequence("Ctrl+H"))
-        history_act.triggered.connect(self._show_history_dialog)
-        file_menu.addAction(history_act)
+        self.history_act = QAction(t("menu.history", "Link history..."), self)
+        self.history_act.setShortcut(QKeySequence("Ctrl+H"))
+        self.history_act.triggered.connect(self._show_history_dialog)
+        self.file_menu.addAction(self.history_act)
 
-        file_menu.addSeparator()
-        exit_act = QAction("Exit", self)
-        exit_act.setShortcut(QKeySequence("Alt+F4"))
-        exit_act.triggered.connect(self.close)
-        file_menu.addAction(exit_act)
+        self.file_menu.addSeparator()
+        self.exit_act = QAction(t("menu.exit", "Exit"), self)
+        self.exit_act.setShortcut(QKeySequence("Alt+F4"))
+        self.exit_act.triggered.connect(self.close)
+        self.file_menu.addAction(self.exit_act)
 
         # Edit Menu
-        edit_menu = menubar.addMenu("Edit")
-        undo_act = QAction("Undo", self)
-        undo_act.setShortcut(QKeySequence.Undo)
-        undo_act.triggered.connect(lambda: self._edit_focused("undo"))
-        edit_menu.addAction(undo_act)
+        self.edit_menu = menubar.addMenu(t("menu.edit", "Edit"))
+        self.undo_act = QAction(t("menu.undo", "Undo"), self)
+        self.undo_act.setShortcut(QKeySequence.Undo)
+        self.undo_act.triggered.connect(lambda: self._edit_focused("undo"))
+        self.edit_menu.addAction(self.undo_act)
 
-        redo_act = QAction("Redo", self)
-        redo_act.setShortcut(QKeySequence.Redo)
-        redo_act.triggered.connect(lambda: self._edit_focused("redo"))
-        edit_menu.addAction(redo_act)
+        self.redo_act = QAction(t("menu.redo", "Redo"), self)
+        self.redo_act.setShortcut(QKeySequence.Redo)
+        self.redo_act.triggered.connect(lambda: self._edit_focused("redo"))
+        self.edit_menu.addAction(self.redo_act)
 
-        edit_menu.addSeparator()
-        cut_act = QAction("Cut", self)
-        cut_act.setShortcut(QKeySequence.Cut)
-        cut_act.triggered.connect(lambda: self._edit_focused("cut"))
-        edit_menu.addAction(cut_act)
+        self.edit_menu.addSeparator()
+        self.cut_act = QAction(t("menu.cut", "Cut"), self)
+        self.cut_act.setShortcut(QKeySequence.Cut)
+        self.cut_act.triggered.connect(lambda: self._edit_focused("cut"))
+        self.edit_menu.addAction(self.cut_act)
 
-        copy_act = QAction("Copy", self)
-        copy_act.setShortcut(QKeySequence.Copy)
-        copy_act.triggered.connect(lambda: self._edit_focused("copy"))
-        edit_menu.addAction(copy_act)
+        self.copy_act = QAction(t("menu.copy", "Copy"), self)
+        self.copy_act.setShortcut(QKeySequence.Copy)
+        self.copy_act.triggered.connect(lambda: self._edit_focused("copy"))
+        self.edit_menu.addAction(self.copy_act)
 
-        paste_act = QAction("Paste", self)
-        paste_act.setShortcut(QKeySequence.Paste)
-        paste_act.triggered.connect(lambda: self._edit_focused("paste"))
-        edit_menu.addAction(paste_act)
+        self.paste_act = QAction(t("menu.paste", "Paste"), self)
+        self.paste_act.setShortcut(QKeySequence.Paste)
+        self.paste_act.triggered.connect(lambda: self._edit_focused("paste"))
+        self.edit_menu.addAction(self.paste_act)
 
-        select_all_act = QAction("Select all", self)
-        select_all_act.setShortcut(QKeySequence.SelectAll)
-        select_all_act.triggered.connect(lambda: self._edit_focused("select_all"))
-        edit_menu.addAction(select_all_act)
+        self.select_all_act = QAction(t("menu.select_all", "Select all"), self)
+        self.select_all_act.setShortcut(QKeySequence.SelectAll)
+        self.select_all_act.triggered.connect(lambda: self._edit_focused("select_all"))
+        self.edit_menu.addAction(self.select_all_act)
 
-        edit_menu.addSeparator()
-        pref_bindings_act = QAction("Preferences - Key bindings and scroll speed...", self)
-        pref_bindings_act.triggered.connect(self._show_key_bindings_dialog)
-        edit_menu.addAction(pref_bindings_act)
+        self.edit_menu.addSeparator()
+        self.pref_bindings_act = QAction(t("menu.pref_bindings", "Preferences - Key bindings and scroll speed..."), self)
+        self.pref_bindings_act.triggered.connect(self._show_key_bindings_dialog)
+        self.edit_menu.addAction(self.pref_bindings_act)
 
-        pref_font_act = QAction("Preferences - UI Font panel...", self)
-        pref_font_act.triggered.connect(self._show_font_dialog)
-        edit_menu.addAction(pref_font_act)
+        self.pref_font_act = QAction(t("menu.pref_font", "Preferences - UI Font panel..."), self)
+        self.pref_font_act.triggered.connect(self._show_font_dialog)
+        self.edit_menu.addAction(self.pref_font_act)
 
-        pref_theme_act = QAction("Preferences - Themes and colors...", self)
-        pref_theme_act.triggered.connect(self._show_theme_dialog)
-        edit_menu.addAction(pref_theme_act)
+        self.pref_theme_act = QAction(t("menu.pref_theme", "Preferences - Themes and colors..."), self)
+        self.pref_theme_act.triggered.connect(self._show_theme_dialog)
+        self.edit_menu.addAction(self.pref_theme_act)
 
-        edit_menu.addSeparator()
-        restart_act = QAction("Force restart application (reboot)", self)
-        restart_act.setShortcut(QKeySequence("Ctrl+Shift+`"))
-        restart_act.setToolTip("Saves state, kills lingering background processes, and cleanly restarts the application.")
-        restart_act.triggered.connect(self._force_restart_app)
-        edit_menu.addAction(restart_act)
+        self.edit_menu.addSeparator()
+        self.restart_act = QAction(t("menu.restart", "Force restart application (reboot)"), self)
+        self.restart_act.setShortcut(QKeySequence("Ctrl+Shift+`"))
+        self.restart_act.setToolTip("Saves state, kills lingering background processes, and cleanly restarts the application.")
+        self.restart_act.triggered.connect(self._force_restart_app)
+        self.edit_menu.addAction(self.restart_act)
 
         # View Menu
-        view_menu = menubar.addMenu("View")
-        library_act = QAction("Downloaded content library...", self)
-        library_act.setShortcut(QKeySequence("Ctrl+L"))
-        library_act.triggered.connect(self._show_library_dialog)
-        view_menu.addAction(library_act)
+        self.view_menu = menubar.addMenu(t("menu.view", "View"))
+        self.library_act = QAction(t("menu.library", "Downloaded content library..."), self)
+        self.library_act.setShortcut(QKeySequence("Ctrl+L"))
+        self.library_act.triggered.connect(self._show_library_dialog)
+        self.view_menu.addAction(self.library_act)
 
-        inspect_act = QAction("Inspect local file / stream details...", self)
-        inspect_act.setShortcut(QKeySequence("Ctrl+I"))
-        inspect_act.setToolTip("Inspect video, audio, and container streams using FFprobe.")
-        inspect_act.triggered.connect(self._show_media_inspector)
-        view_menu.addAction(inspect_act)
+        self.inspect_act = QAction(t("menu.inspect", "Inspect local file / stream details..."), self)
+        self.inspect_act.setShortcut(QKeySequence("Ctrl+I"))
+        self.inspect_act.setToolTip("Inspect video, audio, and container streams using FFprobe.")
+        self.inspect_act.triggered.connect(self._show_media_inspector)
+        self.view_menu.addAction(self.inspect_act)
 
-        view_menu.addSeparator()
-        zoom_in_act = QAction("Zoom in", self)
-        zoom_in_act.setShortcut(QKeySequence("Ctrl++"))
-        zoom_in_act.triggered.connect(lambda: self._change_zoom(ZOOM_STEP_PERCENT))
-        view_menu.addAction(zoom_in_act)
+        self.view_menu.addSeparator()
+        self.zoom_in_act = QAction(t("menu.zoom_in", "Zoom in"), self)
+        self.zoom_in_act.setShortcut(QKeySequence("Ctrl++"))
+        self.zoom_in_act.triggered.connect(lambda: self._change_zoom(ZOOM_STEP_PERCENT))
+        self.view_menu.addAction(self.zoom_in_act)
 
         zoom_in_eq_act = QAction("Zoom in (=)", self)
         zoom_in_eq_act.setShortcut(QKeySequence("Ctrl+="))
         zoom_in_eq_act.triggered.connect(lambda: self._change_zoom(ZOOM_STEP_PERCENT))
         self.addAction(zoom_in_eq_act)
 
-        zoom_out_act = QAction("Zoom out", self)
-        zoom_out_act.setShortcut(QKeySequence("Ctrl+-"))
-        zoom_out_act.triggered.connect(lambda: self._change_zoom(-ZOOM_STEP_PERCENT))
-        view_menu.addAction(zoom_out_act)
+        self.zoom_out_act = QAction(t("menu.zoom_out", "Zoom out"), self)
+        self.zoom_out_act.setShortcut(QKeySequence("Ctrl+-"))
+        self.zoom_out_act.triggered.connect(lambda: self._change_zoom(-ZOOM_STEP_PERCENT))
+        self.view_menu.addAction(self.zoom_out_act)
 
-        zoom_reset_act = QAction("Reset zoom", self)
-        zoom_reset_act.setShortcut(QKeySequence("Ctrl+0"))
-        zoom_reset_act.triggered.connect(lambda: self._apply_zoom(ZOOM_DEFAULT_PERCENT))
-        view_menu.addAction(zoom_reset_act)
+        self.zoom_reset_act = QAction(t("menu.zoom_reset", "Reset zoom"), self)
+        self.zoom_reset_act.setShortcut(QKeySequence("Ctrl+0"))
+        self.zoom_reset_act.triggered.connect(lambda: self._apply_zoom(ZOOM_DEFAULT_PERCENT))
+        self.view_menu.addAction(self.zoom_reset_act)
         self._zoom_actions = {
-            "zoom_in": zoom_in_act,
-            "zoom_out": zoom_out_act,
-            "zoom_reset": zoom_reset_act,
+            "zoom_in": self.zoom_in_act,
+            "zoom_out": self.zoom_out_act,
+            "zoom_reset": self.zoom_reset_act,
         }
 
         # Help Menu
-        help_menu = menubar.addMenu("Help")
-        help_center_act = QAction("Help center", self)
-        help_center_act.triggered.connect(self._show_help_dialog)
-        help_menu.addAction(help_center_act)
+        self.help_menu = menubar.addMenu(t("menu.help", "Help"))
+        self.help_center_act = QAction(t("menu.help_center", "Help center"), self)
+        self.help_center_act.triggered.connect(self._show_help_dialog)
+        self.help_menu.addAction(self.help_center_act)
 
-        platforms_act = QAction("Supported platforms and extractors...", self)
-        platforms_act.triggered.connect(self._show_supported_platforms_dialog)
-        help_menu.addAction(platforms_act)
+        self.platforms_act = QAction(t("menu.platforms", "Supported platforms and extractors..."), self)
+        self.platforms_act.triggered.connect(self._show_supported_platforms_dialog)
+        self.help_menu.addAction(self.platforms_act)
 
-        updates_act = QAction("Check for updates & dependencies...", self)
-        updates_act.triggered.connect(self._show_updates_dialog)
-        help_menu.addAction(updates_act)
+        self.updates_act = QAction(t("menu.updates", "Check for updates & dependencies..."), self)
+        self.updates_act.triggered.connect(self._show_updates_dialog)
+        self.help_menu.addAction(self.updates_act)
 
-        about_menu = menubar.addMenu("About")
-        about_act = QAction("About GGU_VDOD", self)
-        about_act.triggered.connect(self._show_about_dialog)
-        about_menu.addAction(about_act)
+        self.about_menu = menubar.addMenu(t("menu.about", "About"))
+        self.about_act = QAction(t("menu.about_app", "About GGU_VDOD"), self)
+        self.about_act.triggered.connect(self._show_about_dialog)
+        self.about_menu.addAction(self.about_act)
 
         # Language Selection Menu
-        lang_menu = menubar.addMenu("🌐 Language")
+        self.lang_menu = menubar.addMenu(t("menu.language", "🌐 Language"))
         self._lang_actions = {}
-        saved_lang = self._config.get("language", "Auto")
+        saved_lang = self._config.get("language", "en")
         for code, label in SUPPORTED_LANGUAGES.items():
             act = QAction(label, self)
             act.setCheckable(True)
             act.setChecked(saved_lang == code)
             act.triggered.connect(lambda checked, c=code: self._change_language(c))
-            lang_menu.addAction(act)
+            self.lang_menu.addAction(act)
             self._lang_actions[code] = act
 
     def _build_content(self):
@@ -888,11 +888,14 @@ class QtMainWindow(QMainWindow):
         self.output_format_combo.addItems(VIDEO_OUTPUT_FORMATS)
         self.output_format_combo.setToolTip("Select output container format (MP4, MKV, MP3, WAV, etc.).")
 
+        self.quality_lbl_widget = QLabel(t("home.quality_lbl", "Quality:"))
+        self.save_as_lbl_widget = QLabel(t("home.save_as_lbl", "Save as:"))
+
         fmt_grid.addWidget(self.video_radio, 0, 0)
         fmt_grid.addWidget(self.audio_radio, 0, 1)
-        fmt_grid.addWidget(QLabel("Quality:"), 1, 0)
+        fmt_grid.addWidget(self.quality_lbl_widget, 1, 0)
         fmt_grid.addWidget(self.quality_combo, 1, 1)
-        fmt_grid.addWidget(QLabel("Save as:"), 2, 0)
+        fmt_grid.addWidget(self.save_as_lbl_widget, 2, 0)
         fmt_grid.addWidget(self.output_format_combo, 2, 1)
         fmt_grid.addWidget(self.single_only_check, 3, 0, 1, 3)
         fmt_grid.setColumnStretch(2, 1)
@@ -909,7 +912,8 @@ class QtMainWindow(QMainWindow):
         self.output_path.setToolTip("Destination folder where downloaded media files will be saved.")
         self.browse_button = QPushButton("Browse…")
         self.browse_button.setToolTip("Browse and select a destination folder on your computer.")
-        save_row.addWidget(QLabel("Save to:"))
+        self.save_to_lbl_widget = QLabel(t("home.save_to_lbl", "Save to:"))
+        save_row.addWidget(self.save_to_lbl_widget)
         save_row.addWidget(self.output_path, 1)
         save_row.addWidget(self.browse_button)
         layout.addWidget(save_panel)
@@ -920,13 +924,13 @@ class QtMainWindow(QMainWindow):
         adv_header_layout = QHBoxLayout(adv_header_frame)
         adv_header_layout.setContentsMargins(10, 4, 10, 4)
 
-        adv_title_label = QLabel("Complex & Advanced Conversion Options", self)
-        adv_title_label.setStyleSheet("font-weight: 600;")
+        self.adv_title_label = QLabel(t("home.adv_title", "Complex & Advanced Conversion Options"), self)
+        self.adv_title_label.setStyleSheet("font-weight: 600;")
 
-        advanced_toggle = QToolButton(self)
-        advanced_toggle.setText("Expand [+]")
-        advanced_toggle.setCheckable(True)
-        advanced_toggle.setToolTip("Expand or collapse advanced FFmpeg, cookie, proxy, subtitle, and codec settings.")
+        self.advanced_toggle = QToolButton(self)
+        self.advanced_toggle.setText("Expand [+]")
+        self.advanced_toggle.setCheckable(True)
+        self.advanced_toggle.setToolTip("Expand or collapse advanced FFmpeg, cookie, proxy, subtitle, and codec settings.")
 
         self.complex_help_btn = QToolButton(self)
         self.complex_help_btn.setText("Help [?]")
@@ -934,9 +938,9 @@ class QtMainWindow(QMainWindow):
         self.complex_help_btn.setToolTip("Click to view detailed explanations for all complex video, audio, codec, and network options.")
         self.complex_help_btn.clicked.connect(self._show_complex_options_help)
 
-        adv_header_layout.addWidget(adv_title_label)
+        adv_header_layout.addWidget(self.adv_title_label)
         adv_header_layout.addStretch(1)
-        adv_header_layout.addWidget(advanced_toggle)
+        adv_header_layout.addWidget(self.advanced_toggle)
         adv_header_layout.addWidget(self.complex_help_btn)
 
         layout.addWidget(adv_header_frame)
@@ -948,8 +952,8 @@ class QtMainWindow(QMainWindow):
         adv_vbox.setSpacing(12)
 
         # ------------------ Box 1: FFmpeg location ------------------
-        ffmpeg_box = QGroupBox("FFmpeg location (auto-detected - change only if needed)")
-        ffmpeg_layout = QVBoxLayout(ffmpeg_box)
+        self.ffmpeg_box = QGroupBox(t("advanced.ffmpeg_group", "FFmpeg location (auto-detected - change only if needed)"))
+        ffmpeg_layout = QVBoxLayout(self.ffmpeg_box)
         ffmpeg_row = QHBoxLayout()
         detected_ffmpeg = get_default_ffmpeg_path()
         self.ffmpeg_path_input = QLineEdit(detected_ffmpeg)
@@ -965,11 +969,11 @@ class QtMainWindow(QMainWindow):
         self.ffmpeg_status_label = QLabel()
         self._update_ffmpeg_status_label()
         ffmpeg_layout.addWidget(self.ffmpeg_status_label)
-        adv_vbox.addWidget(ffmpeg_box)
+        adv_vbox.addWidget(self.ffmpeg_box)
 
         # ------------------ Box 2: Authentication and output options ------------------
-        auth_box = QGroupBox("Authentication and output options")
-        auth_grid = QGridLayout(auth_box)
+        self.auth_box = QGroupBox(t("advanced.auth_group", "Authentication and output options"))
+        auth_grid = QGridLayout(self.auth_box)
         auth_grid.setContentsMargins(12, 10, 12, 10)
         auth_grid.setHorizontalSpacing(14)
         auth_grid.setVerticalSpacing(8)
@@ -1000,11 +1004,15 @@ class QtMainWindow(QMainWindow):
         self.check_library_btn.setToolTip("Check for online updates to yt-dlp and FFmpeg core modules.")
         self.check_library_btn.clicked.connect(self._show_updates_dialog)
 
-        auth_grid.addWidget(QLabel("Browser cookies:"), 0, 0)
+        self.browser_cookies_lbl = QLabel(t("advanced.cookie_browser", "Browser cookies:"))
+        self.cookies_file_lbl = QLabel(t("advanced.cookies_file", "Cookies file:"))
+        self.proxy_optional_lbl = QLabel(t("advanced.proxy_lbl", "Proxy (optional):"))
+
+        auth_grid.addWidget(self.browser_cookies_lbl, 0, 0)
         auth_grid.addWidget(self.cookie_browser_combo, 0, 1)
-        auth_grid.addWidget(QLabel("Cookies file:"), 1, 0)
+        auth_grid.addWidget(self.cookies_file_lbl, 1, 0)
         auth_grid.addLayout(cookie_row, 1, 1, 1, 2)
-        auth_grid.addWidget(QLabel("Proxy (optional):"), 2, 0)
+        auth_grid.addWidget(self.proxy_optional_lbl, 2, 0)
         auth_grid.addWidget(self.proxy_input, 2, 1)
         auth_grid.addWidget(self.check_library_btn, 2, 2)
 
@@ -1020,9 +1028,10 @@ class QtMainWindow(QMainWindow):
         self.sub_lang_pick_btn = QPushButton("Select Languages...")
         self.sub_lang_pick_btn.setToolTip("Open searchable multi-select dialog for choosing subtitle language codes.")
         self.sub_lang_pick_btn.clicked.connect(self._choose_subtitle_languages)
+        self.sub_languages_lbl = QLabel(t("advanced.sub_langs", "Languages:"))
         sub_row.addWidget(self.download_subs_check)
         sub_row.addWidget(self.auto_subs_check)
-        sub_row.addWidget(QLabel("Languages:"))
+        sub_row.addWidget(self.sub_languages_lbl)
         sub_row.addWidget(self.sub_lang_input)
         sub_row.addWidget(self.sub_lang_pick_btn)
         sub_row.addStretch(1)
@@ -1045,7 +1054,8 @@ class QtMainWindow(QMainWindow):
 
         # Format ID row
         fmt_id_row = QHBoxLayout()
-        fmt_id_row.addWidget(QLabel("Exact format ID(s) (optional):"))
+        self.exact_format_lbl = QLabel(t("advanced.custom_format", "Exact format ID(s) (optional):"))
+        fmt_id_row.addWidget(self.exact_format_lbl)
         self.format_id_input = QLineEdit()
         self.format_id_input.setToolTip("Specify custom yt-dlp format codes (e.g. 137+140).")
         self.list_formats_btn = QPushButton("List formats")
@@ -1055,11 +1065,11 @@ class QtMainWindow(QMainWindow):
         fmt_id_row.addWidget(self.list_formats_btn)
         auth_grid.addLayout(fmt_id_row, 5, 0, 1, 3)
 
-        adv_vbox.addWidget(auth_box)
+        adv_vbox.addWidget(self.auth_box)
 
         # ------------------ Box 3: Local conversion settings ------------------
-        conv_box = QGroupBox("Local conversion settings")
-        conv_grid = QGridLayout(conv_box)
+        self.conv_box = QGroupBox(t("advanced.conversion_group", "Local conversion settings"))
+        conv_grid = QGridLayout(self.conv_box)
         conv_grid.setContentsMargins(12, 10, 12, 10)
         conv_grid.setHorizontalSpacing(14)
         conv_grid.setVerticalSpacing(8)
@@ -1100,19 +1110,30 @@ class QtMainWindow(QMainWindow):
         self.clean_sidecars_check.setChecked(True)
         self.clean_sidecars_check.setToolTip("Automatically remove intermediate conversion files and sidecars after processing.")
 
-        conv_grid.addWidget(QLabel("Video codec:"), 0, 0)
+        self.video_codec_lbl = QLabel(t("advanced.video_codec", "Video codec:"))
+        self.video_bitrate_lbl = QLabel(t("advanced.video_bitrate", "Video bitrate:"))
+        self.resolution_lbl = QLabel(t("advanced.resolution", "Resolution:"))
+        self.fps_lbl = QLabel(t("advanced.fps", "FPS:"))
+        self.sample_rate_lbl = QLabel(t("advanced.sample_rate", "Sample rate:"))
+        self.channels_lbl = QLabel(t("advanced.channels", "Channels:"))
+        self.compression_lbl = QLabel(t("advanced.compression", "Compression:"))
+        self.clip_start_lbl = QLabel(t("home.start_time", "Clip start time:"))
+        self.clip_end_lbl = QLabel(t("home.end_time", "Clip end time:"))
+        self.pattern_lbl = QLabel(t("advanced.pattern_lbl", "Filename pattern (optional):"))
+
+        conv_grid.addWidget(self.video_codec_lbl, 0, 0)
         conv_grid.addWidget(self.video_codec_combo, 0, 1)
-        conv_grid.addWidget(QLabel("Video bitrate:"), 0, 2)
+        conv_grid.addWidget(self.video_bitrate_lbl, 0, 2)
         conv_grid.addWidget(self.video_bitrate_input, 0, 3)
 
-        conv_grid.addWidget(QLabel("Resolution:"), 1, 0)
+        conv_grid.addWidget(self.resolution_lbl, 1, 0)
         conv_grid.addWidget(self.resolution_combo, 1, 1)
-        conv_grid.addWidget(QLabel("FPS:"), 1, 2)
+        conv_grid.addWidget(self.fps_lbl, 1, 2)
         conv_grid.addWidget(self.frame_rate_combo, 1, 3)
 
-        conv_grid.addWidget(QLabel("Sample rate:"), 2, 0)
+        conv_grid.addWidget(self.sample_rate_lbl, 2, 0)
         conv_grid.addWidget(self.sample_rate_combo, 2, 1)
-        conv_grid.addWidget(QLabel("Channels:"), 2, 2)
+        conv_grid.addWidget(self.channels_lbl, 2, 2)
         conv_grid.addWidget(self.channel_combo, 2, 3)
 
         self.start_time_input = QLineEdit()
@@ -1123,12 +1144,12 @@ class QtMainWindow(QMainWindow):
         self.end_time_input.setPlaceholderText("00:05:00 or 300s")
         self.end_time_input.setToolTip("Clip end timestamp (e.g. 00:03:45 or 225s).")
 
-        conv_grid.addWidget(QLabel("Compression:"), 3, 0)
+        conv_grid.addWidget(self.compression_lbl, 3, 0)
         conv_grid.addWidget(self.compression_combo, 3, 1)
 
-        conv_grid.addWidget(QLabel("Clip start time:"), 4, 0)
+        conv_grid.addWidget(self.clip_start_lbl, 4, 0)
         conv_grid.addWidget(self.start_time_input, 4, 1)
-        conv_grid.addWidget(QLabel("Clip end time:"), 4, 2)
+        conv_grid.addWidget(self.clip_end_lbl, 4, 2)
         conv_grid.addWidget(self.end_time_input, 4, 3)
 
         self.pattern_preset_combo = QComboBox()
@@ -1148,16 +1169,16 @@ class QtMainWindow(QMainWindow):
         pattern_row.addWidget(self.pattern_input, 1)
         pattern_row.addWidget(self.pattern_preset_combo)
 
-        conv_grid.addWidget(QLabel("Filename pattern (optional):"), 5, 0)
+        conv_grid.addWidget(self.pattern_lbl, 5, 0)
         conv_grid.addLayout(pattern_row, 5, 1, 1, 3)
 
         conv_grid.addWidget(self.clean_sidecars_check, 6, 0, 1, 4)
 
-        adv_vbox.addWidget(conv_box)
+        adv_vbox.addWidget(self.conv_box)
 
         self.advanced_panel.setVisible(False)
-        advanced_toggle.toggled.connect(lambda open_: self.advanced_panel.setVisible(open_))
-        advanced_toggle.toggled.connect(lambda open_: advanced_toggle.setText("Collapse [-]" if open_ else "Expand [+]"))
+        self.advanced_toggle.toggled.connect(lambda open_: self.advanced_panel.setVisible(open_))
+        self.advanced_toggle.toggled.connect(lambda open_: self.advanced_toggle.setText("Collapse [-]" if open_ else "Expand [+]"))
         layout.addWidget(self.advanced_panel)
 
         # Download Actions Row
@@ -1179,6 +1200,7 @@ class QtMainWindow(QMainWindow):
 
         self.open_folder_button = QPushButton("Open Save Folder")
         self.open_folder_button.setMinimumHeight(38)
+        self.open_folder_button.setMinimumWidth(140)
         self.open_folder_button.setToolTip("Open the save directory in Windows File Explorer.")
 
         action_row.addWidget(self.download_button)
@@ -1194,12 +1216,13 @@ class QtMainWindow(QMainWindow):
         log_layout.setContentsMargins(12, 10, 12, 10)
 
         log_hdr = QHBoxLayout()
-        log_hdr.addWidget(QLabel("Log Stream"))
+        self.log_title_lbl = QLabel(t("home.log_title", "Log Stream"))
+        log_hdr.addWidget(self.log_title_lbl)
         log_hdr.addStretch(1)
-        clear_log_btn = QPushButton("Clear Log")
-        clear_log_btn.setFixedWidth(90)
-        clear_log_btn.clicked.connect(lambda: self.log_box.clear())
-        log_hdr.addWidget(clear_log_btn)
+        self.clear_log_btn = QPushButton(t("home.clear_log", "Clear Log"))
+        self.clear_log_btn.setFixedWidth(90)
+        self.clear_log_btn.clicked.connect(lambda: self.log_box.clear())
+        log_hdr.addWidget(self.clear_log_btn)
         log_layout.addLayout(log_hdr)
 
         self.log_box = QPlainTextEdit()
@@ -2088,27 +2111,176 @@ class QtMainWindow(QMainWindow):
 
     def _retranslate_ui(self):
         self.setWindowTitle(t("app.title", APP_NAME))
+        # Top Menus
+        if hasattr(self, "file_menu"):
+            self.file_menu.setTitle(t("menu.file", "File"))
+        if hasattr(self, "edit_menu"):
+            self.edit_menu.setTitle(t("menu.edit", "Edit"))
+        if hasattr(self, "view_menu"):
+            self.view_menu.setTitle(t("menu.view", "View"))
+        if hasattr(self, "help_menu"):
+            self.help_menu.setTitle(t("menu.help", "Help"))
+        if hasattr(self, "about_menu"):
+            self.about_menu.setTitle(t("menu.about", "About"))
+        if hasattr(self, "lang_menu"):
+            self.lang_menu.setTitle(t("menu.language", "🌐 Language"))
+
+        # Actions
+        if hasattr(self, "new_list_act"):
+            self.new_list_act.setText(t("menu.new_list", "New link list"))
+        if hasattr(self, "open_folder_act"):
+            self.open_folder_act.setText(t("menu.open_folder", "Open save folder"))
+        if hasattr(self, "history_act"):
+            self.history_act.setText(t("menu.history", "Link history..."))
+        if hasattr(self, "exit_act"):
+            self.exit_act.setText(t("menu.exit", "Exit"))
+        if hasattr(self, "undo_act"):
+            self.undo_act.setText(t("menu.undo", "Undo"))
+        if hasattr(self, "redo_act"):
+            self.redo_act.setText(t("menu.redo", "Redo"))
+        if hasattr(self, "cut_act"):
+            self.cut_act.setText(t("menu.cut", "Cut"))
+        if hasattr(self, "copy_act"):
+            self.copy_act.setText(t("menu.copy", "Copy"))
+        if hasattr(self, "paste_act"):
+            self.paste_act.setText(t("menu.paste", "Paste"))
+        if hasattr(self, "select_all_act"):
+            self.select_all_act.setText(t("menu.select_all", "Select all"))
+        if hasattr(self, "pref_bindings_act"):
+            self.pref_bindings_act.setText(t("menu.pref_bindings", "Preferences - Key bindings and scroll speed..."))
+        if hasattr(self, "pref_font_act"):
+            self.pref_font_act.setText(t("menu.pref_font", "Preferences - UI Font panel..."))
+        if hasattr(self, "pref_theme_act"):
+            self.pref_theme_act.setText(t("menu.pref_theme", "Preferences - Themes and colors..."))
+        if hasattr(self, "restart_act"):
+            self.restart_act.setText(t("menu.restart", "Force restart application (reboot)"))
+        if hasattr(self, "library_act"):
+            self.library_act.setText(t("menu.library", "Downloaded content library..."))
+        if hasattr(self, "inspect_act"):
+            self.inspect_act.setText(t("menu.inspect", "Inspect local file / stream details..."))
+        if hasattr(self, "zoom_in_act"):
+            self.zoom_in_act.setText(t("menu.zoom_in", "Zoom in"))
+        if hasattr(self, "zoom_out_act"):
+            self.zoom_out_act.setText(t("menu.zoom_out", "Zoom out"))
+        if hasattr(self, "zoom_reset_act"):
+            self.zoom_reset_act.setText(t("menu.zoom_reset", "Reset zoom"))
+        if hasattr(self, "help_center_act"):
+            self.help_center_act.setText(t("menu.help_center", "Help center"))
+        if hasattr(self, "platforms_act"):
+            self.platforms_act.setText(t("menu.platforms", "Supported platforms and extractors..."))
+        if hasattr(self, "updates_act"):
+            self.updates_act.setText(t("menu.updates", "Check for updates & dependencies..."))
+        if hasattr(self, "about_act"):
+            self.about_act.setText(t("menu.about_app", "About GGU_VDOD"))
+
+        # Main Page Labels & Headers
         if hasattr(self, "page_title_lbl"):
             self.page_title_lbl.setText(t("app.title", APP_NAME))
         if hasattr(self, "subtitle_lbl"):
             self.subtitle_lbl.setText(t("app.subtitle", "Paste one or more video links below (one per line)"))
+        if hasattr(self, "url_text"):
+            self.url_text.setPlaceholderText(t("home.url_placeholder", "https://www.youtube.com/watch?v=..."))
+        if hasattr(self, "preview_title_lbl"):
+            self.preview_title_lbl.setText(t("home.preview_title", "Video preview"))
+        if hasattr(self, "preview_btn"):
+            self.preview_btn.setText(t("home.preview_btn", "Fetch Link Preview"))
+        if hasattr(self, "video_radio"):
+            self.video_radio.setText(t("home.video_radio", "Video"))
+        if hasattr(self, "audio_radio"):
+            self.audio_radio.setText(t("home.audio_radio", "Audio"))
+        if hasattr(self, "quality_lbl_widget"):
+            self.quality_lbl_widget.setText(t("home.quality_lbl", "Quality:"))
+        if hasattr(self, "save_as_lbl_widget"):
+            self.save_as_lbl_widget.setText(t("home.save_as_lbl", "Save as:"))
+        if hasattr(self, "single_only_check"):
+            self.single_only_check.setText(t("home.single_only", "Download single video only (ignore playlist)"))
+        if hasattr(self, "save_to_lbl_widget"):
+            self.save_to_lbl_widget.setText(t("home.save_to_lbl", "Save to:"))
+        if hasattr(self, "browse_button"):
+            self.browse_button.setText(t("settings.browse", "Browse…"))
+
+        # Advanced Toggle Bar & Cards
+        if hasattr(self, "adv_title_label"):
+            self.adv_title_label.setText(t("home.adv_title", "Complex & Advanced Conversion Options"))
+        if hasattr(self, "complex_help_btn"):
+            self.complex_help_btn.setText(t("home.help_btn", "Help [?]"))
+        if hasattr(self, "ffmpeg_box"):
+            self.ffmpeg_box.setTitle(t("advanced.ffmpeg_group", "FFmpeg location (auto-detected - change only if needed)"))
+        if hasattr(self, "ffmpeg_browse_btn"):
+            self.ffmpeg_browse_btn.setText(t("settings.browse", "Browse…"))
+        if hasattr(self, "auth_box"):
+            self.auth_box.setTitle(t("advanced.auth_group", "Authentication and output options"))
+        if hasattr(self, "browser_cookies_lbl"):
+            self.browser_cookies_lbl.setText(t("advanced.cookie_browser", "Browser cookies:"))
+        if hasattr(self, "cookies_file_lbl"):
+            self.cookies_file_lbl.setText(t("advanced.cookies_file", "Cookies file:"))
+        if hasattr(self, "remember_cookie_path_check"):
+            self.remember_cookie_path_check.setText(t("advanced.remember_cookie", "Remember path"))
+        if hasattr(self, "cookie_browse_btn"):
+            self.cookie_browse_btn.setText(t("advanced.browse_cookie", "Import and validate"))
+        if hasattr(self, "proxy_optional_lbl"):
+            self.proxy_optional_lbl.setText(t("advanced.proxy_lbl", "Proxy (optional):"))
+        if hasattr(self, "check_library_btn"):
+            self.check_library_btn.setText(t("advanced.check_library", "Check library updates"))
+        if hasattr(self, "download_subs_check"):
+            self.download_subs_check.setText(t("advanced.subtitles", "Download subtitles"))
+        if hasattr(self, "auto_subs_check"):
+            self.auto_subs_check.setText(t("advanced.auto_subs", "Include auto-generated"))
+        if hasattr(self, "sub_languages_lbl"):
+            self.sub_languages_lbl.setText(t("advanced.sub_langs", "Languages:"))
+        if hasattr(self, "sub_lang_pick_btn"):
+            self.sub_lang_pick_btn.setText(t("advanced.sub_langs_btn", "Select Languages..."))
+        if hasattr(self, "embed_metadata_check"):
+            self.embed_metadata_check.setText(t("advanced.embed_metadata", "Embed metadata"))
+        if hasattr(self, "embed_thumb_check"):
+            self.embed_thumb_check.setText(t("advanced.embed_thumbnail", "Embed thumbnail"))
+        if hasattr(self, "live_start_check"):
+            self.live_start_check.setText(t("advanced.live_start", "Live: start from beginning"))
+        if hasattr(self, "exact_format_lbl"):
+            self.exact_format_lbl.setText(t("advanced.custom_format", "Exact format ID(s) (optional):"))
+        if hasattr(self, "list_formats_btn"):
+            self.list_formats_btn.setText(t("advanced.list_formats", "List formats"))
+        if hasattr(self, "conv_box"):
+            self.conv_box.setTitle(t("advanced.conversion_group", "Local conversion settings"))
+        if hasattr(self, "video_codec_lbl"):
+            self.video_codec_lbl.setText(t("advanced.video_codec", "Video codec:"))
+        if hasattr(self, "video_bitrate_lbl"):
+            self.video_bitrate_lbl.setText(t("advanced.video_bitrate", "Video bitrate:"))
+        if hasattr(self, "resolution_lbl"):
+            self.resolution_lbl.setText(t("advanced.resolution", "Resolution:"))
+        if hasattr(self, "fps_lbl"):
+            self.fps_lbl.setText(t("advanced.fps", "FPS:"))
+        if hasattr(self, "sample_rate_lbl"):
+            self.sample_rate_lbl.setText(t("advanced.sample_rate", "Sample rate:"))
+        if hasattr(self, "channels_lbl"):
+            self.channels_lbl.setText(t("advanced.channels", "Channels:"))
+        if hasattr(self, "compression_lbl"):
+            self.compression_lbl.setText(t("advanced.compression", "Compression:"))
+        if hasattr(self, "clip_start_lbl"):
+            self.clip_start_lbl.setText(t("home.start_time", "Clip start time:"))
+        if hasattr(self, "clip_end_lbl"):
+            self.clip_end_lbl.setText(t("home.end_time", "Clip end time:"))
+        if hasattr(self, "pattern_lbl"):
+            self.pattern_lbl.setText(t("advanced.pattern_lbl", "Filename pattern (optional):"))
+        if hasattr(self, "clean_sidecars_check"):
+            self.clean_sidecars_check.setText(t("advanced.clean_sidecars", "Clean temporary sidecar files after conversion"))
+
+        # Bottom Actions & Log Stream
         if hasattr(self, "download_button"):
             self.download_button.setText(t("home.download_btn", "Start Download Queue"))
         if hasattr(self, "cancel_button"):
             self.cancel_button.setText(t("home.stop_btn", "Cancel Active Queue"))
         if hasattr(self, "open_folder_button"):
             self.open_folder_button.setText(t("home.open_folder_btn", "Open Save Folder"))
-        if hasattr(self, "preview_btn"):
-            self.preview_btn.setText(t("home.preview_btn", "Fetch Link Preview"))
-        if hasattr(self, "url_text"):
-            self.url_text.setPlaceholderText(t("home.url_placeholder", "https://www.youtube.com/watch?v=..."))
-        if hasattr(self, "video_radio"):
-            self.video_radio.setText(t("home.video_radio", "Video"))
-        if hasattr(self, "audio_radio"):
-            self.audio_radio.setText(t("home.audio_radio", "Audio"))
-        if hasattr(self, "single_only_check"):
-            self.single_only_check.setText(t("home.single_only", "Download single video only (ignore playlist)"))
+        if hasattr(self, "log_title_lbl"):
+            self.log_title_lbl.setText(t("home.log_title", "Log Stream"))
+        if hasattr(self, "clear_log_btn"):
+            self.clear_log_btn.setText(t("home.clear_log", "Clear Log"))
+
+        # Navigation Tabs
         if hasattr(self, "main_tab_widget"):
             self.main_tab_widget.setTabText(0, t("nav.home", "📥 Downloader & Queue"))
             self.main_tab_widget.setTabText(1, t("nav.auth", "🔑 Account & Sessions"))
+            if self.main_tab_widget.count() > 2:
+                self.main_tab_widget.setTabText(2, t("nav.mailpit", "📬 Local Test Inbox (Mailpit)"))
 
