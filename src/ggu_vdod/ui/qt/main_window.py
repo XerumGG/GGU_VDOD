@@ -391,15 +391,17 @@ class QtDownloadWorker(QThread):
         except Exception:
             pass
 
+        extractor_args = {"youtube": {"player_client": ["android", "ios", "mweb", "web"]}}
         try:
             from yt_dlp.networking.impersonate import ImpersonateTarget
             target = ImpersonateTarget.from_str("chrome")
             from yt_dlp.networking._curlcffi import CurlCffiRH
             if CurlCffiRH.is_supported_target(target):
                 ydl_opts["impersonate"] = target
-                ydl_opts["extractor_args"] = {"generic": ["impersonate"]}
+                extractor_args["generic"] = ["impersonate"]
         except Exception:
             pass
+        ydl_opts["extractor_args"] = extractor_args
 
         # Automatic DPAPI Account & Session Injection for current target URL
         try:
@@ -510,7 +512,7 @@ class QtDownloadWorker(QThread):
             audio_args = audio_conversion_args(settings, target_ext)
         else:
             ydl_opts["recode_video"] = target_ext
-            ydl_opts["merge_output_format"] = "mp4" if target_ext == "mp4" else "mkv"
+            ydl_opts["merge_output_format"] = target_ext if target_ext in ("mp4", "mkv", "webm", "ogv", "flv", "avi") else "mkv"
             video_args = video_conversion_args(settings, target_ext)
 
         started_at = time.time()

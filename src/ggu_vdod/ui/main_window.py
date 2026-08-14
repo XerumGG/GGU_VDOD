@@ -2641,6 +2641,11 @@ class GGUVDODApp(tk.Tk):
                 "fragment": lambda n: min(RETRY_WAIT_SECONDS * n, 30),
                 "file_access": lambda n: min(RETRY_WAIT_SECONDS * n, 30),
             },
+            "extractor_args": {
+                "youtube": {
+                    "player_client": ["android", "ios", "mweb", "web"]
+                }
+            },
         }
         if settings["cookies_browser"] != "None":
             ydl_opts["cookiesfrombrowser"] = (settings["cookies_browser"].lower(), None, None, None)

@@ -32,7 +32,7 @@ class TransferStatusBar(QFrame):
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         self.progress.setMinimumWidth(200)
-        self.version_label = QLabel(t("app.dev_build", DEVELOPMENT_BUILD_LABEL))
+        self.version_label = QLabel(DEVELOPMENT_BUILD_LABEL)
         self.version_label.setObjectName("version")
         self.version_label.setToolTip(f"GGU_VDOD Build Version: {DEVELOPMENT_BUILD_LABEL}")
 
@@ -66,7 +66,7 @@ class TransferStatusBar(QFrame):
         self.upload_rate_label.setText(f"↑ {t('status.upload', 'Upload')}: {self._last_ul}")
         self.transferred_label.setText(f"{t('status.transferred', 'Transferred')}: {self._last_transferred}")
         self.eta_label.setText(f"{t('status.eta', 'ETA')}: {self._last_eta}")
-        self.version_label.setText(t("app.dev_build", DEVELOPMENT_BUILD_LABEL))
+        self.version_label.setText(DEVELOPMENT_BUILD_LABEL)
 
     def _retranslate_ui(self):
         self._update_text()
