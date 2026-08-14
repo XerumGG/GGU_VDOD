@@ -1,0 +1,66 @@
+{
+  "app": {
+    "title": "GGU_VDOD - Media Downloader & Converter",
+    "dev_build": "Development build : v0.002.006 (051)"
+  },
+  "nav": {
+    "home": "Home / Downloads",
+    "converter": "Local Converter",
+    "history": "Download History",
+    "auth": "Account Sessions",
+    "settings": "Preferences & Settings"
+  },
+  "home": {
+    "url_label": "Enter Video or Playlist URLs (one per line):",
+    "url_placeholder": "https://www.youtube.com/watch?v=...\nhttps://vimeo.com/...\nhttps://tiktok.com/@...",
+    "download_btn": "Start Download Queue",
+    "preview_btn": "Fetch Link Preview",
+    "stop_btn": "Cancel Active Queue",
+    "format_label": "Format & Quality:",
+    "video_quality": "Video Quality",
+    "audio_format": "Audio Format",
+    "cutter_title": "Video Timestamp Cutter (Optional Range)",
+    "start_time": "Start Time (e.g. 00:30 or 30s):",
+    "end_time": "End Time (e.g. 03:00 or 180s):",
+    "status_idle": "Ready for URLs",
+    "status_downloading": "Downloading media..."
+  },
+  "converter": {
+    "title": "Local FFmpeg Media Converter",
+    "input_label": "Select Local Media Files:",
+    "browse_btn": "Browse Files...",
+    "target_format": "Target Format:",
+    "convert_btn": "Start Local Conversion",
+    "preset_label": "Quality Presets:",
+    "status_ready": "Select files to convert"
+  },
+  "history": {
+    "title": "Local Download History",
+    "clear_btn": "Clear History",
+    "open_folder": "Open Download Folder",
+    "search_placeholder": "Search history entries..."
+  },
+  "settings": {
+    "title": "Preferences & Configuration",
+    "language": "Application Language:",
+    "download_dir": "Default Download Directory:",
+    "browse": "Browse...",
+    "ffmpeg_dir": "FFmpeg Directory Path:",
+    "cookies_browser": "Import Cookies From Browser:",
+    "proxy": "HTTP/SOCKS Proxy URL:",
+    "embed_metadata": "Embed Metadata & Chapters",
+    "embed_thumbnail": "Embed High-Res Thumbnail Art",
+    "subtitles": "Download Subtitles / Closed Captions",
+    "audio_alerts": "Audio Error Beep Notifications",
+    "save_btn": "Save Preferences"
+  },
+  "dialogs": {
+    "error_title": "Download Issue Detected",
+    "age_title": "Age-Restricted Video Detected (18+)",
+    "updates_title": "Check for Updates & Dependencies",
+    "ok": "OK",
+    "cancel": "Cancel",
+    "close": "Close",
+    "rebuild_exe": "Rebuild Executable Now"
+  }
+}

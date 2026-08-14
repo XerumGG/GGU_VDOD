@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_all
 
-datas = []
+datas = [('src/ggu_vdod/locales', 'ggu_vdod/locales')]
 binaries = []
 hiddenimports = []
 tmp_ret = collect_all('PySide6')

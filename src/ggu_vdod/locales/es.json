@@ -1,0 +1,66 @@
+{
+  "app": {
+    "title": "GGU_VDOD - Descargador y Convertidor de Medios",
+    "dev_build": "Versión de desarrollo : v0.002.006 (051)"
+  },
+  "nav": {
+    "home": "Inicio / Descargas",
+    "converter": "Convertidor Local",
+    "history": "Historial de Descargas",
+    "auth": "Sesiones de Cuenta",
+    "settings": "Preferencias y Ajustes"
+  },
+  "home": {
+    "url_label": "Ingrese enlaces de video o lista de reproducción (uno por línea):",
+    "url_placeholder": "https://www.youtube.com/watch?v=...\nhttps://vimeo.com/...",
+    "download_btn": "Iniciar Cola de Descarga",
+    "preview_btn": "Vista Previa del Enlace",
+    "stop_btn": "Cancelar Descargas",
+    "format_label": "Formato y Calidad:",
+    "video_quality": "Calidad de Video",
+    "audio_format": "Formato de Audio",
+    "cutter_title": "Recortador de Video por Marca de Tiempo",
+    "start_time": "Tiempo de Inicio (ej. 00:30 o 30s):",
+    "end_time": "Tiempo Final (ej. 03:00 o 180s):",
+    "status_idle": "Listo para enlaces",
+    "status_downloading": "Descargando medios..."
+  },
+  "converter": {
+    "title": "Convertidor de Medios Local FFmpeg",
+    "input_label": "Seleccionar Archivos de Medios Locales:",
+    "browse_btn": "Buscar Archivos...",
+    "target_format": "Formato de Destino:",
+    "convert_btn": "Iniciar Conversión Local",
+    "preset_label": "Ajustes de Calidad:",
+    "status_ready": "Seleccione archivos para convertir"
+  },
+  "history": {
+    "title": "Historial de Descargas Locales",
+    "clear_btn": "Limpiar Historial",
+    "open_folder": "Abrir Carpeta de Descargas",
+    "search_placeholder": "Buscar en historial..."
+  },
+  "settings": {
+    "title": "Preferencias y Configuración",
+    "language": "Idioma de la Aplicación:",
+    "download_dir": "Carpeta de Descargas por Defecto:",
+    "browse": "Examinar...",
+    "ffmpeg_dir": "Ruta del Directorio FFmpeg:",
+    "cookies_browser": "Importar Cookies del Navegador:",
+    "proxy": "URL del Proxy (HTTP/SOCKS):",
+    "embed_metadata": "Incrustar Metadatos y Capítulos",
+    "embed_thumbnail": "Incrustar Carátula en Alta Resoluciòn",
+    "subtitles": "Descargar Subtítulos",
+    "audio_alerts": "Notificaciones de Alerta por Sonido",
+    "save_btn": "Guardar Preferencias"
+  },
+  "dialogs": {
+    "error_title": "Problema de Descarga Detectado",
+    "age_title": "Video con Restricción de Edad (18+)",
+    "updates_title": "Buscar Actualizaciones y Dependencias",
+    "ok": "Aceptar",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "rebuild_exe": "Reconstruir Ejecutable Ahora"
+  }
+}

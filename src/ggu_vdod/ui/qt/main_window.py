@@ -63,6 +63,7 @@ from .dialogs import (
     LinkHistoryDialog, SignInPromptDialog, SubtitleLanguagesDialog, SupportedPlatformsDialog,
     ThemePreferencesDialog, UpdateCheckDialog,
 )
+from ...services.i18n import SUPPORTED_LANGUAGES, i18n, t
 from .theme import BASE_FONT_SIZE, apply_theme, normalize_theme
 from .widgets import TransferStatusBar
 
@@ -742,6 +743,18 @@ class QtMainWindow(QMainWindow):
         about_act = QAction("About GGU_VDOD", self)
         about_act.triggered.connect(self._show_about_dialog)
         about_menu.addAction(about_act)
+
+        # Language Selection Menu
+        lang_menu = menubar.addMenu("🌐 Language")
+        self._lang_actions = {}
+        saved_lang = self._config.get("language", "Auto")
+        for code, label in SUPPORTED_LANGUAGES.items():
+            act = QAction(label, self)
+            act.setCheckable(True)
+            act.setChecked(saved_lang == code)
+            act.triggered.connect(lambda checked, c=code: self._change_language(c))
+            lang_menu.addAction(act)
+            self._lang_actions[code] = act
 
     def _build_content(self):
         root = QWidget()
@@ -2066,3 +2079,20 @@ class QtMainWindow(QMainWindow):
         from PySide6.QtCore import QProcess
         QProcess.startDetached(sys.executable, sys.argv)
         QApplication.quit()
+
+    def _change_language(self, code: str):
+        i18n.set_language(code, save_pref=True)
+        for c, act in getattr(self, "_lang_actions", {}).items():
+            act.setChecked(c == code)
+        self._retranslate_ui()
+
+    def _retranslate_ui(self):
+        self.setWindowTitle(t("app.title", APP_NAME))
+        if hasattr(self, "download_button"):
+            self.download_button.setText(t("home.download_btn", "Download"))
+        if hasattr(self, "cancel_button"):
+            self.cancel_button.setText(t("dialogs.cancel", "Cancel"))
+        if hasattr(self, "open_folder_button"):
+            self.open_folder_button.setText(t("history.open_folder", "Open Save Folder"))
+        if hasattr(self, "url_text"):
+            self.url_text.setPlaceholderText(t("home.url_placeholder", "https://www.youtube.com/watch?v=..."))

@@ -15,7 +15,7 @@ if (Test-Path "d:\GGU_VDOD\build") { Remove-Item -Recurse -Force "d:\GGU_VDOD\bu
 
 # Execute PyInstaller into standard dist directory
 Write-Host "[INFO] Running PyInstaller into permanent 'dist' directory..." -ForegroundColor Green
-.\venv\Scripts\pyinstaller --noconsole --paths src --collect-all PySide6 --name GGU_VDOD --clean -y app.py
+.\venv\Scripts\pyinstaller --noconsole --paths src --add-data "src/ggu_vdod/locales;ggu_vdod/locales" --collect-all PySide6 --name GGU_VDOD --clean -y app.py
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[INFO] PyInstaller build succeeded! Bundling FFmpeg & FFprobe..." -ForegroundColor Green
