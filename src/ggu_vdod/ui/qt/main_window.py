@@ -767,14 +767,14 @@ class QtMainWindow(QMainWindow):
         layout.setSpacing(14)
 
         # Header Title
-        title = QLabel(APP_NAME)
-        title.setObjectName("pageTitle")
-        title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        subtitle = QLabel("Paste one or more video links below (one per line)")
-        subtitle.setObjectName("muted")
-        subtitle.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
+        self.page_title_lbl = QLabel(t("app.title", APP_NAME))
+        self.page_title_lbl.setObjectName("pageTitle")
+        self.page_title_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self.subtitle_lbl = QLabel(t("app.subtitle", "Paste one or more video links below (one per line)"))
+        self.subtitle_lbl.setObjectName("muted")
+        self.subtitle_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self.page_title_lbl)
+        layout.addWidget(self.subtitle_lbl)
 
         # URL Text Box
         self.url_text = QPlainTextEdit()
@@ -2082,14 +2082,29 @@ class QtMainWindow(QMainWindow):
 
     def _retranslate_ui(self):
         self.setWindowTitle(t("app.title", APP_NAME))
+        if hasattr(self, "page_title_lbl"):
+            self.page_title_lbl.setText(t("app.title", APP_NAME))
+        if hasattr(self, "subtitle_lbl"):
+            self.subtitle_lbl.setText(t("app.subtitle", "Paste one or more video links below (one per line)"))
         if hasattr(self, "download_button"):
-            self.download_button.setText(t("home.download_btn", "Download"))
+            self.download_button.setText(t("home.download_btn", "Start Download Queue"))
         if hasattr(self, "cancel_button"):
-            self.cancel_button.setText(t("dialogs.cancel", "Cancel"))
+            self.cancel_button.setText(t("home.stop_btn", "Cancel Active Queue"))
         if hasattr(self, "open_folder_button"):
-            self.open_folder_button.setText(t("history.open_folder", "Open Save Folder"))
+            self.open_folder_button.setText(t("home.open_folder_btn", "Open Save Folder"))
+        if hasattr(self, "preview_btn"):
+            self.preview_btn.setText(t("home.preview_btn", "Fetch Link Preview"))
         if hasattr(self, "url_text"):
             self.url_text.setPlaceholderText(t("home.url_placeholder", "https://www.youtube.com/watch?v=..."))
+        if hasattr(self, "video_radio"):
+            self.video_radio.setText(t("home.video_radio", "Video"))
+        if hasattr(self, "audio_radio"):
+            self.audio_radio.setText(t("home.audio_radio", "Audio"))
+        if hasattr(self, "single_only_check"):
+            self.single_only_check.setText(t("home.single_only", "Download single video only (ignore playlist)"))
+        if hasattr(self, "main_tab_widget"):
+            self.main_tab_widget.setTabText(0, t("nav.home", "📥 Downloader & Queue"))
+            self.main_tab_widget.setTabText(1, t("nav.auth", "🔑 Account & Sessions"))
 
     def _show_universal_preferences_dialog(self):
         from .dialogs import UniversalPreferencesDialog

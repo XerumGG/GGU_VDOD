@@ -13,7 +13,7 @@ import urllib.request
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QColorDialog, QComboBox, QDialog, QFileDialog, QFormLayout,
+    QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSlider, QSpinBox,
     QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
