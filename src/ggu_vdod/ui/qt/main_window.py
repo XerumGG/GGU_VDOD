@@ -1595,11 +1595,11 @@ class QtMainWindow(QMainWindow):
     def _update_batch_navigation(self):
         count = len(self._batch_urls)
         if not count:
-            self.batch_counter_lbl.setText("Item 0 / 0")
+            self.batch_counter_lbl.setText(t("preview.item_counter", "Item {current} / {total}", current=0, total=0))
             self.prev_batch_btn.setEnabled(False)
             self.next_batch_btn.setEnabled(False)
             return
-        self.batch_counter_lbl.setText(f"Item {self._current_batch_idx + 1} / {count}")
+        self.batch_counter_lbl.setText(t("preview.item_counter", "Item {current} / {total}", current=self._current_batch_idx + 1, total=count))
         self.prev_batch_btn.setEnabled(self._current_batch_idx > 0)
         self.next_batch_btn.setEnabled(self._current_batch_idx < count - 1)
 
@@ -1990,20 +1990,29 @@ class QtMainWindow(QMainWindow):
 
     # Dialog Connectors
     def _show_complex_options_help(self):
-        QMessageBox.information(
-            self,
-            "Complex Options Reference Guide",
-            "<h3>Complex & Advanced Options Reference Guide</h3>"
-            "<hr>"
-            "<p><b>FFmpeg Location:</b> Custom path to <code>ffmpeg.exe</code> for merging audio/video streams, converting containers, and re-encoding.</p>"
-            "<p><b>Browser Cookies:</b> Load authenticated session cookies directly from Chrome, Firefox, Edge, Brave, etc., to bypass age limits or login screens.</p>"
-            "<p><b>Proxy:</b> Route HTTP/HTTPS/SOCKS traffic through a proxy server (format: <code>http://user:pass@host:port</code>).</p>"
-            "<p><b>Subtitles:</b> Select language codes (e.g. <code>en.*, es</code>) to download and embed closed captions or auto-generated tracks.</p>"
-            "<p><b>Exact Format IDs:</b> Specify raw yt-dlp format codes (e.g. <code>137+140</code>) after running <i>List Formats</i>.</p>"
-            "<p><b>Video Codec & Bitrate:</b> Re-encode video using H.264, H.265, VP9, or AV1 with custom bitrate targets (e.g. <code>8000k</code>).</p>"
-            "<p><b>Resolution & FPS:</b> Override output video dimensions (e.g. <code>1920x1080</code>, <code>1080p</code>) and frame rates (e.g. <code>60 FPS</code>).</p>"
-            "<p><b>Sample Rate & Channels:</b> Override audio frequency (e.g. <code>48000 Hz</code>) and channel layout (Mono/Stereo).</p>"
+        title = t("help.dialog_title", "Complex Options Reference Guide")
+        hdr = t("help.dialog_header", "Complex & Advanced Options Reference Guide")
+        ffmpeg_desc = t("help.ffmpeg_desc", "Custom path to ffmpeg.exe for merging audio/video streams, converting containers, and re-encoding.")
+        cookies_desc = t("help.cookies_desc", "Load authenticated session cookies directly from Chrome, Firefox, Edge, Brave, etc., to bypass age limits or login screens.")
+        proxy_desc = t("help.proxy_desc", "Route HTTP/HTTPS/SOCKS traffic through a proxy server (format: http://user:pass@host:port).")
+        subs_desc = t("help.subs_desc", "Select language codes (e.g. en.*, es) to download and embed closed captions or auto-generated tracks.")
+        fmt_desc = t("help.fmt_desc", "Specify raw yt-dlp format codes (e.g. 137+140) after running List Formats.")
+        codec_desc = t("help.codec_desc", "Re-encode video using H.264, H.265, VP9, or AV1 with custom bitrate targets (e.g. 8000k).")
+        res_desc = t("help.res_desc", "Override output video dimensions (e.g. 1920x1080, 1080p) and frame rates (e.g. 60 FPS).")
+        sample_desc = t("help.sample_desc", "Override audio frequency (e.g. 48000 Hz) and channel layout (Mono/Stereo).")
+
+        msg = (
+            f"<h3>{hdr}</h3><hr>"
+            f"<p><b>FFmpeg Location:</b> {ffmpeg_desc}</p>"
+            f"<p><b>Browser Cookies:</b> {cookies_desc}</p>"
+            f"<p><b>Proxy:</b> {proxy_desc}</p>"
+            f"<p><b>Subtitles:</b> {subs_desc}</p>"
+            f"<p><b>Exact Format IDs:</b> {fmt_desc}</p>"
+            f"<p><b>Video Codec & Bitrate:</b> {codec_desc}</p>"
+            f"<p><b>Resolution & FPS:</b> {res_desc}</p>"
+            f"<p><b>Sample Rate & Channels:</b> {sample_desc}</p>"
         )
+        QMessageBox.information(self, title, msg)
 
     def _show_key_bindings_dialog(self):
         dlg = KeyBindingsDialog(self._config.get("key_bindings"), self._config.get("scroll_speed", SCROLL_SPEED_DEFAULT), self)
@@ -2182,6 +2191,22 @@ class QtMainWindow(QMainWindow):
             self.url_text.setPlaceholderText(t("home.url_placeholder", "https://www.youtube.com/watch?v=..."))
         if hasattr(self, "preview_title_lbl"):
             self.preview_title_lbl.setText(t("home.preview_title", "Video preview"))
+        if hasattr(self, "prev_batch_btn"):
+            self.prev_batch_btn.setText(t("preview.prev", "◄ Prev"))
+        if hasattr(self, "next_batch_btn"):
+            self.next_batch_btn.setText(t("preview.next", "Next ►"))
+        if hasattr(self, "download_thumbnail_btn"):
+            self.download_thumbnail_btn.setText(t("preview.download_thumb_btn", "Download thumbnail (HQ)"))
+        if hasattr(self, "preview_image") and self.preview_image.pixmap().isNull() if hasattr(self.preview_image, "pixmap") and self.preview_image.pixmap() else True:
+            self.preview_image.setText(t("home.no_preview", "No preview"))
+        if hasattr(self, "preview_title") and not getattr(self, "_active_preview_data", None):
+            self.preview_title.setText(t("preview.title_placeholder", "Paste a link to preview it"))
+        if hasattr(self, "preview_source") and not getattr(self, "_active_preview_data", None):
+            self.preview_source.setText(t("preview.source_waiting", "Source: waiting for a link"))
+        if hasattr(self, "preview_details") and not getattr(self, "_active_preview_data", None):
+            self.preview_details.setText(t("preview.details_placeholder", "Title, duration, uploader, and platform will appear here."))
+        if hasattr(self, "preview_status") and not getattr(self, "_active_preview_data", None):
+            self.preview_status.setText(t("preview.waiting_status", "Waiting for a link"))
         if hasattr(self, "preview_btn"):
             self.preview_btn.setText(t("home.preview_btn", "Fetch Link Preview"))
         if hasattr(self, "video_radio"):

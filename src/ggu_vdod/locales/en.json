@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "GGU_VDOD - Media Downloader & Converter",
-    "dev_build": "#052 Development build : v0.02.07",
+    "dev_build": "#054 Development build : v0.02.07",
     "subtitle": "Paste one or more video links below (one per line)"
   },
   "nav": {
@@ -59,14 +59,69 @@
     "advanced_options": "Advanced download & conversion options",
     "help_btn": "Help [?]",
     "preview_title": "Video preview",
-    "no_preview": "Paste a link to preview it",
+    "no_preview": "No preview",
+    "no_preview_desc": "Paste a link to preview it",
     "cutter_title": "Video Timestamp Cutter (Optional Range)",
     "start_time": "Start Time (e.g. 00:30 or 30s):",
     "end_time": "End Time (e.g. 03:00 or 180s):",
     "log_title": "Log Stream",
     "clear_log": "Clear Log",
-    "status_idle": "Ready for URLs",
+    "status_idle": "Ready",
     "status_downloading": "Downloading media..."
+  },
+  "preview": {
+    "prev": "◄ Prev",
+    "next": "Next ►",
+    "item_counter": "Item {current} / {total}",
+    "download_thumb_btn": "Download thumbnail (HQ)",
+    "title_placeholder": "Paste a link to preview it",
+    "source_waiting": "Source: waiting for a link",
+    "details_placeholder": "Title, duration, uploader, and platform will appear here.",
+    "waiting_status": "Waiting for a link"
+  },
+  "status": {
+    "download": "Download",
+    "upload": "Upload",
+    "transferred": "Transferred",
+    "eta": "ETA"
+  },
+  "auth": {
+    "title": "🔑 Active Domain Sessions & Security Controls",
+    "subtitle": "Credentials are encrypted with Windows DPAPI / Windows Credential Manager. Plaintext passwords are never stored.",
+    "table_domain": "Domain",
+    "table_label": "Account Label",
+    "table_mode": "Auth Mode",
+    "table_expires": "Expires In",
+    "table_status": "Status",
+    "add_btn": "Add Session...",
+    "forget_btn": "Forget Selected",
+    "purge_btn": "Purge Expired",
+    "clear_btn": "Clear All Sessions"
+  },
+  "mailpit": {
+    "title": "📬 Local Test Inbox (Mailpit - Owned Staging Only)",
+    "subtitle": "Captures local test verification emails for user-owned staging sites (localhost, *.local, *.test). Never used for external public sites.",
+    "table_from": "From",
+    "table_to": "To",
+    "table_subject": "Subject",
+    "table_created": "Created",
+    "email_content": "Email Content & Verification Links:",
+    "open_link_btn": "Open Verification Link in Browser",
+    "refresh_btn": "Refresh Inbox",
+    "open_webui_btn": "Open Mailpit Web UI (127.0.0.1:8025)",
+    "clear_btn": "Clear Test Mailbox"
+  },
+  "help": {
+    "dialog_title": "Complex Options Reference Guide",
+    "dialog_header": "Complex & Advanced Options Reference Guide",
+    "ffmpeg_desc": "Custom path to ffmpeg.exe for merging audio/video streams, converting containers, and re-encoding.",
+    "cookies_desc": "Load authenticated session cookies directly from Chrome, Firefox, Edge, Brave, etc., to bypass age limits or login screens.",
+    "proxy_desc": "Route HTTP/HTTPS/SOCKS traffic through a proxy server (format: http://user:pass@host:port).",
+    "subs_desc": "Select language codes (e.g. en.*, es) to download and embed closed captions or auto-generated tracks.",
+    "fmt_desc": "Specify raw yt-dlp format codes (e.g. 137+140) after running List Formats.",
+    "codec_desc": "Re-encode video using H.264, H.265, VP9, or AV1 with custom bitrate targets (e.g. 8000k).",
+    "res_desc": "Override output video dimensions (e.g. 1920x1080, 1080p) and frame rates (e.g. 60 FPS).",
+    "sample_desc": "Override audio frequency (e.g. 48000 Hz) and channel layout (Mono/Stereo)."
   },
   "advanced": {
     "ffmpeg_group": "FFmpeg & FFprobe location",

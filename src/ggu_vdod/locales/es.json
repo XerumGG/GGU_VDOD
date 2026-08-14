@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "GGU_VDOD - Descargador y Convertidor de Medios",
-    "dev_build": "#052 Versión de desarrollo : v0.02.07",
+    "dev_build": "#054 Versión de desarrollo : v0.02.07",
     "subtitle": "Ingrese uno o más enlaces de video a continuación (uno por línea)"
   },
   "nav": {
@@ -59,14 +59,69 @@
     "advanced_options": "Opciones avanzadas de descarga y conversión",
     "help_btn": "Ayuda [?]",
     "preview_title": "Vista previa de video",
-    "no_preview": "Pegue un enlace para vista previa",
+    "no_preview": "Sin vista previa",
+    "no_preview_desc": "Pegue un enlace para vista previa",
     "cutter_title": "Recortador de Video por Marca de Tiempo",
     "start_time": "Tiempo de Inicio (ej. 00:30 o 30s):",
     "end_time": "Tiempo Final (ej. 03:00 o 180s):",
     "log_title": "Registro de actividad",
     "clear_log": "Limpiar registro",
-    "status_idle": "Listo para enlaces",
+    "status_idle": "Listo",
     "status_downloading": "Descargando medios..."
+  },
+  "preview": {
+    "prev": "◄ Anterior",
+    "next": "Siguiente ►",
+    "item_counter": "Elemento {current} / {total}",
+    "download_thumb_btn": "Descargar miniatura (HQ)",
+    "title_placeholder": "Pegue un enlace para vista previa",
+    "source_waiting": "Origen: esperando enlace",
+    "details_placeholder": "Título, duración, autor y plataforma aparecerán aquí.",
+    "waiting_status": "Esperando enlace"
+  },
+  "status": {
+    "download": "Descarga",
+    "upload": "Subida",
+    "transferred": "Transferido",
+    "eta": "Tiempo restante"
+  },
+  "auth": {
+    "title": "🔑 Sesiones de dominio activas y controles de seguridad",
+    "subtitle": "Las credenciales se cifran con Windows DPAPI. Las contraseñas nunca se guardan en texto plano.",
+    "table_domain": "Dominio",
+    "table_label": "Etiqueta de cuenta",
+    "table_mode": "Modo de autenticación",
+    "table_expires": "Expira en",
+    "table_status": "Estado",
+    "add_btn": "Agregar sesión...",
+    "forget_btn": "Olvidar seleccionados",
+    "purge_btn": "Limpiar expirados",
+    "clear_btn": "Borrar todas las sesiones"
+  },
+  "mailpit": {
+    "title": "📬 Buzón de pruebas local (Mailpit)",
+    "subtitle": "Captura correos de verificación para entornos locales. Nunca se usa en sitios públicos.",
+    "table_from": "De",
+    "table_to": "Para",
+    "table_subject": "Asunto",
+    "table_created": "Fecha",
+    "email_content": "Contenido del correo y enlaces de verificación:",
+    "open_link_btn": "Abrir enlace de verificación en el navegador",
+    "refresh_btn": "Actualizar buzón",
+    "open_webui_btn": "Abrir interfaz web Mailpit (127.0.0.1:8025)",
+    "clear_btn": "Limpiar buzón"
+  },
+  "help": {
+    "dialog_title": "Guía de referencia de opciones complejas",
+    "dialog_header": "Guía de referencia de opciones avanzadas y complejas",
+    "ffmpeg_desc": "Ruta personalizada a ffmpeg.exe para combinar streams y reencodificar.",
+    "cookies_desc": "Cargue cookies de sesión desde Chrome, Firefox, etc., para ignorar restricciones de edad.",
+    "proxy_desc": "Dirija el tráfico a través de un servidor proxy (formato: http://user:pass@host:port).",
+    "subs_desc": "Seleccione códigos de idioma (ej. en.*, es) para descargar subtítulos.",
+    "fmt_desc": "Especifique códigos de formato yt-dlp (ej. 137+140) tras listar formatos.",
+    "codec_desc": "Reencodifique video usando H.264, H.265, VP9, o AV1 con tasa de bits objetivo.",
+    "res_desc": "Cambie la resolución de salida y la tasa de fotogramas (ej. 60 FPS).",
+    "sample_desc": "Cambie la frecuencia de audio (ej. 48000 Hz) y los canales (Mono/Estéreo)."
   },
   "advanced": {
     "ffmpeg_group": "Ubicación de FFmpeg y FFprobe",

@@ -80,18 +80,26 @@ class AccountSessionWidget(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
-        title_label = QLabel("🔑 Active Domain Sessions & Security Controls", self)
-        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
-        layout.addWidget(title_label)
+        from ...services.i18n import i18n, t
 
-        sub_label = QLabel("Credentials are encrypted with Windows DPAPI / Windows Credential Manager. Plaintext passwords are never stored.", self)
-        sub_label.setStyleSheet("color: #888888; font-size: 11px;")
-        layout.addWidget(sub_label)
+        self.title_label = QLabel(t("auth.title", "🔑 Active Domain Sessions & Security Controls"), self)
+        self.title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        layout.addWidget(self.title_label)
+
+        self.sub_label = QLabel(t("auth.subtitle", "Credentials are encrypted with Windows DPAPI / Windows Credential Manager. Plaintext passwords are never stored."), self)
+        self.sub_label.setStyleSheet("color: #888888; font-size: 11px;")
+        layout.addWidget(self.sub_label)
 
         # Table
         self.table = QTableWidget(self)
         self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Domain", "Account Label", "Auth Mode", "Expires In", "Status"])
+        self.table.setHorizontalHeaderLabels([
+            t("auth.table_domain", "Domain"),
+            t("auth.table_label", "Account Label"),
+            t("auth.table_mode", "Auth Mode"),
+            t("auth.table_expires", "Expires In"),
+            t("auth.table_status", "Status"),
+        ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         layout.addWidget(self.table)
@@ -99,16 +107,16 @@ class AccountSessionWidget(QWidget):
         # Action Toolbar
         toolbar = QHBoxLayout()
 
-        self.add_btn = QPushButton("Add Session...", self)
+        self.add_btn = QPushButton(t("auth.add_btn", "Add Session..."), self)
         self.add_btn.clicked.connect(self._add_session)
 
-        self.forget_btn = QPushButton("Forget Selected", self)
+        self.forget_btn = QPushButton(t("auth.forget_btn", "Forget Selected"), self)
         self.forget_btn.clicked.connect(self._forget_selected)
 
-        self.purge_btn = QPushButton("Purge Expired", self)
+        self.purge_btn = QPushButton(t("auth.purge_btn", "Purge Expired"), self)
         self.purge_btn.clicked.connect(self._purge_expired)
 
-        self.clear_btn = QPushButton("Clear All Sessions", self)
+        self.clear_btn = QPushButton(t("auth.clear_btn", "Clear All Sessions"), self)
         self.clear_btn.setStyleSheet("background-color: #8b0000; color: white;")
         self.clear_btn.clicked.connect(self._clear_all)
 
@@ -119,7 +127,24 @@ class AccountSessionWidget(QWidget):
         toolbar.addWidget(self.clear_btn)
 
         layout.addLayout(toolbar)
+        i18n.language_changed.connect(self._retranslate_ui)
         self.refresh_sessions()
+
+    def _retranslate_ui(self):
+        from ...services.i18n import t
+        self.title_label.setText(t("auth.title", "🔑 Active Domain Sessions & Security Controls"))
+        self.sub_label.setText(t("auth.subtitle", "Credentials are encrypted with Windows DPAPI / Windows Credential Manager. Plaintext passwords are never stored."))
+        self.table.setHorizontalHeaderLabels([
+            t("auth.table_domain", "Domain"),
+            t("auth.table_label", "Account Label"),
+            t("auth.table_mode", "Auth Mode"),
+            t("auth.table_expires", "Expires In"),
+            t("auth.table_status", "Status"),
+        ])
+        self.add_btn.setText(t("auth.add_btn", "Add Session..."))
+        self.forget_btn.setText(t("auth.forget_btn", "Forget Selected"))
+        self.purge_btn.setText(t("auth.purge_btn", "Purge Expired"))
+        self.clear_btn.setText(t("auth.clear_btn", "Clear All Sessions"))
 
     def refresh_sessions(self, force: bool = False):
         """Reload active sessions into table widget."""

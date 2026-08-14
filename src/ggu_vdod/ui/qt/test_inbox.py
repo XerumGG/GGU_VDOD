@@ -58,11 +58,13 @@ class MailpitTestInboxWidget(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
 
+        from ...services.i18n import i18n, t
+
         # Header Status Row
         header_row = QHBoxLayout()
-        title_label = QLabel("📬 Local Test Inbox (Mailpit - Owned Staging Only)", self)
-        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
-        header_row.addWidget(title_label)
+        self.title_label = QLabel(t("mailpit.title", "📬 Local Test Inbox (Mailpit - Owned Staging Only)"), self)
+        self.title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        header_row.addWidget(self.title_label)
         header_row.addStretch()
 
         self.status_label = QLabel("Mailpit: Checking...", self)
@@ -70,12 +72,12 @@ class MailpitTestInboxWidget(QWidget):
         header_row.addWidget(self.status_label)
         layout.addLayout(header_row)
 
-        sub_label = QLabel(
-            "Captures local test verification emails for user-owned staging sites (localhost, *.local, *.test). Never used for external public sites.",
+        self.sub_label = QLabel(
+            t("mailpit.subtitle", "Captures local test verification emails for user-owned staging sites (localhost, *.local, *.test). Never used for external public sites."),
             self,
         )
-        sub_label.setStyleSheet("color: #888888; font-size: 11px;")
-        layout.addWidget(sub_label)
+        self.sub_label.setStyleSheet("color: #888888; font-size: 11px;")
+        layout.addWidget(self.sub_label)
 
         # Main Splitter (Message Table + Email Preview Box)
         splitter = QSplitter(Qt.Orientation.Vertical, self)
@@ -83,7 +85,12 @@ class MailpitTestInboxWidget(QWidget):
         # Message List Table
         self.table = QTableWidget(self)
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["From", "To", "Subject", "Created"])
+        self.table.setHorizontalHeaderLabels([
+            t("mailpit.table_from", "From"),
+            t("mailpit.table_to", "To"),
+            t("mailpit.table_subject", "Subject"),
+            t("mailpit.table_created", "Created"),
+        ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.itemSelectionChanged.connect(self._on_message_selected)
@@ -96,10 +103,11 @@ class MailpitTestInboxWidget(QWidget):
         prev_layout.setSpacing(6)
 
         prev_header = QHBoxLayout()
-        prev_header.addWidget(QLabel("Email Content & Verification Links:", self))
+        self.prev_lbl = QLabel(t("mailpit.email_content", "Email Content & Verification Links:"), self)
+        prev_header.addWidget(self.prev_lbl)
         prev_header.addStretch()
 
-        self.open_link_btn = QPushButton("Open Verification Link in Browser", self)
+        self.open_link_btn = QPushButton(t("mailpit.open_link_btn", "Open Verification Link in Browser"), self)
         self.open_link_btn.setEnabled(False)
         self.open_link_btn.clicked.connect(self._open_selected_verification_link)
         prev_header.addWidget(self.open_link_btn)
@@ -117,14 +125,14 @@ class MailpitTestInboxWidget(QWidget):
         # Action Toolbar
         toolbar = QHBoxLayout()
 
-        self.refresh_btn = QPushButton("Refresh Inbox", self)
+        self.refresh_btn = QPushButton(t("mailpit.refresh_btn", "Refresh Inbox"), self)
         self.refresh_btn.clicked.connect(self.trigger_poll)
 
-        self.open_webui_btn = QPushButton("Open Mailpit Web UI (127.0.0.1:8025)", self)
+        self.open_webui_btn = QPushButton(t("mailpit.open_webui_btn", "Open Mailpit Web UI (127.0.0.1:8025)"), self)
         self.open_webui_btn.setToolTip("Open Mailpit web dashboard in your default web browser.")
         self.open_webui_btn.clicked.connect(self._open_webui)
 
-        self.clear_btn = QPushButton("Clear Test Mailbox", self)
+        self.clear_btn = QPushButton(t("mailpit.clear_btn", "Clear Test Mailbox"), self)
         self.clear_btn.setStyleSheet("background-color: #8b0000; color: white;")
         self.clear_btn.clicked.connect(self._clear_mailbox)
 
@@ -134,6 +142,23 @@ class MailpitTestInboxWidget(QWidget):
         toolbar.addWidget(self.clear_btn)
 
         layout.addLayout(toolbar)
+        i18n.language_changed.connect(self._retranslate_ui)
+
+    def _retranslate_ui(self):
+        from ...services.i18n import t
+        self.title_label.setText(t("mailpit.title", "📬 Local Test Inbox (Mailpit - Owned Staging Only)"))
+        self.sub_label.setText(t("mailpit.subtitle", "Captures local test verification emails for user-owned staging sites (localhost, *.local, *.test). Never used for external public sites."))
+        self.table.setHorizontalHeaderLabels([
+            t("mailpit.table_from", "From"),
+            t("mailpit.table_to", "To"),
+            t("mailpit.table_subject", "Subject"),
+            t("mailpit.table_created", "Created"),
+        ])
+        self.prev_lbl.setText(t("mailpit.email_content", "Email Content & Verification Links:"))
+        self.open_link_btn.setText(t("mailpit.open_link_btn", "Open Verification Link in Browser"))
+        self.refresh_btn.setText(t("mailpit.refresh_btn", "Refresh Inbox"))
+        self.open_webui_btn.setText(t("mailpit.open_webui_btn", "Open Mailpit Web UI (127.0.0.1:8025)"))
+        self.clear_btn.setText(t("mailpit.clear_btn", "Clear Test Mailbox"))
 
     def _open_webui(self):
         import webbrowser
