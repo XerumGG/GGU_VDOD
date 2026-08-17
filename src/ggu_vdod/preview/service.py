@@ -33,7 +33,7 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
         "age_limit": 99,
     }
 
-    extractor_args = {"youtube": {"player_client": ["android", "ios", "mweb", "web"]}}
+    extractor_args = {}
     try:
         from yt_dlp.networking.impersonate import ImpersonateTarget
         target = ImpersonateTarget.from_str("chrome")
@@ -43,7 +43,8 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
             extractor_args["generic"] = ["impersonate"]
     except Exception:
         pass
-    options["extractor_args"] = extractor_args
+    if extractor_args:
+        options["extractor_args"] = extractor_args
 
     try:
         parsed_domain = urllib.parse.urlparse(target_url).netloc

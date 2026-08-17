@@ -391,7 +391,7 @@ class QtDownloadWorker(QThread):
         except Exception:
             pass
 
-        extractor_args = {"youtube": {"player_client": ["android", "ios", "mweb", "web"]}}
+        extractor_args = {}
         try:
             from yt_dlp.networking.impersonate import ImpersonateTarget
             target = ImpersonateTarget.from_str("chrome")
@@ -401,7 +401,8 @@ class QtDownloadWorker(QThread):
                 extractor_args["generic"] = ["impersonate"]
         except Exception:
             pass
-        ydl_opts["extractor_args"] = extractor_args
+        if extractor_args:
+            ydl_opts["extractor_args"] = extractor_args
 
         # Automatic DPAPI Account & Session Injection for current target URL
         try:
