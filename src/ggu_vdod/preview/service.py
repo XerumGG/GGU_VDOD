@@ -33,6 +33,14 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
         "age_limit": 99,
     }
 
+    try:
+        from ..config.paths import get_default_qjs_path
+        qjs_bin = get_default_qjs_path()
+        if qjs_bin and os.path.exists(qjs_bin):
+            options["js_runtimes"] = {"quickjs": {"path": qjs_bin}}
+    except Exception:
+        pass
+
     extractor_args = {}
     try:
         from yt_dlp.networking.impersonate import ImpersonateTarget

@@ -30,6 +30,10 @@ if ($LASTEXITCODE -eq 0) {
         Copy-Item "d:\GGU_VDOD\ffmpeg\ffprobe.exe" -Destination "$dest_ffmpeg\ffprobe.exe" -Force
         Copy-Item "d:\GGU_VDOD\ffmpeg\ffprobe.exe" -Destination "d:\GGU_VDOD\dist\GGU_VDOD\ffprobe.exe" -Force
     }
+    if (Test-Path "d:\GGU_VDOD\ffmpeg\qjs.exe") {
+        Copy-Item "d:\GGU_VDOD\ffmpeg\qjs.exe" -Destination "$dest_ffmpeg\qjs.exe" -Force
+        Copy-Item "d:\GGU_VDOD\ffmpeg\qjs.exe" -Destination "d:\GGU_VDOD\dist\GGU_VDOD\qjs.exe" -Force
+    }
     Write-Host "[SUCCESS] Permanent build complete at 'd:\GGU_VDOD\dist\GGU_VDOD\GGU_VDOD.exe'" -ForegroundColor Cyan
 } else {
     Write-Host "[ERROR] PyInstaller build failed with exit code $LASTEXITCODE" -ForegroundColor Red

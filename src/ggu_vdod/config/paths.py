@@ -85,5 +85,22 @@ def get_default_ffprobe_path():
     return r"D:\GGU_VDOD\ffmpeg\ffprobe.exe"
 
 
+def get_default_qjs_path():
+    r"""Return default QuickJS binary path (qjs.exe) for solving YouTube JavaScript challenges."""
+    for folder in [
+        get_default_ffmpeg_dir(),
+        os.path.join(get_app_dir(), "ffmpeg"),
+        os.path.join(get_app_dir(), "bin"),
+        r"D:\GGU_VDOD\ffmpeg",
+        r"D:\GGU_VDOD\bin",
+    ]:
+        if folder and os.path.isdir(folder):
+            exe = os.path.join(folder, "qjs.exe")
+            if os.path.exists(exe):
+                return exe
+    import shutil
+    return shutil.which("qjs") or shutil.which("quickjs")
+
+
 CONFIG_DIR = get_config_dir()
 CONFIG_FILE = os.path.join(CONFIG_DIR, "config.json")
