@@ -149,8 +149,8 @@
     "cap2_body": "محاكاة TLS متصفح Chrome لتجاوز أخطاء 403.",
     "cap3_title": "تشفير DPAPI:",
     "cap3_body": "تخزين آمن لبيانات الاعتماد تحت Windows DPAPI.",
-    "cap4_title": "التحقق من العمر والبريد المحلي:",
-    "cap4_body": "كشف قيود +18 والتكامل مع Mailpit.",
+    "cap4_title": "Account Sessions & Local Test Inbox:",
+    "cap4_body": "Register domain account sessions and integrate with local Mailpit (127.0.0.1:8025) for staging signups.",
     "cap5_title": "فحص التحديث التلقائي:",
     "cap5_body": "فحص دوري لإصدارات yt-dlp و FFmpeg."
   },
@@ -223,7 +223,6 @@
   },
   "dialogs": {
     "error_title": "تم اكتشاف مشكلة في التنزيل",
-    "age_title": "فيديو محظور حسب الفئة العمرية (18+)",
     "updates_title": "التحقق من التحديثات والمكونات",
     "ok": "موافق",
     "cancel": "إلغاء",

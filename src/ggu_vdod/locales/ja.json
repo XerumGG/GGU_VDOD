@@ -149,8 +149,8 @@
     "cap2_body": "TLS Chrome ブラウザ偽装を使用して HTTP 403 エラーを回避します。",
     "cap3_title": "DPAPI 暗号化セッション:",
     "cap3_body": "ドメイン認証情報を Windows DPAPI で安全に暗号化保存します。",
-    "cap4_title": "年齢確認とローカル受信トレイ:",
-    "cap4_body": "18禁制限を検出し、Mailpit (127.0.0.1:8025) と連携します。",
+    "cap4_title": "アカウントセッションとローカルテスト受信ボックス:",
+    "cap4_body": "Register domain account sessions and integrate with local Mailpit (127.0.0.1:8025) for staging signups.",
     "cap5_title": "24時間ごとの自動更新確認:",
     "cap5_body": "yt-dlp、PySide6、FFmpeg などのバージョンを定期確認します。"
   },
@@ -223,7 +223,6 @@
   },
   "dialogs": {
     "error_title": "ダウンロードエラーを検出",
-    "age_title": "年齢制限動画を検出 (18+)",
     "updates_title": "更新と依存関係を確認",
     "ok": "OK",
     "cancel": "キャンセル",

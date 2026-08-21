@@ -149,8 +149,8 @@
     "cap2_body": "使用原生 TLS Chrome 浏览器伪装绕过 403 错误。",
     "cap3_title": "DPAPI 加密会话：",
     "cap3_body": "使用 Windows DPAPI 安全加密存储凭据。",
-    "cap4_title": "年龄验证与测试收件箱：",
-    "cap4_body": "自动检测 18+ 限制并集成 Mailpit。",
+    "cap4_title": "账户会话与本地测试收件箱：",
+    "cap4_body": "管理域账户会话并集成本地 Mailpit（127.0.0.1:8025）。",
     "cap5_title": "自动 24 小时更新检查：",
     "cap5_body": "定期检查 yt-dlp 和 FFmpeg 的版本。"
   },
@@ -223,7 +223,6 @@
   },
   "dialogs": {
     "error_title": "检测到下载问题",
-    "age_title": "检测到年龄限制视频 (18+)",
     "updates_title": "检查更新与依赖库",
     "ok": "确定",
     "cancel": "取消",

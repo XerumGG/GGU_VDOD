@@ -43,13 +43,12 @@ from ...preview.metadata import download_thumbnail_bytes
 from ...preview.service import fetch_preview
 from ...services.network import explain_download_error
 from ...services.cookies import inspect_netscape_cookie_file
-from ...auth.sanitizer import is_adult_or_age_restricted_url
 from .account_panel import AccountSessionWidget
 from .test_inbox import MailpitTestInboxWidget
 from .dialogs import (
-    AboutDialog, AgeGateAuthDialog, AgeVerificationDialog, DeepMediaInspectorDialog,
+    AboutDialog, DeepMediaInspectorDialog,
     ErrorAlertDialog, FontPreferencesDialog, HelpCenterDialog, KeyBindingsDialog, LibraryDialog,
-    LinkHistoryDialog, SignInPromptDialog, SubtitleLanguagesDialog, SupportedPlatformsDialog,
+    LinkHistoryDialog, SubtitleLanguagesDialog, SupportedPlatformsDialog,
     ThemePreferencesDialog, UpdateCheckDialog,
 )
 from ...services.i18n import SUPPORTED_LANGUAGES, i18n, t
@@ -1431,45 +1430,6 @@ class QtMainWindow(QMainWindow):
         self._thumbnail_workers.add(worker)
         worker.start()
 
-    def _handle_age_verification(self, urls: list[str]) -> list[str]:
-        """Check for adult/18+ URLs and prompt for age verification and authentication options."""
-        adult_urls = [u for u in urls if is_adult_or_age_restricted_url(u)]
-        if not adult_urls:
-            return urls
-
-        # Step 1: Age Gate Verification Dialog (18+)
-        first_adult_url = adult_urls[0]
-        dlg = AgeVerificationDialog(first_adult_url, self)
-        if dlg.exec() != QDialog.DialogCode.Accepted:
-            self.log_box.appendPlainText("[NOTICE] Download cancelled for adult link(s): Age verification (18+) not confirmed.")
-            safe_urls = [u for u in urls if not is_adult_or_age_restricted_url(u)]
-            return safe_urls
-
-        self.log_box.appendPlainText("[INFO] Age verification (18+) confirmed by user.")
-
-        # Step 2: Sign-in / Cookie / Session Setup Dialog
-        try:
-            domain = urllib.parse.urlparse(first_adult_url).netloc or "this site"
-        except Exception:
-            domain = "this site"
-
-        auth_dlg = AgeGateAuthDialog(domain, self)
-        if auth_dlg.exec() == QDialog.DialogCode.Accepted:
-            action = getattr(auth_dlg, "user_action", "guest")
-            if action == "cookies":
-                if self.cookie_browser_combo.currentText() in ("None", "Custom cookies.txt file..."):
-                    self._set_combo_value(self.cookie_browser_combo, "chrome")
-                self.log_box.appendPlainText(f"[INFO] Configured browser cookie import for {domain}.")
-            elif action == "account_sessions":
-                self.main_tab_widget.setCurrentIndex(1)
-                self.log_box.appendPlainText(f"[INFO] Redirecting to Account & Sessions tab for {domain}.")
-            elif action == "mailpit":
-                self.main_tab_widget.setCurrentIndex(2)
-                self.log_box.appendPlainText("[INFO] Redirecting to Local Test Inbox (Mailpit) tab.")
-            elif action == "guest":
-                self.log_box.appendPlainText("[INFO] Proceeding as guest using 18+ age limit bypass flag.")
-
-        return urls
 
     def _start_download(self):
         try:
@@ -1485,10 +1445,6 @@ class QtMainWindow(QMainWindow):
             if not urls:
                 self.log_box.appendPlainText("[WARNING] Download clicked but no valid video links found in input box.")
                 QMessageBox.warning(self, "No links provided", "Please paste at least one valid video link before clicking Download.")
-                return
-
-            urls = self._handle_age_verification(urls)
-            if not urls:
                 return
 
             if not self._ensure_cookie_file_consent():

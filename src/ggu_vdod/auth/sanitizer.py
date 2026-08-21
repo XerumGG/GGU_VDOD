@@ -39,15 +39,3 @@ def sanitize_headers(headers: dict) -> dict:
     return clean_headers
 
 
-UNIVERSAL_AGE_KEYWORDS = [
-    "adult", "18+", "nsfw", "over18", "age-gate", "age_limit",
-    "mature", "restricted", "verify-age", "private-stream",
-]
-
-
-def is_adult_or_age_restricted_url(url: str) -> bool:
-    """Check if URL matches general age-restricted keywords or auth gates."""
-    if not url:
-        return False
-    lower_url = str(url).lower()
-    return any(k in lower_url for k in UNIVERSAL_AGE_KEYWORDS)

@@ -149,8 +149,8 @@
     "cap2_body": "NATIVE TLS Chrome-Impersonation zur Umgehung von 403-Fehlern.",
     "cap3_title": "DPAPI Verschlüsselung:",
     "cap3_body": "Sichere Speicherung von Zugangsdaten.",
-    "cap4_title": "Altersprüfung & Test-Posteingang:",
-    "cap4_body": "Erkennt 18+ Beschränkungen und integriert Mailpit.",
+    "cap4_title": "Kontositzungen & Local Test Inbox:",
+    "cap4_body": "Verwaltet Domain-Kontositzungen und integriert den lokalen Mailpit-Server (127.0.0.1:8025).",
     "cap5_title": "Automatische Updates:",
     "cap5_body": "Prüft regelmäßig Updates für yt-dlp und FFmpeg."
   },
@@ -223,7 +223,6 @@
   },
   "dialogs": {
     "error_title": "Download-Problem erkannt",
-    "age_title": "Altersbeschränktes Video erkannt (18+)",
     "updates_title": "Updates & Abhängigkeiten prüfen",
     "ok": "OK",
     "cancel": "Abbrechen",

@@ -149,8 +149,8 @@
     "cap2_body": "Uses native TLS Chrome browser impersonation to bypass HTTP 403 Cloudflare challenges.",
     "cap3_title": "DPAPI Encrypted Account Sessions:",
     "cap3_body": "Saves domain credentials and tokens securely under Windows DPAPI encryption.",
-    "cap4_title": "Age Verification & Local Test Inbox:",
-    "cap4_body": "Automatically detects 18+ age restrictions and integrates with local Mailpit (127.0.0.1:8025) for signups.",
+    "cap4_title": "Account Sessions & Local Test Inbox:",
+    "cap4_body": "Register domain account sessions and integrate with local Mailpit (127.0.0.1:8025) for staging signups.",
     "cap5_title": "Automatic Component Update Check:",
     "cap5_body": "Periodically verifies installed versions of yt-dlp, PySide6, Pillow, PyInstaller, curl_cffi, FFmpeg, and FFprobe."
   },
@@ -223,7 +223,6 @@
   },
   "dialogs": {
     "error_title": "Download Issue Detected",
-    "age_title": "Age-Restricted Video Detected (18+)",
     "updates_title": "Check for Updates & Dependencies",
     "ok": "OK",
     "cancel": "Cancel",

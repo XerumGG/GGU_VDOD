@@ -11,7 +11,6 @@ if str(SOURCE_ROOT) not in sys.path:
 
 from PySide6.QtWidgets import QApplication
 from ggu_vdod.ui.qt.account_panel import AccountSessionWidget, AddCredentialDialog
-from ggu_vdod.ui.qt.dialogs import SignInPromptDialog
 from ggu_vdod.ui.qt.main_window import QtMainWindow
 
 app = QApplication.instance() or QApplication(sys.argv)
@@ -26,13 +25,6 @@ class QtAccountPanelTests(unittest.TestCase):
         finally:
             widget.close()
 
-    def test_sign_in_prompt_dialog_instantiation(self):
-        dlg = SignInPromptDialog("protected-site.com")
-        try:
-            self.assertEqual(dlg.domain, "protected-site.com")
-            self.assertEqual(dlg.get_selected_browser(), "Chrome")
-        finally:
-            dlg.close()
 
     def test_main_window_has_account_tab(self):
         window = QtMainWindow()

@@ -185,7 +185,6 @@
   },
   "dialogs": {
     "error_title": "Problema de Descarga Detectado",
-    "age_title": "Video con Restricción de Edad (18+)",
     "updates_title": "Buscar Actualizaciones y Dependencias",
     "ok": "Aceptar",
     "cancel": "Cancelar",

@@ -149,8 +149,8 @@
     "cap2_body": "Utiliza personificação TLS Chrome para evitar erro 403.",
     "cap3_title": "Criptografia DPAPI:",
     "cap3_body": "Armazenamento seguro sob o Windows DPAPI.",
-    "cap4_title": "Verificação de idade e Mailpit:",
-    "cap4_body": "Detecta restrições 18+ e se integra ao Mailpit.",
+    "cap4_title": "Sessões de conta e caixa de teste local:",
+    "cap4_body": "Gerencia sessões de conta por domínio e integra o Mailpit local (127.0.0.1:8025).",
     "cap5_title": "Atualização automática:",
     "cap5_body": "Verifica periodicamente atualizações do yt-dlp e FFmpeg."
   },
@@ -223,7 +223,6 @@
   },
   "dialogs": {
     "error_title": "Problema de Download Detectado",
-    "age_title": "Vídeo com Restricão de Idade (18+)",
     "updates_title": "Verificar Atualizações e Dependências",
     "ok": "OK",
     "cancel": "Cancelar",

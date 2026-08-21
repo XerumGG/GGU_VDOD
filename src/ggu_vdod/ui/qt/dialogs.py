@@ -880,22 +880,15 @@ class HelpCenterDialog(QDialog):
         html = """
         <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6;">
             <div style="background: #141414; border: 1px solid #e5484d; border-radius: 8px; padding: 16px; margin-bottom: 18px;">
-                <h3 style="margin-top: 0; color: #e5484d; font-size: 16px;">1. Account Sessions & 18+ Age Gate Bypass Guide</h3>
+                <h3 style="margin-top: 0; color: #e5484d; font-size: 16px;">1. Account Sessions & Local Test Inbox Guide</h3>
                 <p style="color: #a7a7a7; font-size: 12px; margin-top: -6px;"><i>Example Targets: Protected media platforms (e.g. <b>example.com</b> or <b>staging.local</b>)</i></p>
                 
-                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">A. Age-Gated Media Link Detection</h4>
-                <ol style="margin-top: 4px; padding-left: 20px;">
-                    <li>When pasting an age-restricted or protected link (e.g. <code>https://example.com/watch?v=12345</code> or <code>staging.local</code>), GGU_VDOD automatically detects the domain restriction.</li>
-                    <li>An <b>Age Verification Required (18+)</b> modal pops up asking you to confirm you are 18 years of age or older.</li>
-                    <li>Click <b>I am 18 or older (Confirm)</b> to open the authentication setup dialog.</li>
-                </ol>
-
                 <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">B. Authentication Options for Age-Restricted Sites</h4>
                 <ul style="margin-top: 4px; padding-left: 20px;">
                     <li><b>Option 1 (Auto-Import Browser Cookies):</b> Imports active session cookies from Chrome, Firefox, Edge, Brave, Vivaldi, etc., to bypass age verification gates automatically.</li>
                     <li><b>Option 2 (Account Sessions Tab):</b> Registers stored account credentials (username/password/token) under DPAPI encryption for the domain.</li>
                     <li><b>Option 3 (Local Test Inbox Mailpit):</b> Opens local email capture dashboard on <code>127.0.0.1:8025</code> for staging account signups.</li>
-                    <li><b>Option 4 (Continue as Guest):</b> Sets native <code>age_limit: 99</code> bypass flags in yt-dlp to extract public age-restricted streams without login.</li>
+                    <li><b>Option 3 (Continue without sign-in):</b> Sets native <code>age_limit: 99</code> bypass flags in yt-dlp to extract public age-restricted streams without login.</li>
                 </ul>
             </div>
 
@@ -1692,184 +1685,5 @@ class ThemePreferencesDialog(QDialog):
         return theme_name(self._draft), dict(self._draft)
 
 
-class SignInPromptDialog(QDialog):
-    """Modal dialog displayed when protected media requires sign-in or authentication."""
-
-    def __init__(self, domain: str = "", parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Sign In Required to Continue")
-        self.setMinimumWidth(450)
-        self.domain = domain
-
-        layout = QVBoxLayout(self)
-        layout.setSpacing(12)
-
-        info_label = QLabel(
-            f" Content on <b>{html.escape(domain or 'this website')}</b> requires sign-in or account verification.",
-            self,
-        )
-        info_label.setWordWrap(True)
-        layout.addWidget(info_label)
-
-        sub_label = QLabel(
-            "Select how you want GGU_VDOD to authenticate for this download:",
-            self,
-        )
-        sub_label.setStyleSheet("color: #aaaaaa;")
-        layout.addWidget(sub_label)
-
-        form = QFormLayout()
-        self.browser_combo = QComboBox(self)
-        self.browser_combo.addItems(["Chrome", "Firefox", "Edge", "Brave", "Opera", "Safari", "Vivaldi"])
-        form.addRow("Browser Session:", self.browser_combo)
-
-        self.account_input = QLineEdit(self)
-        self.account_input.setPlaceholderText("Account Label (e.g. user@domain.com)")
-        form.addRow("Account Label:", self.account_input)
-
-        layout.addLayout(form)
-
-        btn_box = QHBoxLayout()
-        self.browser_btn = QPushButton("Use Selected Browser Session", self)
-        self.browser_btn.clicked.connect(self.accept)
-        btn_box.addWidget(self.browser_btn)
-
-        self.cancel_btn = QPushButton("Cancel", self)
-        self.cancel_btn.clicked.connect(self.reject)
-        btn_box.addWidget(self.cancel_btn)
-
-        layout.addLayout(btn_box)
-
-    def get_selected_browser(self) -> str:
-        return self.browser_combo.currentText()
-
-    def get_account_label(self) -> str:
-        return self.account_input.text().strip()
-
-
-class AgeVerificationDialog(QDialog):
-    """Modal dialog for 18+ adult content age verification."""
-
-    def __init__(self, target_url: str = "", parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Age Verification Required (18+)")
-        self.resize(520, 240)
-        self.setMinimumSize(460, 200)
-
-        domain = ""
-        if target_url:
-            try:
-                domain = urllib.parse.urlparse(target_url).netloc
-            except Exception:
-                domain = target_url
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(14)
-
-        hdr_frame = QFrame()
-        hdr_frame.setObjectName("panel")
-        hdr_frame.setStyleSheet("QFrame#panel { background: #1a1a1a; border: 1px solid #e5484d; border-radius: 8px; }")
-        hdr_layout = QVBoxLayout(hdr_frame)
-        hdr_layout.setContentsMargins(16, 14, 16, 14)
-
-        title = QLabel("Age Verification Required (18+)", self)
-        title.setStyleSheet("font-size: 16px; font-weight: 700; color: #e5484d;")
-
-        msg_text = f"The URL ({domain or 'this site'}) contains adult or age-restricted media.\n\nYou must be 18 years of age or older to view, preview, or download content from this platform."
-        msg = QLabel(msg_text, self)
-        msg.setWordWrap(True)
-        msg.setStyleSheet("font-size: 13px; color: #e2e2e2;")
-
-        hdr_layout.addWidget(title)
-        hdr_layout.addWidget(msg)
-        layout.addWidget(hdr_frame)
-
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(12)
-
-        self.confirm_btn = QPushButton("I am 18 or older (Confirm)", self)
-        self.confirm_btn.setObjectName("primary")
-        self.confirm_btn.setMinimumHeight(36)
-        self.confirm_btn.clicked.connect(self.accept)
-
-        self.cancel_btn = QPushButton("Cancel / Under 18", self)
-        self.cancel_btn.setMinimumHeight(36)
-        self.cancel_btn.clicked.connect(self.reject)
-
-        btn_row.addWidget(self.confirm_btn)
-        btn_row.addWidget(self.cancel_btn)
-        layout.addLayout(btn_row)
-
-
-class AgeGateAuthDialog(QDialog):
-    """Sign-in & Cookie import choice dialog for protected links."""
-
-    def __init__(self, target_domain: str = "this domain", parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Authentication & Session Setup Options")
-        self.resize(580, 340)
-        self.setMinimumSize(500, 300)
-        self.target_domain = target_domain or "this domain"
-        self.user_action = "guest"  # "guest", "cookies", "account_sessions", "mailpit"
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(14)
-
-        title = QLabel(f"Authentication Options for {self.target_domain}", self)
-        title.setStyleSheet("font-size: 15px; font-weight: 700; color: #ffffff;")
-        layout.addWidget(title)
-
-        desc = QLabel(
-            f"Some protected platforms require authenticated session cookies or stored credentials for {self.target_domain}.\nSelect how you would like to authenticate:",
-            self
-        )
-        desc.setWordWrap(True)
-        desc.setStyleSheet("font-size: 12px; color: #a0a0a0;")
-        layout.addWidget(desc)
-
-        card_layout = QVBoxLayout()
-        card_layout.setSpacing(10)
-
-        self.cookie_btn = QPushButton(f"Import Browser Cookies for {self.target_domain}", self)
-        self.cookie_btn.setMinimumHeight(38)
-        self.cookie_btn.clicked.connect(self._on_cookies_chosen)
-
-        self.session_btn = QPushButton("Open Account Sessions Tab (Save Encrypted Credentials)", self)
-        self.session_btn.setMinimumHeight(38)
-        self.session_btn.clicked.connect(self._on_sessions_chosen)
-
-        self.mailpit_btn = QPushButton("Open Local Test Inbox (Mailpit Web UI on 127.0.0.1:8025)", self)
-        self.mailpit_btn.setMinimumHeight(38)
-        self.mailpit_btn.clicked.connect(self._on_mailpit_chosen)
-
-        self.guest_btn = QPushButton("Continue as Guest (Use Impersonate & Bypass Flags)", self)
-        self.guest_btn.setObjectName("primary")
-        self.guest_btn.setMinimumHeight(38)
-        self.guest_btn.clicked.connect(self._on_guest_chosen)
-
-        card_layout.addWidget(self.cookie_btn)
-        card_layout.addWidget(self.session_btn)
-        card_layout.addWidget(self.mailpit_btn)
-        card_layout.addWidget(self.guest_btn)
-
-        layout.addLayout(card_layout)
-
-    def _on_cookies_chosen(self):
-        self.user_action = "cookies"
-        self.accept()
-
-    def _on_sessions_chosen(self):
-        self.user_action = "account_sessions"
-        self.accept()
-
-    def _on_mailpit_chosen(self):
-        self.user_action = "mailpit"
-        self.accept()
-
-    def _on_guest_chosen(self):
-        self.user_action = "guest"
-        self.accept()
 
 

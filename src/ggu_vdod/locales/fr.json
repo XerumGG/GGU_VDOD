@@ -149,8 +149,8 @@
     "cap2_body": "Utilise le profilage TLS Chrome pour contourner les erreurs 403.",
     "cap3_title": "Chiffrement DPAPI :",
     "cap3_body": "Stockage sécurisé des identifiants sous Windows.",
-    "cap4_title": "Vérification d'âge et Mailpit :",
-    "cap4_body": "Détecte les restrictions 18+ et s'intègre avec Mailpit.",
+    "cap4_title": "Sessions de compte et boîte de test locale :",
+    "cap4_body": "Gère les sessions de compte par domaine et intègre Mailpit local (127.0.0.1:8025).",
     "cap5_title": "Mise à jour automatique :",
     "cap5_body": "Vérifie régulièrement les versions de yt-dlp et FFmpeg."
   },
@@ -223,7 +223,6 @@
   },
   "dialogs": {
     "error_title": "Problème de téléchargement détecté",
-    "age_title": "Vidéo avec restriction d'âge (18+)",
     "updates_title": "Vérifier les mises à jour et dépendances",
     "ok": "OK",
     "cancel": "Annuler",
