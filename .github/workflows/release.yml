@@ -81,14 +81,23 @@ jobs:
                   "${{ github.workspace }}\installer\GGU_VDOD.iss"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Assemble portable zip (fallback, no FFmpeg)
+      - name: Verify installer artifact exists
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Path release | Out-Null
-          Copy-Item dist\GGU_VDOD\GGU_VDOD.exe release\
-          Copy-Item README.md release\
-          Copy-Item LICENSE release\
-          Compress-Archive -Path release\* -DestinationPath GGU_VDOD-windows-portable.zip
+          if (!(Test-Path "installer_output") -or !(Get-ChildItem "installer_output\GGU_VDOD-setup-*.exe" -ErrorAction SilentlyContinue)) {
+            Write-Host "::error::Installer exe not found in installer_output/"
+            exit 1
+          }
+          Get-ChildItem "installer_output\GGU_VDOD-setup-*.exe" | ForEach-Object {
+            Write-Host ("Installer ready: {0} ({1:N1} MB)" -f $_.Name, ($_.Length/1MB))
+          }
+
+      - name: Assemble portable zip (full self-contained app)
+        shell: pwsh
+        run: |
+          # The build is onedir: the launcher exe REQUIRES _internal beside it,
+          # so the portable archive must carry the whole app folder (FFmpeg included).
+          Compress-Archive -Path dist\GGU_VDOD\* -DestinationPath GGU_VDOD-windows-portable.zip -Force
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2

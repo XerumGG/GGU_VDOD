@@ -22,7 +22,9 @@ DefaultDirName={localappdata}\Programs\GGU_VDOD
 DisableDirPage=no
 DefaultGroupName=GGU_VDOD
 PrivilegesRequired=lowest
-OutputDir=installer_output
+; Resolved relative to THIS file, so ".." puts output at repository root,
+; matching build_exe.ps1 messages and the release workflow upload glob.
+OutputDir=..\installer_output
 OutputBaseFilename=GGU_VDOD-setup-v{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
