@@ -10,7 +10,7 @@ import urllib.request
 import yt_dlp
 
 from ..core.constants import APP_NAME
-from ..services.network import looks_like_cookie_database_error
+from ..services.network import looks_like_bot_check, looks_like_cookie_database_error
 from .metadata import (
     best_thumbnail_url, download_thumbnail_bytes, format_duration,
     friendly_source_name, preview_target_url, youtube_video_id,
@@ -87,6 +87,21 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
                 with yt_dlp.YoutubeDL(clean_opts) as downloader:
                     info = downloader.extract_info(target_url, download=False)
                     final_error = None
+            except Exception as retry_err:
+                final_error = retry_err
+
+        if final_error is not None and browser == "None" and not cookies_file and looks_like_bot_check(final_error):
+            # Retry with alternate YouTube clients before giving up on the preview.
+            alt_opts = dict(options)
+            alt_args = dict(alt_opts.get("extractor_args") or {})
+            yt_args = dict(alt_args.get("youtube") or {})
+            yt_args["player_client"] = ["tv", "web_safari", "web_embedded"]
+            alt_args["youtube"] = yt_args
+            alt_opts["extractor_args"] = alt_args
+            try:
+                with yt_dlp.YoutubeDL(alt_opts) as downloader:
+                    info = downloader.extract_info(target_url, download=False)
+                final_error = None
             except Exception as retry_err:
                 final_error = retry_err
 

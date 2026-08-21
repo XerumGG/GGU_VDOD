@@ -50,6 +50,21 @@ def explain_download_error(error):
     return text
 
 
+def looks_like_bot_check(error):
+    """Detect platform sign-in/bot verification walls (YouTube and similar)."""
+    text = str(error).lower()
+    return any(
+        hint in text
+        for hint in (
+            "confirm you're not a bot",
+            "not a bot",
+            "sign in to confirm",
+            "--cookies-from-browser",
+            "use --cookies",
+        )
+    )
+
+
 def looks_like_cookie_database_error(error):
     text = str(error).lower()
     return (

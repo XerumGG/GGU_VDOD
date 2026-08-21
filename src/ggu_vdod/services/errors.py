@@ -161,7 +161,29 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
             action_type="auth_setup",
         )
 
-    # 7. VIDEO REMOVED OR DELETED (HTTP 404)
+    # 7. PLATFORM BOT-CHECK / SIGN-IN WALL (e.g. YouTube "confirm you're not a bot")
+    if any(
+        kw in full_text
+        for kw in (
+            "confirm you're not a bot",
+            "not a bot",
+            "sign in to confirm",
+            "--cookies-from-browser",
+            "use --cookies",
+        )
+    ):
+        return ErrorDetails(
+            code="ERR_BOT_CHECK",
+            title="Platform Sign-In Verification",
+            simple_message="The platform wants proof of a real browser session before serving this media. This happens regularly on YouTube and similar sites.",
+            recommendation="Pick your browser under 'Browser cookies' in the Advanced panel, or store a session in the 'Account & Sessions' tab - then start the download again.",
+            severity="WARNING",
+            sound_type="MB_ICONEXCLAMATION",
+            raw_log=raw_log,
+            action_type="auth_setup",
+        )
+
+    # 8. VIDEO REMOVED OR DELETED (HTTP 404)
     if has_code("404") or "video unavailable" in full_text or "removed by the uploader" in full_text:
         return ErrorDetails(
             code="ERR_VIDEO_DELETED_404",

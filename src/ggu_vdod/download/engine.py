@@ -26,7 +26,7 @@ from ..core.constants import (
 )
 from ..core.formatting import format_bytes, format_rate
 from ..services.network import (
-    explain_download_error, looks_like_connection_error,
+    explain_download_error, looks_like_bot_check, looks_like_connection_error,
     looks_like_cookie_database_error, looks_like_subtitle_rate_limit,
 )
 
@@ -171,6 +171,7 @@ class DownloadEngine:
         settings = dict(self.settings)
         cookie_fallback_used = False
         subtitle_fallback_used = False
+        botcheck_fallback_used = False
 
         for attempt in range(1, MAX_RETRIES + 1):
             if self.cancelled():
@@ -204,6 +205,19 @@ class DownloadEngine:
                     settings["embed_subtitles"] = False
                     self._log(
                         "[WARNING] Subtitle service rate-limited this request; retrying the media without subtitles."
+                    )
+                    continue
+                if (
+                    not botcheck_fallback_used
+                    and settings.get("cookies_browser") in (None, "", "None")
+                    and not settings.get("cookies_file")
+                    and looks_like_bot_check(error)
+                ):
+                    botcheck_fallback_used = True
+                    settings["youtube_alt_clients"] = True
+                    self._log(
+                        "[WARNING] Platform bot-check detected; retrying once with alternate "
+                        "YouTube clients (TV/Safari). For reliable access configure browser cookies."
                     )
                     continue
                 if looks_like_connection_error(error) and attempt < MAX_RETRIES:
@@ -305,6 +319,11 @@ class DownloadEngine:
             pass
         if extractor_args:
             ydl_opts["extractor_args"] = extractor_args
+        if settings.get("youtube_alt_clients"):
+            # Alternate clients frequently bypass YouTube's anonymous bot-check.
+            ydl_opts.setdefault("extractor_args", {}).setdefault("youtube", {})["player_client"] = [
+                "tv", "web_safari", "web_embedded",
+            ]
 
         # Automatic DPAPI Account & Session Injection for current target URL
         try:
