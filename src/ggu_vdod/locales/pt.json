@@ -5,9 +5,9 @@
     "subtitle": "Cole um ou mais links de vídeo abaixo (um por linha)"
   },
   "nav": {
-    "home": "📥 Downloader e Fila",
-    "auth": "🔑 Conta e Sessões",
-    "mailpit": "📬 Caixa de Entrada Local (Mailpit)"
+    "home": "Downloader e Fila",
+    "auth": "Conta e Sessões",
+    "mailpit": "Caixa de Entrada Local (Mailpit)"
   },
   "menu": {
     "file": "Arquivo",
@@ -15,7 +15,7 @@
     "view": "Exibir",
     "help": "Ajuda",
     "about": "Sobre",
-    "language": "🌐 Idioma (Language)",
+    "language": "Idioma (Language)",
     "preferences": "Preferências...",
     "pref_bindings": "Preferências - Atalhos e velocidade de rolagem...",
     "pref_font": "Preferências - Painel de fontes da interface...",
@@ -86,7 +86,7 @@
     "eta": "Tempo restante"
   },
   "auth": {
-    "title": "🔑 Sessões de domínio ativas e controles de segurança",
+    "title": "Sessões de domínio ativas e controles de segurança",
     "subtitle": "As credenciais são criptografadas com Windows DPAPI.",
     "table_domain": "Domínio",
     "table_label": "Rótulo da conta",
@@ -105,7 +105,7 @@
     "cleared_msg": "{count} sessão(ões) limpa(s)."
   },
   "mailpit": {
-    "title": "📬 Caixa de entrada local de testes (Mailpit)",
+    "title": "Caixa de entrada local de testes (Mailpit)",
     "subtitle": "Captura e-mails de verificação para testes locais.",
     "table_from": "De",
     "table_to": "Para",

@@ -3,11 +3,15 @@
 import re
 
 SENSITIVE_PATTERNS = [
-    (r"(?i)(password|pass|secret|token|api_key|access_token|auth_token|sig|signature|key)=([^\s&]+)", r"\1=***REDACTED***"),
+    (r"(?i)\b(password|pass|secret|token|api_key|access_token|auth_token|sig|signature|key)=([^\s&]+)", r"\1=***REDACTED***"),
     (r"(?i)(\"password\"|\"secret\"|\"token\"|\"access_token\"|\"api_key\"):\s*\"[^\"]+\"", r'\1: "***REDACTED***"'),
-    (r"(?i)bearer\s+[a-zA-Z0-9_\-\.]{10,}", r"Bearer ***REDACTED***"),
-    (r"(?i)cookie:\s*[^\r\n]+", r"Cookie: ***REDACTED***"),
-    (r"(?i)authorization:\s*[^\r\n]+", r"Authorization: ***REDACTED***"),
+    (r"(?i)\bbearer\s+[a-zA-Z0-9_\-\.]{10,}", r"Bearer ***REDACTED***"),
+    (r"(?i)\bcookie:\s*[^\r\n]+", r"Cookie: ***REDACTED***"),
+    (r"(?i)\bauthorization:\s*[^\r\n]+", r"Authorization: ***REDACTED***"),
+]
+
+_COMPILED_SENSITIVE_PATTERNS = [
+    (re.compile(pattern), replacement) for pattern, replacement in SENSITIVE_PATTERNS
 ]
 
 
@@ -16,8 +20,8 @@ def sanitize_log_text(text: str) -> str:
     if not text:
         return ""
     sanitized = text
-    for pattern, replacement in SENSITIVE_PATTERNS:
-        sanitized = re.sub(pattern, replacement, sanitized)
+    for pattern, replacement in _COMPILED_SENSITIVE_PATTERNS:
+        sanitized = pattern.sub(replacement, sanitized)
     return sanitized
 
 

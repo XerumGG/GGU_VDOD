@@ -22,6 +22,12 @@ class ErrorDetails:
     action_type: Optional[str] = None  # 'retry', 'change_dir', 'auth_setup', 'ffmpeg_browse', 'close_browser', 'change_quality'
 
 
+_STATUS_CODE_PATTERNS = {
+    code: re.compile(rf"(?<!\d){code}(?!\d)")
+    for code in ("403", "404", "407", "429", "451")
+}
+
+
 def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDetails:
     """Classify runtime exceptions or error strings into natural language ErrorDetails."""
     if isinstance(error_input, Exception):
@@ -36,6 +42,9 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
     err_lower = err_str.lower()
     ctx_lower = (context or "").lower()
     full_text = f"{err_lower} {ctx_lower}"
+
+    def has_code(code: str) -> bool:
+        return _STATUS_CODE_PATTERNS[code].search(full_text) is not None
 
     # 1. DISK SPACE FULL
     if (
@@ -83,7 +92,7 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
         )
 
     # 3. CLOUDFLARE ANTI-BOT CHALLENGE (HTTP 403)
-    if "cloudflare anti-bot challenge" in full_text or ("403" in full_text and "impersonate" in full_text):
+    if "cloudflare anti-bot challenge" in full_text or (has_code("403") and "impersonate" in full_text):
         return ErrorDetails(
             code="ERR_CLOUDFLARE_403",
             title="Cloudflare Protection Blocked",
@@ -96,7 +105,7 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
         )
 
     # 4. HTTP 429 TOO MANY REQUESTS / RATE LIMITED
-    if "429" in full_text or "too many requests" in full_text or "rate limit" in full_text:
+    if has_code("429") or "too many requests" in full_text or "rate limit" in full_text:
         return ErrorDetails(
             code="ERR_RATE_LIMITED_429",
             title="Server Rate Limited (HTTP 429)",
@@ -153,7 +162,7 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
         )
 
     # 7. VIDEO REMOVED OR DELETED (HTTP 404)
-    if "404" in full_text or "video unavailable" in full_text or "removed by the uploader" in full_text:
+    if has_code("404") or "video unavailable" in full_text or "removed by the uploader" in full_text:
         return ErrorDetails(
             code="ERR_VIDEO_DELETED_404",
             title="Video Removed or Deleted (404)",
@@ -166,7 +175,7 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
         )
 
     # 8. REGIONAL OR GEOGRAPHIC BLOCK
-    if "not made this video available in your country" in full_text or "geoblocked" in full_text or "451" in full_text:
+    if "not made this video available in your country" in full_text or "geoblocked" in full_text or has_code("451"):
         return ErrorDetails(
             code="ERR_GEOBLOCKED",
             title="Country / Regional Block",
@@ -236,7 +245,7 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
         )
 
     # 13. PROXY FAILED
-    if "proxyerror" in full_text or "proxy connection refused" in full_text or "407" in full_text:
+    if "proxyerror" in full_text or "proxy connection refused" in full_text or has_code("407"):
         return ErrorDetails(
             code="ERR_PROXY_FAILED",
             title="Proxy Connection Failed",

@@ -1,17 +1,14 @@
 """PySide6 main window providing 100% complete desktop downloader capabilities."""
 
-import io
 import json
 import os
-from pathlib import Path
 import re
-import subprocess
 import sys
 import time
+import urllib.parse
 import urllib.request
 
-from PIL import Image
-from PySide6.QtCore import QEvent, QObject, QPoint, QRect, QSize, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog,
@@ -23,38 +20,30 @@ from PySide6.QtWidgets import (
 )
 
 from ...config.paths import (
-    get_app_dir, get_default_ffmpeg_dir, get_default_ffmpeg_path,
-    get_default_ffprobe_path, get_default_output_dir, get_default_qjs_path,
+    get_default_ffmpeg_dir, get_default_ffmpeg_path, get_default_output_dir,
 )
-from ...config.store import add_history_entry, load_config, save_config, update_history_entry
-from ...conversion.options import (
-    FFmpegCustomAudioConvertPP, FFmpegCustomReencodePP, audio_conversion_args,
-    clean_video_sidecars, output_template, video_conversion_args,
+from ...config.manager import settings_manager
+from ...config.store import (
+    add_history_entry, compute_settings_fingerprint, load_history,
+    update_history_entry,
 )
 from ...core.constants import (
-    APP_NAME, AUDIO_FORMAT_EXTENSIONS, AUDIO_OUTPUT_FORMATS, AUDIO_QUALITIES,
-    BITRATE_MAP, CHANNEL_OPTIONS, COMPRESSION_OPTIONS, COOKIE_BROWSERS,
-    DEFAULT_KEY_BINDINGS, FRAME_RATE_OPTIONS, HEIGHT_MAP, KEY_BINDING_CHOICES,
-    MAX_RETRIES, PREVIEW_HEIGHT, PREVIEW_WIDTH, RETRY_WAIT_SECONDS,
+    APP_NAME, AUDIO_OUTPUT_FORMATS, AUDIO_QUALITIES,
+    CHANNEL_OPTIONS, COMPRESSION_OPTIONS,
+    DEFAULT_KEY_BINDINGS, FRAME_RATE_OPTIONS,
+    PREVIEW_HEIGHT, PREVIEW_WIDTH,
     SAMPLE_RATE_OPTIONS, SCROLL_SPEED_DEFAULT, SCROLL_SPEED_MAX, SCROLL_SPEED_MIN,
-    UPDATE_COMPONENTS, VIDEO_CODEC_ARGS, VIDEO_CODEC_OPTIONS, VIDEO_FORMAT_EXTENSIONS,
+    VIDEO_CODEC_OPTIONS,
     VIDEO_OUTPUT_FORMATS, VIDEO_QUALITIES, VIDEO_RESOLUTION_OPTIONS,
-    VIDEO_SIDECAR_EXTENSIONS, ZOOM_DEFAULT_PERCENT, ZOOM_MAX_PERCENT,
+    ZOOM_DEFAULT_PERCENT, ZOOM_MAX_PERCENT,
     ZOOM_MIN_PERCENT, ZOOM_STEP_PERCENT, clamp_scroll_speed, clamp_zoom_percent,
 )
-from ...core.formatting import format_bytes, format_rate
-from ...core.version import DEVELOPMENT_BUILD_LABEL, PACKAGE_VERSION
-from ...preview.metadata import (
-    best_thumbnail_url, download_thumbnail_bytes, format_duration,
-    friendly_source_name, preview_target_url, youtube_video_id,
-)
+from ...core.version import DEVELOPMENT_BUILD_LABEL
+from ...preview.metadata import download_thumbnail_bytes
 from ...preview.service import fetch_preview
-from ...services.network import (
-    explain_download_error, is_internet_up, looks_like_connection_error,
-    looks_like_cookie_database_error, looks_like_subtitle_rate_limit,
-)
+from ...services.network import explain_download_error
 from ...services.cookies import inspect_netscape_cookie_file
-from ...auth.sanitizer import is_adult_or_age_restricted_url, sanitize_log_text
+from ...auth.sanitizer import is_adult_or_age_restricted_url
 from .account_panel import AccountSessionWidget
 from .test_inbox import MailpitTestInboxWidget
 from .dialogs import (
@@ -65,12 +54,24 @@ from .dialogs import (
 )
 from ...services.i18n import SUPPORTED_LANGUAGES, i18n, t
 from .theme import BASE_FONT_SIZE, apply_theme, normalize_theme
-from .widgets import TransferStatusBar
+from .widgets import TransferStatusBar, detach_running_worker
 
-try:
-    import yt_dlp
-except ImportError:
-    yt_dlp = None
+
+def _load_yt_dlp():
+    """Import yt-dlp lazily so cold start does not pay for it before a download.
+    Honors a module-level injection (used by tests to supply fakes)."""
+    global yt_dlp
+    if yt_dlp is not None:
+        return yt_dlp
+    try:
+        import yt_dlp as _yt_dlp
+    except ImportError:
+        return None
+    yt_dlp = _yt_dlp
+    return yt_dlp
+
+
+yt_dlp = None
 
 
 class PreviewWorker(QThread):
@@ -119,8 +120,17 @@ class ThumbnailDownloadWorker(QThread):
             elif ".webp" in self.thumbnail_url.lower():
                 ext = ".webp"
 
-            safe_title = re.sub(r'[\\/*?:"<>|]', '_', self.title or "thumbnail")
+            safe_title = re.sub(r'[\\/*?:"<>|]', '_', self.title or "thumbnail").strip(" .")
+            if not safe_title or safe_title.upper() in {
+                "CON", "PRN", "AUX", "NUL",
+                *(f"{name}{i}" for name in ("COM", "LPT") for i in range(1, 10)),
+            }:
+                safe_title = "thumbnail"
             save_path = os.path.join(self.output_dir, f"{safe_title}_HQ{ext}")
+            index = 1
+            while os.path.exists(save_path):
+                save_path = os.path.join(self.output_dir, f"{safe_title}_HQ ({index}){ext}")
+                index += 1
 
             with open(save_path, "wb") as f:
                 f.write(raw_bytes)
@@ -145,6 +155,7 @@ class FormatListWorker(QThread):
 
     def run(self):
         try:
+            yt_dlp = _load_yt_dlp()
             if not yt_dlp:
                 raise RuntimeError("yt-dlp library is missing.")
             options = {"quiet": True, "no_warnings": True, "noplaylist": True}
@@ -171,62 +182,16 @@ class FormatListWorker(QThread):
             self.formats_failed.emit(str(error))
 
 
-class DownloadCancelled(Exception):
-    """Raised from a progress hook to stop the active yt-dlp operation."""
 
-
-def format_eta_clean(eta_seconds) -> str:
-    """Format ETA seconds into clean rounded figures (e.g. '5m 49s' or '45s')."""
-    if not eta_seconds or float(eta_seconds) <= 0:
-        return "—"
-    try:
-        secs = int(round(float(eta_seconds)))
-        if secs < 60:
-            return f"{secs}s"
-        mins = secs // 60
-        rem_secs = secs % 60
-        if mins < 60:
-            return f"{mins}m {rem_secs:02d}s"
-        hours = mins // 60
-        rem_mins = mins % 60
-        return f"{hours}h {rem_mins:02d}m"
-    except Exception:
-        return f"{eta_seconds}s"
-
-
-class QtYTDLPLogger:
-    """Forward status messages into the Qt log box, throttled every 10 seconds without tool prefixes."""
-
-    def __init__(self, emit):
-        self._emit = emit
-        self._last_log_time = 0
-
-    def debug(self, message):
-        if not message:
-            return
-        text = str(message).strip()
-        if text.startswith("[download]") or text.startswith("[debug]") or "frag" in text.lower():
-            return
-        now = time.time()
-        if now - self._last_log_time >= 10.0:
-            self._last_log_time = now
-            clean_msg = re.sub(r"^\[[^\]]+\]\s*", "", text)
-            self._emit(f"[STATUS] {clean_msg}")
-
-    def warning(self, message):
-        text = str(message or "").strip()
-        if "No supported JavaScript runtime could be found" in text or "JavaScript runtime has been deprecated" in text:
-            return
-        clean_msg = re.sub(r"^\[[^\]]+\]\s*", "", text)
-        self._emit(f"[WARNING] {clean_msg}")
-
-    def error(self, message):
-        clean_msg = re.sub(r"^\[[^\]]+\]\s*", "", str(message or "").strip())
-        self._emit(f"[ERROR] {clean_msg}")
+from ...download.engine import (
+    DownloadCancelled,
+    DownloadEngine,
+    kill_own_ffmpeg_children as _kill_own_ffmpeg_children,
+)
 
 
 class QtDownloadWorker(QThread):
-    """Download media queue on a background QThread with real-time Qt signals."""
+    """Thin Qt adapter: owns a DownloadEngine and maps its events to signals."""
     log_emitted = Signal(str)
     progress_updated = Signal(dict)
     status_updated = Signal(str)
@@ -236,339 +201,44 @@ class QtDownloadWorker(QThread):
 
     def __init__(self, urls, settings, parent=None):
         super().__init__(parent)
-        self.urls = urls
-        self.settings = settings
+        self.urls = list(urls)
+        self.settings = dict(settings or {})
         self.cancelled = False
+        worker = self
+
+        class _Engine(DownloadEngine):
+            def _on_item_finished(self, url, success):
+                worker.item_finished.emit(url, success, worker.settings.get("format", "video"))
+
+        self.engine = _Engine(
+            self.settings,
+            log=self.log_emitted.emit,
+            status=self.status_updated.emit,
+            progress=self.progress_updated.emit,
+            error=self.error_occurred.emit,
+            cancel=lambda: self.cancelled,
+        )
 
     def cancel(self):
         self.cancelled = True
 
     def run(self):
-        if not yt_dlp:
-            error_message = "yt-dlp library is missing."
-            self.log_emitted.emit(f"[ERROR] {error_message}")
-            self.error_occurred.emit("", error_message)
-            self.queue_completed.emit(0, len(self.urls))
-            return
-
-        success_count = 0
-        failure_count = 0
-
-        for index, url in enumerate(self.urls, 1):
-            if self.cancelled:
-                self.log_emitted.emit("[INFO] Download operation cancelled by user.")
-                break
-
-            self.log_emitted.emit(f"\n--- [Queue {index}/{len(self.urls)}] Processing {url} ---")
-            self.status_updated.emit(f"Downloading item {index} of {len(self.urls)}...")
-
-            success = self._download_with_retries(url)
-            self.item_finished.emit(url, success, self.settings.get("format", "video"))
-            if success:
-                success_count += 1
-            else:
-                failure_count += 1
-
+        success_count, failure_count = self.engine.run_queue(self.urls)
         self.status_updated.emit("Ready.")
         self.queue_completed.emit(success_count, failure_count)
 
-    def _download_with_retries(self, url):
-        """Retry recoverable failures while keeping the final error visible."""
-        settings = dict(self.settings)
-        cookie_fallback_used = False
-        subtitle_fallback_used = False
-
-        for attempt in range(1, MAX_RETRIES + 1):
-            if self.cancelled:
-                self.log_emitted.emit("[INFO] Item cancelled.")
-                return False
-            try:
-                self._process_single_url(url, settings)
-                return True
-            except DownloadCancelled:
-                self.log_emitted.emit("[INFO] Item cancelled.")
-                return False
-            except Exception as error:
-                if (
-                    not cookie_fallback_used
-                    and settings.get("cookies_browser") not in (None, "", "None")
-                    and looks_like_cookie_database_error(error)
-                ):
-                    cookie_fallback_used = True
-                    settings["cookies_browser"] = "None"
-                    self.log_emitted.emit(
-                        "[WARNING] Browser cookies could not be read; retrying without them. "
-                        "Close the browser or use cookies.txt if sign-in is required."
-                    )
-                    continue
-                if (
-                    not subtitle_fallback_used
-                    and settings.get("embed_subtitles")
-                    and looks_like_subtitle_rate_limit(error)
-                ):
-                    subtitle_fallback_used = True
-                    settings["embed_subtitles"] = False
-                    self.log_emitted.emit(
-                        "[WARNING] Subtitle service rate-limited this request; retrying the media without subtitles."
-                    )
-                    continue
-                if looks_like_connection_error(error) and attempt < MAX_RETRIES:
-                    self.status_updated.emit(f"Connection issue; retrying ({attempt}/{MAX_RETRIES})...")
-                    self.log_emitted.emit(
-                        f"[WARNING] Network error. Retrying in {RETRY_WAIT_SECONDS}s "
-                        f"({attempt}/{MAX_RETRIES})..."
-                    )
-                    time.sleep(RETRY_WAIT_SECONDS)
-                    if not is_internet_up():
-                        self.log_emitted.emit("[WARNING] Internet connection still unavailable; retry will continue when possible.")
-                    continue
-                self.log_emitted.emit(f"[ERROR] Failed {url}: {explain_download_error(error)}")
-                self.error_occurred.emit(url, str(error))
-                return False
-        return False
-
     def _process_single_url(self, url, settings):
-        output_dir = settings.get("output_dir") or get_default_output_dir()
-        os.makedirs(output_dir, exist_ok=True)
-        is_audio = settings.get("format") == "audio"
-        target_ext = (AUDIO_FORMAT_EXTENSIONS if is_audio else VIDEO_FORMAT_EXTENSIONS).get(
-            str(settings.get("output_format") or "").upper(), ""
-        ).lower()
-        if not target_ext:
-            raise ValueError("Choose a valid output format before downloading.")
-
-        def progress_hook(d):
-            if self.cancelled:
-                raise DownloadCancelled("Download cancelled by user")
-            status = d.get("status")
-            if status == "downloading":
-                total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
-                downloaded = d.get("downloaded_bytes") or 0
-                speed = d.get("speed") or 0
-                eta = d.get("eta") or 0
-
-                percent = (downloaded / total * 100.0) if total > 0 else 0
-                self.progress_updated.emit({
-                    "status": "Downloading...",
-                    "progress": percent,
-                    "download_rate": format_rate(speed),
-                    "upload_rate": "0 B/s",
-                    "transferred": f"{format_bytes(downloaded)} / {format_bytes(total)}" if total else format_bytes(downloaded),
-                    "eta": format_eta_clean(eta),
-                })
-            elif status == "finished":
-                self.log_emitted.emit("[INFO] Primary download complete. Finalizing media file...")
-
-        ydl_opts = {
-            "outtmpl": output_template(settings, output_dir, target_ext),
-            "progress_hooks": [progress_hook],
-            "noplaylist": settings.get("single_only", True),
-            "quiet": True,
-            "no_warnings": False,
-            "age_limit": 99,
-            "logger": QtYTDLPLogger(self.log_emitted.emit),
-            "retries": MAX_RETRIES,
-            "fragment_retries": MAX_RETRIES,
-            "file_access_retries": MAX_RETRIES,
-            "postprocessors": [],
-        }
-
-        try:
-            import shutil
-            js_runtimes = {}
-            qjs_bin = get_default_qjs_path()
-            if qjs_bin and os.path.exists(qjs_bin):
-                js_runtimes["quickjs"] = {"path": qjs_bin}
-            for rt in ["node", "deno", "bun", "qjs"]:
-                rt_path = shutil.which(rt)
-                if rt_path:
-                    key = "quickjs" if rt == "qjs" else rt
-                    js_runtimes[key] = {"path": rt_path}
-            if js_runtimes:
-                ydl_opts["js_runtimes"] = js_runtimes
-        except Exception:
-            pass
-
-        extractor_args = {}
-        try:
-            from yt_dlp.networking.impersonate import ImpersonateTarget
-            target = ImpersonateTarget.from_str("chrome")
-            from yt_dlp.networking._curlcffi import CurlCffiRH
-            if CurlCffiRH.is_supported_target(target):
-                ydl_opts["impersonate"] = target
-                extractor_args["generic"] = ["impersonate"]
-        except Exception:
-            pass
-        if extractor_args:
-            ydl_opts["extractor_args"] = extractor_args
-
-        # Automatic DPAPI Account & Session Injection for current target URL
-        try:
-            target_domain = urllib.parse.urlparse(url).netloc
-            if target_domain:
-                from ...auth.manager import AuthManager
-                session = AuthManager.resolve_domain_session(target_domain)
-                if session:
-                    account_lbl = session.get("account_label")
-                    sec = session.get("secret")
-                    if account_lbl and sec:
-                        ydl_opts["username"] = account_lbl
-                        ydl_opts["password"] = sec
-                        self.log_emitted.emit(f"[INFO] Injected stored DPAPI account credentials for domain: {target_domain} ({account_lbl})")
-                    else:
-                        self.log_emitted.emit(f"[INFO] Injected active domain session for: {target_domain}")
-        except Exception as auth_err:
-            pass
-
-        ffmpeg_dir = get_default_ffmpeg_dir()
-        ffmpeg_path = settings.get("ffmpeg_path") or get_default_ffmpeg_path()
-        target_ffmpeg_dir = ffmpeg_dir if (os.path.isdir(ffmpeg_dir) and os.path.exists(os.path.join(ffmpeg_dir, "ffmpeg.exe"))) else (os.path.dirname(ffmpeg_path) if (ffmpeg_path and os.path.exists(ffmpeg_path)) else None)
-
-        if target_ffmpeg_dir:
-            if target_ffmpeg_dir not in os.environ.get("PATH", ""):
-                os.environ["PATH"] = target_ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
-            ydl_opts["ffmpeg_location"] = target_ffmpeg_dir
-            ffprobe_status = "(ffmpeg.exe & ffprobe.exe)" if os.path.exists(os.path.join(target_ffmpeg_dir, "ffprobe.exe")) else "(ffmpeg.exe)"
-            self.log_emitted.emit(f"[INFO] Using FFmpeg directory: {target_ffmpeg_dir} {ffprobe_status}")
-        else:
-            self.log_emitted.emit("[WARNING] FFmpeg binary not found! Video merging and container conversion may be limited.")
-
-        # Cookies configuration
-        browser = settings.get("cookies_browser")
-        cookies_file = settings.get("cookies_file")
-        if cookies_file and os.path.exists(cookies_file):
-            ydl_opts["cookiefile"] = cookies_file
-        elif browser and browser not in ("None", "custom", "Custom cookies.txt file..."):
-            ydl_opts["cookiesfrombrowser"] = (browser.lower(),)
-
-        # Proxy configuration
-        proxy = settings.get("proxy")
-        if proxy:
-            ydl_opts["proxy"] = proxy
-
-        # Subtitles configuration
-        if settings.get("embed_subtitles"):
-            ydl_opts["writesubtitles"] = True
-            if settings.get("auto_subtitles"):
-                ydl_opts["writeautomaticsub"] = True
-            sub_langs = [s.strip() for s in settings.get("subtitle_langs", "en").split(",") if s.strip()]
-            ydl_opts["subtitleslangs"] = sub_langs or ["en"]
-            ydl_opts["postprocessors"].append({"key": "FFmpegEmbedSubtitle"})
-
-        # Metadata & thumbnail embedding
-        if settings.get("embed_metadata", True):
-            ydl_opts["postprocessors"].append({"key": "FFmpegMetadata", "add_chapters": True, "add_metadata": True})
-        if settings.get("embed_thumbnail"):
-            ydl_opts["writethumbnail"] = True
-            ydl_opts["postprocessors"].append({"key": "FFmpegThumbnailsConvertor", "format": "jpg"})
-            ydl_opts["postprocessors"].append({"key": "EmbedThumbnail"})
-
-        # Live stream option
-        if settings.get("live_start_from_beginning"):
-            ydl_opts["live_from_start"] = True
-
-        # Timestamp Cutter (start & end time range clipping)
-        start_time_str = settings.get("start_time")
-        end_time_str = settings.get("end_time")
-        from ...services.probe import parse_time_str_to_seconds
-        start_sec = parse_time_str_to_seconds(start_time_str)
-        end_sec = parse_time_str_to_seconds(end_time_str)
-        if start_sec is not None or end_sec is not None:
-            s_val = start_sec if start_sec is not None else 0.0
-            e_val = end_sec if end_sec is not None else None
-
-            ffmpeg_trim_args = []
-            if s_val > 0:
-                ffmpeg_trim_args.extend(["-ss", str(s_val)])
-            if e_val is not None:
-                ffmpeg_trim_args.extend(["-to", str(e_val)])
-
-            if ffmpeg_trim_args:
-                ydl_opts["postprocessor_args"] = {"ffmpeg": ffmpeg_trim_args}
-                self.log_emitted.emit(f"[INFO] Video Timestamp Cutter active: Clipping range [{start_time_str or '00:00'} -> {end_time_str or 'END'}]")
-
-        # Format & Quality selection
-        exact_format_id = settings.get("exact_format_id")
-        if exact_format_id:
-            ydl_opts["format"] = exact_format_id
-        elif is_audio:
-            ydl_opts["format"] = "bestaudio/best"
-        else:
-            quality = settings.get("quality", "Best available")
-            height = HEIGHT_MAP.get(quality)
-            if height:
-                ydl_opts["format"] = (
-                    f"bestvideo[height={height}]+bestaudio/best[height={height}]"
-                    f"/bestvideo[height<={height}]+bestaudio/best[height<={height}]"
-                    f"/best[height<={height}]/best"
-                )
-            else:
-                ydl_opts["format"] = "bestvideo+bestaudio/best"
-
-        # Local output conversion. Audio uses the custom converter so every UI
-        # target (including OGG, WMA, and AIFF) is handled consistently.
-        if is_audio:
-            audio_args = audio_conversion_args(settings, target_ext)
-        else:
-            ydl_opts["recode_video"] = target_ext
-            ydl_opts["merge_output_format"] = target_ext if target_ext in ("mp4", "mkv", "webm", "ogv", "flv", "avi") else "mkv"
-            video_args = video_conversion_args(settings, target_ext)
-
-        started_at = time.time()
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            if is_audio:
-                ydl.add_post_processor(FFmpegCustomAudioConvertPP(ydl, target_ext, audio_args))
-            elif video_args:
-                ydl.add_post_processor(FFmpegCustomReencodePP(ydl, target_ext, video_args))
-            info = ydl.extract_info(url, download=True)
-
-        if settings.get("clean_sidecars", True):
-            clean_video_sidecars(output_dir, started_at, target_ext)
-        self._report_selected_format(info, settings, target_ext)
-        self.log_emitted.emit(f"[SUCCESS] Successfully processed: {url}")
-
-    def _report_selected_format(self, info, settings, target_ext):
-        """Make actual source and final conversion choices visible in the log."""
-        if not isinstance(info, dict):
-            return
-        selected = info.get("requested_formats") or [info]
-        stream_details = []
-        selected_heights = []
-        for item in selected:
-            if not isinstance(item, dict):
-                continue
-            height = item.get("height")
-            if height:
-                selected_heights.append(height)
-            role = "video" if item.get("vcodec") not in (None, "none") else "audio"
-            resolution = item.get("resolution") or (f"{height}p" if height else "audio")
-            codec = item.get("vcodec") if role == "video" else item.get("acodec")
-            stream_details.append(
-                f"{role}: id={item.get('format_id', '?')}, ext={item.get('ext', '?')}, "
-                f"resolution={resolution}, codec={codec}"
-            )
-        if stream_details:
-            self.log_emitted.emit("[FORMAT] Selected source " + " | ".join(stream_details))
-        requested_height = HEIGHT_MAP.get(settings.get("quality"))
-        if requested_height and selected_heights and max(selected_heights) < requested_height:
-            self.log_emitted.emit(
-                f"[FORMAT] Requested {requested_height}p; source only provided {max(selected_heights)}p. "
-                "The highest accessible lower-quality stream was used."
-            )
-        conversion_resolution = settings.get("conversion_resolution", "Source")
-        if conversion_resolution != "Source":
-            self.log_emitted.emit(
-                f"[FORMAT] Final output is intentionally scaled to {conversion_resolution}."
-            )
-        self.log_emitted.emit(f"[FORMAT] Final container target: {target_ext.upper()}")
-
+        self.engine.process_url(url, dict(settings))
 
 class QtMainWindow(QMainWindow):
     """Production PySide6 MainWindow for GGU_VDOD bringing 100% legacy parity."""
 
     def __init__(self, settings=None, persist_settings=True):
         super().__init__()
-        self._config = dict(load_config() if settings is None else settings)
+        if settings is None:
+            self._config = settings_manager.snapshot()
+        else:
+            self._config = dict(settings)
         self._persist_settings = persist_settings
         self._preview_token = 0
         self._preview_workers = set()
@@ -746,7 +416,7 @@ class QtMainWindow(QMainWindow):
         self.about_menu.addAction(self.about_act)
 
         # Language Selection Menu
-        self.lang_menu = menubar.addMenu(t("menu.language", "🌐 Language"))
+        self.lang_menu = menubar.addMenu(t("menu.language", "Language"))
         self._lang_actions = {}
         saved_lang = self._config.get("language", "en")
         for code, label in SUPPORTED_LANGUAGES.items():
@@ -1234,6 +904,7 @@ class QtMainWindow(QMainWindow):
         self.log_box.setObjectName("logBox")
         self.log_box.setReadOnly(True)
         self.log_box.setMinimumHeight(150)
+        self.log_box.setMaximumBlockCount(2000)
         log_layout.addWidget(self.log_box)
         layout.addWidget(log_frame)
 
@@ -1241,13 +912,13 @@ class QtMainWindow(QMainWindow):
 
         # Main Tab Widget
         self.main_tab_widget = QTabWidget()
-        self.main_tab_widget.addTab(self.content_scroll, "📥 Downloader & Queue")
+        self.main_tab_widget.addTab(self.content_scroll, "Downloader & Queue")
 
         self.account_widget = AccountSessionWidget(self)
-        self.main_tab_widget.addTab(self.account_widget, "🔑 Account & Sessions")
+        self.main_tab_widget.addTab(self.account_widget, "Account & Sessions")
 
         self.test_inbox_widget = MailpitTestInboxWidget(self)
-        self.main_tab_widget.addTab(self.test_inbox_widget, "📬 Local Test Inbox (Mailpit)")
+        self.main_tab_widget.addTab(self.test_inbox_widget, "Local Test Inbox (Mailpit)")
 
         main_vbox.addWidget(self.main_tab_widget, 1)
 
@@ -1310,7 +981,7 @@ class QtMainWindow(QMainWindow):
         if now - last_check >= 86400:
             self._config["last_update_check"] = now
             if self._persist_settings:
-                save_config(self._config)
+                settings_manager.replace(self._config)
             QTimer.singleShot(2000, self._run_scheduled_update_check)
 
     def _run_scheduled_update_check(self):
@@ -1441,7 +1112,7 @@ class QtMainWindow(QMainWindow):
         if not self._persist_settings:
             return
         self._config = self._settings_from_ui()
-        save_config(self._config)
+        settings_manager.replace(self._config)
 
     def _apply_preferences(self):
         self._apply_ui_theme()
@@ -1451,7 +1122,12 @@ class QtMainWindow(QMainWindow):
         hbar = self.content_scroll.horizontalScrollBar()
         vbar.setSingleStep(12 * speed)
         hbar.setSingleStep(12 * speed)
-        self.content_scroll.viewport().installEventFilter(self)
+        # Watch events application-wide so Ctrl+wheel zooms over ANY widget
+        # (text boxes consume wheel events, a viewport-only filter never sees them).
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
+            app.installEventFilter(self)
 
     @staticmethod
     def _clamp_font_size(value):
@@ -1574,13 +1250,11 @@ class QtMainWindow(QMainWindow):
         self.log_box.appendPlainText(f"[INFO] UI Zoom set to {self.zoom_percent}%")
 
     def eventFilter(self, watched, event):
-        """Provide Ctrl + mouse-wheel zoom without interfering with normal scrolling."""
-        if (
-            event.type() == QEvent.Type.Wheel
-            and event.modifiers() & Qt.KeyboardModifier.ControlModifier
-        ):
+        """Provide Ctrl + mouse-wheel zoom over every widget without
+        interfering with normal scrolling."""
+        if event.type() == QEvent.Type.Wheel:
             delta = event.angleDelta().y()
-            if delta:
+            if delta and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 self._change_zoom(ZOOM_STEP_PERCENT if delta > 0 else -ZOOM_STEP_PERCENT)
                 event.accept()
                 return True
@@ -1661,6 +1335,10 @@ class QtMainWindow(QMainWindow):
         if not url:
             return
         token = self._preview_token
+        cached = self._batch_previews.get(url)
+        if cached is not None:
+            self._apply_preview(token, cached)
+            return
         self.preview_status.setText("Fetching preview…")
         worker = PreviewWorker(
             token, url,
@@ -1779,7 +1457,8 @@ class QtMainWindow(QMainWindow):
         if auth_dlg.exec() == QDialog.DialogCode.Accepted:
             action = getattr(auth_dlg, "user_action", "guest")
             if action == "cookies":
-                self._set_combo_value(self.cookie_browser_combo, "chrome")
+                if self.cookie_browser_combo.currentText() in ("None", "Custom cookies.txt file..."):
+                    self._set_combo_value(self.cookie_browser_combo, "chrome")
                 self.log_box.appendPlainText(f"[INFO] Configured browser cookie import for {domain}.")
             elif action == "account_sessions":
                 self.main_tab_widget.setCurrentIndex(1)
@@ -1820,16 +1499,16 @@ class QtMainWindow(QMainWindow):
                 import shutil
                 du = shutil.disk_usage(out_dir)
                 free_mb = du.free / (1024 * 1024)
-                if free_mb < 500:
-                    from ...services.errors import classify_error
-                    err_details = classify_error("insufficient disk space free on target drive", context=out_dir)
-                    dlg = ErrorAlertDialog(err_details, self)
-                    res = dlg.exec()
-                    if res == 3:  # Change Dir requested
-                        self._choose_output_dir()
-                    return
             except Exception:
-                pass
+                free_mb = None
+            if free_mb is not None and free_mb < 500:
+                from ...services.errors import classify_error
+                err_details = classify_error("insufficient disk space free on target drive", context=out_dir)
+                dlg = ErrorAlertDialog(err_details, self)
+                res = dlg.exec()
+                if res == 3:  # Change Dir requested
+                    self._choose_output_folder()
+                return
 
             settings = {
                 "format": "video" if self.video_radio.isChecked() else "audio",
@@ -1862,8 +1541,40 @@ class QtMainWindow(QMainWindow):
             }
             self._save_settings()
 
+            current_fingerprint = compute_settings_fingerprint(settings)
+            completed_by_url = {
+                h.get("url"): h
+                for h in load_history()
+                if h.get("status") == "Completed" and h.get("fingerprint")
+            }
+            duplicates = [
+                u for u in urls
+                if completed_by_url.get(u, {}).get("fingerprint") == current_fingerprint
+            ]
+            if duplicates:
+                shown = "\n".join(duplicates[:6]) + ("\n…" if len(duplicates) > 6 else "")
+                box = QMessageBox(
+                    QMessageBox.Icon.Warning,
+                    "Media already exists",
+                    "The following item(s) were already downloaded with the same "
+                    f"format and quality:\n\n{shown}\n\nDownload them again anyway?",
+                    parent=self,
+                )
+                btn_anyway = box.addButton("Download anyway", QMessageBox.ButtonRole.AcceptRole)
+                btn_skip = box.addButton("Skip existing", QMessageBox.ButtonRole.DestructiveRole)
+                box.setDefaultButton(btn_skip)
+                box.exec()
+                if box.clickedButton() is btn_skip:
+                    urls = [u for u in urls if u not in set(duplicates)]
+                    self.log_box.appendPlainText(
+                        f"[INFO] Skipping {len(duplicates)} already-downloaded item(s)."
+                    )
+                    if not urls:
+                        self.log_box.appendPlainText("[INFO] Nothing left to download.")
+                        return
+
             for url in urls:
-                add_history_entry(url, title=url, format_type=settings.get("format", "video"), status="Queued")
+                add_history_entry(url, title=url, format_type=settings.get("format", "video"), status="Queued", fingerprint=current_fingerprint)
 
             self.download_button.setEnabled(False)
             self.cancel_button.setEnabled(True)
@@ -1889,12 +1600,7 @@ class QtMainWindow(QMainWindow):
             self._download_worker.cancel()
             self.cancel_button.setEnabled(False)
             self.log_box.appendPlainText("[INFO] Cancellation requested...")
-            if sys.platform == "win32":
-                try:
-                    import subprocess
-                    subprocess.run(["taskkill", "/F", "/IM", "ffmpeg.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except Exception:
-                    pass
+            _kill_own_ffmpeg_children()
 
     def _on_progress_update(self, data):
         self.transfer_status.set_transfer_state(
@@ -1934,6 +1640,8 @@ class QtMainWindow(QMainWindow):
         """Show the original classified failure on the UI thread, one alert at a time."""
         from ...services.errors import classify_error
 
+        if len(self._pending_error_alerts) >= 25:
+            return
         details = classify_error(error_message, context=url)
         self._pending_error_alerts.append(details)
         self._show_next_error_alert()
@@ -1958,10 +1666,14 @@ class QtMainWindow(QMainWindow):
         QTimer.singleShot(0, self._show_next_error_alert)
 
     def _on_item_finished(self, url, succeeded, format_type):
+        fingerprint = ""
+        if succeeded and self._download_worker is not None:
+            fingerprint = compute_settings_fingerprint(self._download_worker.settings)
         update_history_entry(
             url,
             "Completed" if succeeded else "Failed or cancelled",
             format_type=format_type,
+            fingerprint=fingerprint,
         )
         if succeeded:
             self._play_notification_sound()
@@ -1976,19 +1688,18 @@ class QtMainWindow(QMainWindow):
                 child.shutdown()
         if self._download_worker and self._download_worker.isRunning():
             self._download_worker.cancel()
-            self._download_worker.wait(1500)
+            detach_running_worker(self._download_worker, grace_ms=8000)
         for worker in tuple(self._preview_workers | self._thumbnail_workers | self._format_workers):
-            if worker.isRunning():
-                worker.wait(750)
+            detach_running_worker(worker, grace_ms=750)
+        scheduled = getattr(self, "_scheduled_update_worker", None)
+        detach_running_worker(scheduled, grace_ms=750)
         self._save_settings()
         try:
             from ...services.cookies import purge_all_temporary_cookie_files
             from ...auth.manager import AuthManager
             purge_all_temporary_cookie_files()
             AuthManager.purge_expired_sessions()
-            if sys.platform == "win32":
-                import subprocess
-                subprocess.run(["taskkill", "/F", "/IM", "ffmpeg.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            _kill_own_ffmpeg_children()
         except Exception:
             pass
         super().closeEvent(event)
@@ -2026,7 +1737,7 @@ class QtMainWindow(QMainWindow):
             self._config["key_bindings"] = bindings
             self._config["scroll_speed"] = speed
             if self._persist_settings:
-                save_config(self._config)
+                settings_manager.replace(self._config)
             self._apply_preferences()
 
     def _show_history_dialog(self):
@@ -2106,13 +1817,7 @@ class QtMainWindow(QMainWindow):
         """Force restart application (reboot) on Ctrl+Shift+` or menu selection."""
         self.log_box.appendPlainText("[INFO] Force restart requested. Terminating processes and relaunching...")
         self._save_settings()
-        if sys.platform == "win32":
-            try:
-                import subprocess
-                subprocess.run(["taskkill", "/F", "/IM", "ffmpeg.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                subprocess.run(["taskkill", "/F", "/IM", "ffprobe.exe", "/T"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except Exception:
-                pass
+        _kill_own_ffmpeg_children()
         from PySide6.QtCore import QProcess
         QProcess.startDetached(sys.executable, sys.argv)
         QApplication.quit()
@@ -2137,7 +1842,7 @@ class QtMainWindow(QMainWindow):
         if hasattr(self, "about_menu"):
             self.about_menu.setTitle(t("menu.about", "About"))
         if hasattr(self, "lang_menu"):
-            self.lang_menu.setTitle(t("menu.language", "🌐 Language"))
+            self.lang_menu.setTitle(t("menu.language", "Language"))
 
         # Actions
         if hasattr(self, "new_list_act"):
@@ -2202,15 +1907,18 @@ class QtMainWindow(QMainWindow):
             self.next_batch_btn.setText(t("preview.next", "Next ►"))
         if hasattr(self, "download_thumbnail_btn"):
             self.download_thumbnail_btn.setText(t("preview.download_thumb_btn", "Download thumbnail (HQ)"))
-        if hasattr(self, "preview_image") and self.preview_image.pixmap().isNull() if hasattr(self.preview_image, "pixmap") and self.preview_image.pixmap() else True:
-            self.preview_image.setText(t("home.no_preview", "No preview"))
-        if hasattr(self, "preview_title") and not getattr(self, "_active_preview_data", None):
+        preview_active = bool(getattr(self, "_current_preview_data", None))
+        if hasattr(self, "preview_image"):
+            has_pixmap = not self.preview_image.pixmap().isNull()
+            if not has_pixmap and not preview_active:
+                self.preview_image.setText(t("home.no_preview", "No preview"))
+        if hasattr(self, "preview_title") and not preview_active:
             self.preview_title.setText(t("preview.title_placeholder", "Paste a link to preview it"))
-        if hasattr(self, "preview_source") and not getattr(self, "_active_preview_data", None):
+        if hasattr(self, "preview_source") and not preview_active:
             self.preview_source.setText(t("preview.source_waiting", "Source: waiting for a link"))
-        if hasattr(self, "preview_details") and not getattr(self, "_active_preview_data", None):
+        if hasattr(self, "preview_details") and not preview_active:
             self.preview_details.setText(t("preview.details_placeholder", "Title, duration, uploader, and platform will appear here."))
-        if hasattr(self, "preview_status") and not getattr(self, "_active_preview_data", None):
+        if hasattr(self, "preview_status") and not preview_active:
             self.preview_status.setText(t("preview.waiting_status", "Waiting for a link"))
         if hasattr(self, "preview_btn"):
             self.preview_btn.setText(t("home.preview_btn", "Fetch Link Preview"))
@@ -2309,8 +2017,8 @@ class QtMainWindow(QMainWindow):
 
         # Navigation Tabs
         if hasattr(self, "main_tab_widget"):
-            self.main_tab_widget.setTabText(0, t("nav.home", "📥 Downloader & Queue"))
-            self.main_tab_widget.setTabText(1, t("nav.auth", "🔑 Account & Sessions"))
+            self.main_tab_widget.setTabText(0, t("nav.home", "Downloader & Queue"))
+            self.main_tab_widget.setTabText(1, t("nav.auth", "Account & Sessions"))
             if self.main_tab_widget.count() > 2:
-                self.main_tab_widget.setTabText(2, t("nav.mailpit", "📬 Local Test Inbox (Mailpit)"))
+                self.main_tab_widget.setTabText(2, t("nav.mailpit", "Local Test Inbox (Mailpit)"))
 

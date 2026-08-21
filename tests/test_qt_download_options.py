@@ -76,8 +76,9 @@ class QtDownloadOptionTests(unittest.TestCase):
         class FakeYTDLP:
             YoutubeDL = FakeYDL
 
-        original_ytdlp = module.yt_dlp
-        module.yt_dlp = FakeYTDLP
+        import ggu_vdod.download.engine as engine_module
+        original_ytdlp = engine_module.yt_dlp
+        engine_module.yt_dlp = FakeYTDLP
         try:
             with tempfile.TemporaryDirectory() as output_dir:
                 settings = self._settings(output_dir, quality="2160p (4K)", output_format="MP4")
@@ -87,7 +88,7 @@ class QtDownloadOptionTests(unittest.TestCase):
             self.assertIn("bestvideo[height<=2160]", captured[0].options["format"])
             self.assertTrue(captured[0].download)
         finally:
-            module.yt_dlp = original_ytdlp
+            engine_module.yt_dlp = original_ytdlp
 
     def test_audio_targets_use_the_generic_ffmpeg_converter(self):
         import ggu_vdod.ui.qt.main_window as module
@@ -117,8 +118,9 @@ class QtDownloadOptionTests(unittest.TestCase):
         class FakeYTDLP:
             YoutubeDL = FakeYDL
 
-        original_ytdlp = module.yt_dlp
-        module.yt_dlp = FakeYTDLP
+        import ggu_vdod.download.engine as engine_module
+        original_ytdlp = engine_module.yt_dlp
+        engine_module.yt_dlp = FakeYTDLP
         try:
             with tempfile.TemporaryDirectory() as output_dir:
                 settings = self._settings(output_dir, format_type="audio", quality="320 kbps (Best)", output_format="WMA")
@@ -127,7 +129,7 @@ class QtDownloadOptionTests(unittest.TestCase):
             self.assertEqual(captured[0].options["format"], "bestaudio/best")
             self.assertTrue(any(isinstance(item, FFmpegCustomAudioConvertPP) for item in captured[0].postprocessors))
         finally:
-            module.yt_dlp = original_ytdlp
+            engine_module.yt_dlp = original_ytdlp
 
     @staticmethod
     def _settings(output_dir, format_type="video", quality="Best available", output_format="MP4"):

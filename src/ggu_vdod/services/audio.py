@@ -1,6 +1,7 @@
 """Audio notification sound manager with distinct Windows error cues."""
 
 import sys
+import threading
 
 try:
     import winsound
@@ -52,26 +53,33 @@ def sound_pattern_for(sound_type: str = "MB_ICONEXCLAMATION", error_code: str | 
     return _ERROR_SOUND_PATTERNS.get(error_code or "", _DEFAULT_SOUND_PATTERNS.get(sound_type, _DEFAULT_SOUND_PATTERNS["MB_ICONEXCLAMATION"]))
 
 
-def play_error_sound(sound_type: str = "MB_ICONEXCLAMATION", error_code: str | None = None) -> None:
-    """Play a recognisable sound pattern for a classified error."""
+def _play_pattern_async(pattern, fallback_sound_type=None):
+    """Play a beep pattern on a worker thread; winsound.Beep blocks for the full duration."""
     if not HAS_WINSOUND:
         return
-    try:
-        for frequency, duration in sound_pattern_for(sound_type, error_code):
-            winsound.Beep(frequency, duration)
-    except Exception:
+
+    def _worker():
         try:
-            beep_type = SOUND_MAPPING.get(sound_type, winsound.MB_ICONEXCLAMATION)
-            winsound.MessageBeep(beep_type)
+            for frequency, duration in pattern:
+                winsound.Beep(frequency, duration)
         except Exception:
-            pass
+            if fallback_sound_type is not None:
+                try:
+                    winsound.MessageBeep(fallback_sound_type)
+                except Exception:
+                    pass
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def play_error_sound(sound_type: str = "MB_ICONEXCLAMATION", error_code: str | None = None) -> None:
+    """Play a recognisable sound pattern for a classified error."""
+    _play_pattern_async(
+        sound_pattern_for(sound_type, error_code),
+        SOUND_MAPPING.get(sound_type, getattr(winsound, "MB_ICONEXCLAMATION", 0) if HAS_WINSOUND else 0),
+    )
 
 
 def play_success_sound() -> None:
     """Play Windows asterisk/notification chime on successful operation completion."""
-    if not HAS_WINSOUND:
-        return
-    try:
-        winsound.MessageBeep(winsound.MB_ICONASTERISK)
-    except Exception:
-        pass
+    _play_pattern_async(((988, 80),), getattr(winsound, "MB_ICONASTERISK", 0) if HAS_WINSOUND else 0)

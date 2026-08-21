@@ -5,9 +5,9 @@
     "subtitle": "以下に1つ以上の動画リンクを貼り付けてください（1行に1つ）"
   },
   "nav": {
-    "home": "📥 ダウンローダーとキュー",
-    "auth": "🔑 アカウントとセッション",
-    "mailpit": "📬 ローカルテスト受信トレイ (Mailpit)"
+    "home": "ダウンローダーとキュー",
+    "auth": "アカウントとセッション",
+    "mailpit": "ローカルテスト受信トレイ (Mailpit)"
   },
   "menu": {
     "file": "ファイル",
@@ -15,7 +15,7 @@
     "view": "表示",
     "help": "ヘルプ",
     "about": "情報",
-    "language": "🌐 言語 (Language)",
+    "language": "言語 (Language)",
     "preferences": "設定...",
     "pref_bindings": "設定 - ショートカットキーとスクロール速度...",
     "pref_font": "設定 - UIフォントパネル...",
@@ -86,7 +86,7 @@
     "eta": "残り時間"
   },
   "auth": {
-    "title": "🔑 アクティブなドメインセッションとセキュリティ制御",
+    "title": "アクティブなドメインセッションとセキュリティ制御",
     "subtitle": "認証情報は Windows DPAPI で暗号化されています。プレーンテキストで保存されることはありません。",
     "table_domain": "ドメイン",
     "table_label": "アカウントラベル",
@@ -105,7 +105,7 @@
     "cleared_msg": "{count} 件のセッションを消去しました。"
   },
   "mailpit": {
-    "title": "📬 ローカルテスト受信トレイ (Mailpit - テスト環境用)",
+    "title": "ローカルテスト受信トレイ (Mailpit - テスト環境用)",
     "subtitle": "ローカルテスト用の認証メールをキャプチャします (localhost, *.local)。外部サイトには使用されません。",
     "table_from": "送信元",
     "table_to": "送信先",

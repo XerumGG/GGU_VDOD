@@ -1,8 +1,8 @@
 name: Build and Release
 
 # Runs automatically whenever you push a version tag, e.g.:
-#   git tag v1.0.0
-#   git push origin v1.0.0
+#   git tag v0.2.8
+#   git push origin v0.2.8
 on:
   push:
     tags:
@@ -28,7 +28,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller
+          pip install pyinstaller pillow
+          choco install innosetup -y --no-progress
 
       - name: Run regression tests
         env:
@@ -36,24 +37,55 @@ jobs:
           PYTHONPATH: src
         run: python -m unittest discover -s tests -v
 
-      - name: Build GGU_VDOD.exe
-        run: pyinstaller --onefile --noconsole --paths src --collect-all PySide6 --name GGU_VDOD app.py
+      - name: Build GGU_VDOD app folder
+        run: >
+          pyinstaller --noconsole --paths src
+          --add-data "src/ggu_vdod/locales;ggu_vdod/locales"
+          --collect-all PySide6 --name GGU_VDOD --clean -y app.py
 
-      - name: Assemble release package
+      - name: Download FFmpeg for bundling
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg" -Force
+          $bin = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName + "\bin"
+          New-Item -ItemType Directory -Force -Path "dist\GGU_VDOD\ffmpeg" | Out-Null
+          Copy-Item "$bin\ffmpeg.exe"  "dist\GGU_VDOD\ffmpeg\ffmpeg.exe"
+          Copy-Item "$bin\ffprobe.exe" "dist\GGU_VDOD\ffmpeg\ffprobe.exe"
+          Copy-Item "bin\qjs.exe"      "dist\GGU_VDOD\ffmpeg\qjs.exe"
+
+      - name: Read app version
+        id: version
+        shell: pwsh
+        run: |
+          $v = (Get-Content src/ggu_vdod/core/version.py | Select-String 'MAJOR = (\d+)|MINOR = (\d+)|PATCH = (\d+)' |
+            ForEach-Object { $_.Matches } | ForEach-Object { $_.Value -replace '\D','' }) -join '.'
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Build Windows installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" `
+                  "/DSourceDir=${{ github.workspace }}\dist\GGU_VDOD" `
+                  "${{ github.workspace }}\installer\GGU_VDOD.iss"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Assemble portable zip (fallback, no FFmpeg)
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path release | Out-Null
-          Copy-Item dist\GGU_VDOD.exe release\
+          Copy-Item dist\GGU_VDOD\GGU_VDOD.exe release\
           Copy-Item README.md release\
           Copy-Item LICENSE release\
-          # ffmpeg is intentionally NOT bundled here - see README for why.
-          # Users add their own ffmpeg build next to the exe (or install it system-wide).
-          Compress-Archive -Path release\* -DestinationPath GGU_VDOD-windows.zip
+          Compress-Archive -Path release\* -DestinationPath GGU_VDOD-windows-portable.zip
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: GGU_VDOD-windows.zip
+          files: |
+            installer_output/GGU_VDOD-setup-*.exe
+            GGU_VDOD-windows-portable.zip
           generate_release_notes: true
-          # Flip this to true while you're still testing the pipeline itself
           prerelease: false

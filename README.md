@@ -15,6 +15,19 @@ High-performance desktop media downloader and local converter powered by PySide6
 - **Automatic 24-Hour Component Update Check:** Periodically checks versions for yt-dlp, PySide6, Pillow, PyInstaller, curl_cffi, FFmpeg, and FFprobe.
 - **Force Application Restart (Reboot):** Instantly reboot the app and release processes using **Edit > Force restart application** (`Ctrl+Shift+` `).
 
+## Installation
+
+**Windows installer (recommended):** download `GGU_VDOD-setup-vX.Y.Z.exe` from
+[GitHub Releases](../../releases), run it, and click through the wizard. It
+installs per-user (no admin rights), adds Start Menu / desktop shortcuts, and
+registers an uninstaller in Windows Settings > Apps.
+
+**Portable:** download `GGU_VDOD-windows-portable.zip`, extract anywhere, and
+run `GGU_VDOD.exe` directly.
+
+User data (settings, history, sessions) always lives in
+`%LOCALAPPDATA%\GGU_VDOD` and is preserved across updates and uninstalls.
+
 ## Project Documentation
 
 - [Architecture](docs/Architecture.md)

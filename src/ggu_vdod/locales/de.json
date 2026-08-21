@@ -5,9 +5,9 @@
     "subtitle": "Fügen Sie einen oder mehrere Video-Links unten ein (einer pro Zeile)"
   },
   "nav": {
-    "home": "📥 Downloader & Warteschlange",
-    "auth": "🔑 Konto & Sitzungen",
-    "mailpit": "📬 Lokaler Test-Posteingang (Mailpit)"
+    "home": "Downloader & Warteschlange",
+    "auth": "Konto & Sitzungen",
+    "mailpit": "Lokaler Test-Posteingang (Mailpit)"
   },
   "menu": {
     "file": "Datei",
@@ -15,7 +15,7 @@
     "view": "Ansicht",
     "help": "Hilfe",
     "about": "Über",
-    "language": "🌐 Sprache (Language)",
+    "language": "Sprache (Language)",
     "preferences": "Einstellungen...",
     "pref_bindings": "Einstellungen - Tastenkombinationen und Scrollgeschwindigkeit...",
     "pref_font": "Einstellungen - Schriftarten-Bedienfeld...",
@@ -86,7 +86,7 @@
     "eta": "Restzeit"
   },
   "auth": {
-    "title": "🔑 Aktive Domain-Sitzungen & Sicherheitskontrollen",
+    "title": "Aktive Domain-Sitzungen & Sicherheitskontrollen",
     "subtitle": "Zugangsdaten werden mit Windows DPAPI verschlüsselt.",
     "table_domain": "Domain",
     "table_label": "Konto-Bezeichnung",
@@ -105,7 +105,7 @@
     "cleared_msg": "{count} Sitzung(en) gelöscht."
   },
   "mailpit": {
-    "title": "📬 Lokaler Test-Posteingang (Mailpit - Testumgebung)",
+    "title": "Lokaler Test-Posteingang (Mailpit - Testumgebung)",
     "subtitle": "Erfasst lokale Test-Bestätigungs-E-Mails (localhost, *.local).",
     "table_from": "Von",
     "table_to": "An",

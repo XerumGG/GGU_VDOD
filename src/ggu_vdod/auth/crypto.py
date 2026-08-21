@@ -18,6 +18,10 @@ if sys.platform == "win32":
         ]
 
 
+class DPAPIError(Exception):
+    """Raised when Windows DPAPI protection fails and secrets must not be written."""
+
+
 def protect_bytes(raw_data: bytes, description: str = "GGU_VDOD_DPAPI") -> bytes:
     """Encrypt raw bytes using Windows DPAPI (CryptProtectData)."""
     if not raw_data:
@@ -41,7 +45,8 @@ def protect_bytes(raw_data: bytes, description: str = "GGU_VDOD_DPAPI") -> bytes
                 return protected
         except Exception:
             pass
-    # Fallback to salted XOR cipher for non-windows platforms
+        raise DPAPIError("Windows DPAPI encryption failed; refusing to store secrets with a weak fallback.")
+    # Obfuscation-only fallback for non-Windows development platforms.
     salt = secrets.token_bytes(16)
     key = hashlib.pbkdf2_hmac("sha256", b"GGU_VDOD_LOCAL_SECRET", salt, 100000)
     cipher = bytes([b ^ key[i % len(key)] for i, b in enumerate(raw_data)])
@@ -71,6 +76,7 @@ def unprotect_bytes(protected_data: bytes) -> bytes:
                 return unprotected
         except Exception:
             pass
+        return b""
     try:
         if len(protected_data) > 16:
             salt = protected_data[:16]

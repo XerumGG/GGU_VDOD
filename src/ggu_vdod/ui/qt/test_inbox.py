@@ -3,12 +3,13 @@
 from PySide6.QtCore import Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPlainTextEdit,
+    QAbstractItemView, QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPlainTextEdit,
     QPushButton, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
     QWidget,
 )
 
 from ...auth.mailpit import MailpitClient, is_staging_domain
+from .widgets import detach_running_worker
 
 
 class MailpitPollThread(QThread):
@@ -28,6 +29,22 @@ class MailpitPollThread(QThread):
         self.poll_completed.emit(is_running, messages)
 
 
+class MailpitMessageDetailThread(QThread):
+    """Fetch one message body and its verification links off the UI loop."""
+
+    detail_ready = Signal(str, dict, list)
+
+    def __init__(self, client: MailpitClient, message_id: str, parent=None):
+        super().__init__(parent)
+        self.client = client
+        self.message_id = message_id
+
+    def run(self):
+        detail = self.client.get_message(self.message_id) or {}
+        links = self.client.extract_verification_links(self.message_id)
+        self.detail_ready.emit(self.message_id, detail, links)
+
+
 class MailpitTestInboxWidget(QWidget):
     """Built-in Local Test Inbox panel displaying captured Mailpit emails."""
 
@@ -35,19 +52,20 @@ class MailpitTestInboxWidget(QWidget):
         super().__init__(parent)
         self.client = MailpitClient()
         self._active_poll_thread = None
+        self._active_detail_thread = None
         self._current_message_id = None
         self._extracted_links = []
         self._init_ui()
 
         self._poll_timer = QTimer(self)
         self._poll_timer.timeout.connect(self.trigger_poll)
-        self._poll_timer.start(5000)
+        self._poll_timer.start(15000)
 
     def shutdown(self):
         if hasattr(self, "_poll_timer"):
             self._poll_timer.stop()
-        if self._active_poll_thread and self._active_poll_thread.isRunning():
-            self._active_poll_thread.wait(1000)
+        detach_running_worker(self._active_poll_thread)
+        detach_running_worker(self._active_detail_thread)
 
     def closeEvent(self, event):
         self.shutdown()
@@ -62,7 +80,7 @@ class MailpitTestInboxWidget(QWidget):
 
         # Header Status Row
         header_row = QHBoxLayout()
-        self.title_label = QLabel(t("mailpit.title", "📬 Local Test Inbox (Mailpit - Owned Staging Only)"), self)
+        self.title_label = QLabel(t("mailpit.title", "Local Test Inbox (Mailpit - Owned Staging Only)"), self)
         self.title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         header_row.addWidget(self.title_label)
         header_row.addStretch()
@@ -93,6 +111,7 @@ class MailpitTestInboxWidget(QWidget):
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.itemSelectionChanged.connect(self._on_message_selected)
         splitter.addWidget(self.table)
 
@@ -146,7 +165,7 @@ class MailpitTestInboxWidget(QWidget):
 
     def _retranslate_ui(self):
         from ...services.i18n import t
-        self.title_label.setText(t("mailpit.title", "📬 Local Test Inbox (Mailpit - Owned Staging Only)"))
+        self.title_label.setText(t("mailpit.title", "Local Test Inbox (Mailpit - Owned Staging Only)"))
         self.sub_label.setText(t("mailpit.subtitle", "Captures local test verification emails for user-owned staging sites (localhost, *.local, *.test). Never used for external public sites."))
         self.table.setHorizontalHeaderLabels([
             t("mailpit.table_from", "From"),
@@ -177,16 +196,19 @@ class MailpitTestInboxWidget(QWidget):
             return
         self._active_poll_thread = MailpitPollThread(self.client, self)
         self._active_poll_thread.poll_completed.connect(self._on_poll_completed)
+        self._active_poll_thread.finished.connect(
+            lambda t=self._active_poll_thread: setattr(self, "_active_poll_thread", None)
+        )
         self._active_poll_thread.start()
 
     def _on_poll_completed(self, is_running: bool, messages: list):
         if not is_running:
-            self.status_label.setText("Mailpit: Offline 🔴 (Run Mailpit on localhost:8025)")
+            self.status_label.setText("Mailpit: Offline (Run Mailpit on localhost:8025)")
             self.status_label.setStyleSheet("font-weight: 600; color: #ff4444;")
             self.table.setRowCount(0)
             return
 
-        self.status_label.setText("Mailpit: Online 🟢 (localhost:8025)")
+        self.status_label.setText("Mailpit: Online (localhost:8025)")
         self.status_label.setStyleSheet("font-weight: 600; color: #00cc66;")
 
         self.table.setRowCount(0)
@@ -227,19 +249,32 @@ class MailpitTestInboxWidget(QWidget):
             return
 
         self._current_message_id = msg_id
-        detail = self.client.get_message(msg_id)
-        links = self.client.extract_verification_links(msg_id)
-        self._extracted_links = links
+        self.preview_box.setPlainText("Loading message…")
+        self.open_link_btn.setEnabled(False)
+        if self._active_detail_thread and self._active_detail_thread.isRunning():
+            return
+        self._active_detail_thread = MailpitMessageDetailThread(self.client, msg_id, self)
+        self._active_detail_thread.detail_ready.connect(self._on_message_detail)
+        self._active_detail_thread.finished.connect(
+            lambda t=self._active_detail_thread: setattr(self, "_active_detail_thread", None)
+        )
+        self._active_detail_thread.start()
 
-        if detail:
-            body = detail.get("Text") or detail.get("HTML") or "(Empty Email Body)"
-            preview_text = f"Subject: {detail.get('Subject')}\nFrom: {detail.get('From', {}).get('Address')}\nDate: {detail.get('Created')}\n"
-            preview_text += f"\n--- Verification Links ({len(links)}) ---\n"
-            for link in links:
-                preview_text += f"🔗 {link}\n"
-            preview_text += f"\n--- Email Body ---\n{body}"
-            self.preview_box.setPlainText(preview_text)
-            self.open_link_btn.setEnabled(bool(links))
+    def _on_message_detail(self, msg_id, detail, links):
+        if msg_id != self._current_message_id:
+            return
+        self._extracted_links = links
+        if not detail:
+            self.preview_box.setPlainText("(Could not load message details)")
+            return
+        body = detail.get("Text") or detail.get("HTML") or "(Empty Email Body)"
+        preview_text = f"Subject: {detail.get('Subject')}\nFrom: {detail.get('From', {}).get('Address')}\nDate: {detail.get('Created')}\n"
+        preview_text += f"\n--- Verification Links ({len(links)}) ---\n"
+        for link in links:
+            preview_text += f" {link}\n"
+        preview_text += f"\n--- Email Body ---\n{body}"
+        self.preview_box.setPlainText(preview_text)
+        self.open_link_btn.setEnabled(bool(links))
 
     def _open_selected_verification_link(self):
         if self._extracted_links:

@@ -5,9 +5,9 @@
     "subtitle": "Ingrese uno o más enlaces de video a continuación (uno por línea)"
   },
   "nav": {
-    "home": "📥 Descargador y Cola",
-    "auth": "🔑 Cuenta y Sesiones",
-    "mailpit": "📬 Buzón de Pruebas (Mailpit)"
+    "home": "Descargador y Cola",
+    "auth": "Cuenta y Sesiones",
+    "mailpit": "Buzón de Pruebas (Mailpit)"
   },
   "menu": {
     "file": "Archivo",
@@ -15,7 +15,7 @@
     "view": "Ver",
     "help": "Ayuda",
     "about": "Acerca de",
-    "language": "🌐 Idioma (Language)",
+    "language": "Idioma (Language)",
     "preferences": "Preferencias...",
     "pref_bindings": "Preferencias - Métodos abreviados y velocidad de desplazamiento...",
     "pref_font": "Preferencias - Panel de fuentes de la interfaz...",
@@ -86,7 +86,7 @@
     "eta": "Tiempo restante"
   },
   "auth": {
-    "title": "🔑 Sesiones de dominio activas y controles de seguridad",
+    "title": "Sesiones de dominio activas y controles de seguridad",
     "subtitle": "Las credenciales se cifran con Windows DPAPI. Las contraseñas nunca se guardan en texto plano.",
     "table_domain": "Dominio",
     "table_label": "Etiqueta de cuenta",
@@ -99,7 +99,7 @@
     "clear_btn": "Borrar todas las sesiones"
   },
   "mailpit": {
-    "title": "📬 Buzón de pruebas local (Mailpit)",
+    "title": "Buzón de pruebas local (Mailpit)",
     "subtitle": "Captura correos de verificación para entornos locales. Nunca se usa en sitios públicos.",
     "table_from": "De",
     "table_to": "Para",

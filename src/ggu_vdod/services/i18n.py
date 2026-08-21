@@ -7,21 +7,19 @@ from pathlib import Path
 from PySide6.QtCore import QObject, Signal, QLocale, Qt
 from PySide6.QtWidgets import QApplication
 
-from ..config.store import load_config, save_config
-
 SUPPORTED_LANGUAGES = {
-    "Auto": "🌐 Auto-Detect System",
-    "en": "🇺🇸 English",
-    "es": "🇪🇸 Español",
-    "fr": "🇫🇷 Français",
-    "de": "🇩🇪 Deutsch",
-    "hi": "🇮🇳 हिन्दी (Hindi)",
-    "bn": "🇧🇩 বাংলা (Bengali)",
-    "zh": "🇨🇳 中文 (Chinese)",
-    "ja": "🇯🇵 日本語 (Japanese)",
-    "ru": "🇷🇺 Русский (Russian)",
-    "pt": "🇵🇹 Português",
-    "ar": "🇸🇦 العربية (Arabic)",
+    "Auto": "Auto-Detect System",
+    "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "de": "Deutsch",
+    "hi": "हिन्दी (Hindi)",
+    "bn": "বাংলা (Bengali)",
+    "zh": "中文 (Chinese)",
+    "ja": "日本語 (Japanese)",
+    "ru": "Русский (Russian)",
+    "pt": "Português",
+    "ar": "العربية (Arabic)",
 }
 
 RTL_LANGUAGES = {"ar", "he", "fa", "ur"}
@@ -51,8 +49,8 @@ class I18nService(QObject):
         self._load_saved_language()
 
     def _load_saved_language(self):
-        config = load_config()
-        saved_lang = config.get("language", "en")
+        from ..config.manager import settings_manager
+        saved_lang = settings_manager.get("language", "en")
         self.set_language(saved_lang, save_pref=False)
 
     def detect_system_language(self) -> str:
@@ -80,9 +78,9 @@ class I18nService(QObject):
         self._load_translations(target_code)
 
         if save_pref:
-            config = load_config()
-            config["language"] = lang_code
-            save_config(config)
+            from ..config.manager import settings_manager
+            settings_manager.set("language", lang_code)
+            settings_manager.save()
 
         # Update Qt Application layout direction for RTL languages like Arabic
         app = QApplication.instance()

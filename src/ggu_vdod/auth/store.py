@@ -14,14 +14,46 @@ from .crypto import decrypt_string, encrypt_string, protect_bytes, unprotect_byt
 
 
 def get_auth_store_path() -> Path:
-    """Return path to auth_sessions.json in app data directory."""
+    """Return path to auth_sessions.json inside the per-user config directory.
+
+    Writable data lives outside the install directory so the app works when
+    installed to Program Files; legacy files next to the exe are migrated once.
+    """
+    from ..config.paths import get_config_dir
+    config_dir = Path(get_config_dir())
+    store_path = config_dir / "auth_sessions.json"
+    if not store_path.is_file():
+        _migrate_legacy_store(config_dir)
+    return store_path
+
+
+def _legacy_store_path() -> Path:
     return Path(get_app_dir()) / "auth_sessions.json"
+
+
+def _migrate_legacy_store(config_dir: Path) -> None:
+    """Copy pre-installer stores from the old app-dir location into config dir."""
+    try:
+        legacy = _legacy_store_path()
+        target = config_dir / "auth_sessions.json"
+        if legacy.is_file() and not target.is_file():
+            config_dir.mkdir(parents=True, exist_ok=True)
+            data = json.loads(legacy.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                target.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        legacy_dat = Path(get_app_dir()) / "auth_sessions.dat"
+        target_dat = config_dir / "auth_sessions.dat"
+        if legacy_dat.is_file() and not target_dat.is_file():
+            config_dir.mkdir(parents=True, exist_ok=True)
+            target_dat.write_bytes(legacy_dat.read_bytes())
+    except Exception:
+        pass
 
 
 def load_auth_sessions() -> dict:
     """Load all saved domain sessions from auth_sessions.json (or dat fallback)."""
     store_path = get_auth_store_path()
-    dat_path = Path(get_app_dir()) / "auth_sessions.dat"
+    dat_path = store_path.with_suffix(".dat")
 
     # Fallback to dat file if json doesn't exist yet
     if not store_path.is_file() and dat_path.is_file():
@@ -47,12 +79,22 @@ def load_auth_sessions() -> dict:
     return {}
 
 
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write text via a temp file + os.replace so crashes never corrupt the store."""
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        f.write(text)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, path)
+
+
 def save_auth_sessions(sessions: dict) -> None:
     """Persist domain sessions to auth_sessions.json."""
     store_path = get_auth_store_path()
     try:
         os.makedirs(store_path.parent, exist_ok=True)
-        store_path.write_text(json.dumps(sessions, indent=2), encoding="utf-8")
+        _atomic_write_text(store_path, json.dumps(sessions, indent=2))
     except Exception:
         pass
 
@@ -75,6 +117,8 @@ def save_domain_session(
     # Store in Windows Credential Manager if available
     if secret and sys.platform == "win32":
         write_windows_credential(domain_key, account_label.strip(), secret)
+    elif not secret and sys.platform == "win32":
+        delete_windows_credential(domain_key)
 
     sessions = load_auth_sessions()
     sessions[domain_key] = {

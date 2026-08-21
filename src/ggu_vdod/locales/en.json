@@ -5,9 +5,9 @@
     "subtitle": "Paste one or more video links below (one per line)"
   },
   "nav": {
-    "home": "📥 Downloader & Queue",
-    "auth": "🔑 Account & Sessions",
-    "mailpit": "📬 Local Test Inbox (Mailpit)"
+    "home": "Downloader & Queue",
+    "auth": "Account & Sessions",
+    "mailpit": "Local Test Inbox (Mailpit)"
   },
   "menu": {
     "file": "File",
@@ -15,7 +15,7 @@
     "view": "View",
     "help": "Help",
     "about": "About",
-    "language": "🌐 Language",
+    "language": "Language",
     "preferences": "Preferences...",
     "pref_bindings": "Preferences - Key bindings and scroll speed...",
     "pref_font": "Preferences - UI Font panel...",
@@ -86,7 +86,7 @@
     "eta": "ETA"
   },
   "auth": {
-    "title": "🔑 Active Domain Sessions & Security Controls",
+    "title": "Active Domain Sessions & Security Controls",
     "subtitle": "Credentials are encrypted with Windows DPAPI / Windows Credential Manager. Plaintext passwords are never stored.",
     "table_domain": "Domain",
     "table_label": "Account Label",
@@ -105,7 +105,7 @@
     "cleared_msg": "Cleared {count} stored session(s)."
   },
   "mailpit": {
-    "title": "📬 Local Test Inbox (Mailpit - Owned Staging Only)",
+    "title": "Local Test Inbox (Mailpit - Owned Staging Only)",
     "subtitle": "Captures local test verification emails for user-owned staging sites (localhost, *.local, *.test). Never used for external public sites.",
     "table_from": "From",
     "table_to": "To",

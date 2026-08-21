@@ -16,6 +16,7 @@ auth_sessions.dat
 venv/
 
 # Build output
+installer_output/
 build/
 dist/
 dist_v*/

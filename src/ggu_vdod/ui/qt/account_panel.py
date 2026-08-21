@@ -1,9 +1,9 @@
 """PySide6 Account & Session Management UI Panel for GGU_VDOD."""
 
 import time
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPushButton, QTableWidget,
+    QAbstractItemView, QHBoxLayout, QHeaderView, QLabel, QMessageBox, QPushButton, QTableWidget,
     QTableWidgetItem, QVBoxLayout, QWidget, QInputDialog, QLineEdit, QDialog,
     QFormLayout, QComboBox,
 )
@@ -63,17 +63,17 @@ class AccountSessionWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._init_ui()
-        self._refresh_timer = QTimer(self)
-        self._refresh_timer.timeout.connect(self.refresh_sessions)
-        self._refresh_timer.start(5000)
 
     def shutdown(self):
-        if hasattr(self, "_refresh_timer"):
-            self._refresh_timer.stop()
+        pass
 
     def closeEvent(self, event):
-        self.shutdown()
         super().closeEvent(event)
+
+    def showEvent(self, event):
+        """Refresh only when the tab becomes visible instead of polling on a timer."""
+        super().showEvent(event)
+        self.refresh_sessions()
 
     def _init_ui(self):
         layout = QVBoxLayout(self)
@@ -82,7 +82,7 @@ class AccountSessionWidget(QWidget):
 
         from ...services.i18n import i18n, t
 
-        self.title_label = QLabel(t("auth.title", "🔑 Active Domain Sessions & Security Controls"), self)
+        self.title_label = QLabel(t("auth.title", "Active Domain Sessions & Security Controls"), self)
         self.title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         layout.addWidget(self.title_label)
 
@@ -102,6 +102,7 @@ class AccountSessionWidget(QWidget):
         ])
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         layout.addWidget(self.table)
 
         # Action Toolbar
@@ -132,7 +133,7 @@ class AccountSessionWidget(QWidget):
 
     def _retranslate_ui(self):
         from ...services.i18n import t
-        self.title_label.setText(t("auth.title", "🔑 Active Domain Sessions & Security Controls"))
+        self.title_label.setText(t("auth.title", "Active Domain Sessions & Security Controls"))
         self.sub_label.setText(t("auth.subtitle", "Credentials are encrypted with Windows DPAPI / Windows Credential Manager. Plaintext passwords are never stored."))
         self.table.setHorizontalHeaderLabels([
             t("auth.table_domain", "Domain"),
@@ -150,11 +151,8 @@ class AccountSessionWidget(QWidget):
         """Reload active sessions into table widget."""
         if not force and not self.isVisible():
             return
-        sessions = AuthManager.purge_expired_sessions()
-        active_list = list_active_sessions() if hasattr(AuthManager, "list_active_sessions") else []
-        if not active_list:
-            from ...auth.store import list_active_sessions as store_list
-            active_list = store_list()
+        from ...auth.store import list_active_sessions
+        active_list = list_active_sessions()
 
         self.table.setRowCount(0)
         now = int(time.time())
@@ -176,7 +174,7 @@ class AccountSessionWidget(QWidget):
                 ttl_str = "Never"
 
             ttl_item = QTableWidgetItem(ttl_str)
-            status_str = "Expired" if entry.get("is_expired") else "Active 🟢"
+            status_str = "Expired" if entry.get("is_expired") else "Active"
             status_item = QTableWidgetItem(status_str)
 
             self.table.setItem(row, 0, domain_item)
@@ -199,10 +197,28 @@ class AccountSessionWidget(QWidget):
             QMessageBox.information(self, "No Selection", "Please select a domain session to forget.")
             return
 
-        for index in selected_rows:
-            domain = self.table.item(index.row(), 0).text()
-            if domain:
-                AuthManager.forget_session(domain)
+        domains = [
+            self.table.item(index.row(), 0).text()
+            for index in selected_rows
+            if self.table.item(index.row(), 0)
+        ]
+        domains = [d for d in domains if d]
+        if not domains:
+            return
+        answer = QMessageBox.question(
+            self,
+            "Forget Session(s)",
+            "Delete the selected session(s) and their stored credentials?\n\n"
+            + "\n".join(domains[:8])
+            + ("\n…" if len(domains) > 8 else ""),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+
+        for domain in domains:
+            AuthManager.forget_session(domain)
 
         self.refresh_sessions()
 

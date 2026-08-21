@@ -63,16 +63,18 @@ MAILPIT_HTML_WEB_UI = """<!DOCTYPE html>
                     return;
                 }
                 let html = '<table><tr><th>From</th><th>To</th><th>Subject</th><th>Date</th><th>Action / Verification</th></tr>';
+                const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
                 for (const msg of data.messages) {
-                    const detailRes = await fetch('/api/v1/message/' + msg.ID);
+                    const detailRes = await fetch('/api/v1/message/' + encodeURIComponent(msg.ID));
                     const detail = await detailRes.json();
                     const body = (detail.Text || detail.HTML || '');
                     const linkMatch = body.match(/https?:\\/\\/[^\\s"'<>]+\\b(?:verify|confirm|activate|register|token|login|auth|session)[^\\s"'<>]*/i);
                     let actionHtml = '-';
                     if (linkMatch) {
-                        actionHtml = `<a class="verify-btn" href="${linkMatch[0]}" target="_blank">Verify Session</a>`;
+                        const safeLink = esc(linkMatch[0]);
+                        actionHtml = `<a class="verify-btn" href="${safeLink}" target="_blank" rel="noopener noreferrer">Verify Session</a>`;
                     }
-                    html += `<tr><td>${msg.From.Address}</td><td>${msg.To[0].Address}</td><td><strong>${msg.Subject}</strong></td><td>${msg.Created}</td><td>${actionHtml}</td></tr>`;
+                    html += `<tr><td>${esc(msg.From.Address)}</td><td>${esc(msg.To[0].Address)}</td><td><strong>${esc(msg.Subject)}</strong></td><td>${esc(msg.Created)}</td><td>${actionHtml}</td></tr>`;
                 }
                 html += '</table>';
                 container.innerHTML = html;
@@ -172,7 +174,7 @@ class _EmbeddedMailpitHandler(BaseHTTPRequestHandler):
     def _send_json(self, status_code, data):
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Origin", "http://127.0.0.1:8025")
         self.end_headers()
         self.wfile.write(json.dumps(data).encode("utf-8"))
 

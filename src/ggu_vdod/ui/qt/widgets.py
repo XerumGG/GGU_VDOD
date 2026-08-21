@@ -1,10 +1,28 @@
 """Reusable PySide6 widgets that are independent of downloader logic."""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QThread, Qt
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QProgressBar
 
 from ...core.version import DEVELOPMENT_BUILD_LABEL
 from ...services.i18n import i18n, t
+
+_detached_workers: list = []
+
+
+def detach_running_worker(worker: QThread, grace_ms: int = 1000) -> None:
+    """Wait briefly for a running QThread, then orphan it instead of letting Qt
+    destroy it mid-run (which aborts the process). The reference list keeps the
+    Python wrapper alive until the thread finishes on its own."""
+    if worker is None or not worker.isRunning():
+        return
+    worker.wait(grace_ms)
+    if worker.isRunning():
+        try:
+            worker.setParent(None)
+        except Exception:
+            pass
+        _detached_workers.append(worker)
+        worker.finished.connect(lambda w=worker: _detached_workers.remove(w) if w in _detached_workers else None)
 
 
 class TransferStatusBar(QFrame):

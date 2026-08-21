@@ -35,9 +35,8 @@ def best_thumbnail_url(info):
     if video_id:
         maxres_url = f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
         try:
-            ctx = ssl._create_unverified_context()
             req = urllib.request.Request(maxres_url, headers={"User-Agent": "Mozilla/5.0"}, method="HEAD")
-            with urllib.request.urlopen(req, timeout=3, context=ctx) as resp:
+            with urllib.request.urlopen(req, timeout=3) as resp:
                 if resp.status == 200:
                     return maxres_url
         except Exception:
@@ -61,19 +60,13 @@ def best_thumbnail_url(info):
     return info.get("thumbnail") or ""
 
 
-import ssl
-
-
 def download_thumbnail_bytes(thumbnail_url, max_bytes=12 * 1024 * 1024):
     if not thumbnail_url:
         return None
     try:
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"}
         request = urllib.request.Request(thumbnail_url, headers=headers)
-        with urllib.request.urlopen(request, timeout=10, context=ctx) as response:
+        with urllib.request.urlopen(request, timeout=10) as response:
             return response.read(max_bytes)
     except Exception:
         return None

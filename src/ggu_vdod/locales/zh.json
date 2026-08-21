@@ -5,9 +5,9 @@
     "subtitle": "在下方粘贴一个或多个视频链接（每行一个）"
   },
   "nav": {
-    "home": "📥 下载与队列",
-    "auth": "🔑 账户与会话",
-    "mailpit": "📬 本地测试收件箱 (Mailpit)"
+    "home": "下载与队列",
+    "auth": "账户与会话",
+    "mailpit": "本地测试收件箱 (Mailpit)"
   },
   "menu": {
     "file": "文件",
@@ -15,7 +15,7 @@
     "view": "视图",
     "help": "帮助",
     "about": "关于",
-    "language": "🌐 语言 (Language)",
+    "language": "语言 (Language)",
     "preferences": "偏好设置...",
     "pref_bindings": "偏好设置 - 快捷键与滚动速度...",
     "pref_font": "偏好设置 - 界面字体面板...",
@@ -86,7 +86,7 @@
     "eta": "剩余时间"
   },
   "auth": {
-    "title": "🔑 活动域名会话与安全控制",
+    "title": "活动域名会话与安全控制",
     "subtitle": "凭据由 Windows DPAPI 加密保护。绝不以明文存储密码。",
     "table_domain": "域名",
     "table_label": "账户标签",
@@ -105,7 +105,7 @@
     "cleared_msg": "已清除 {count} 个存储的会话。"
   },
   "mailpit": {
-    "title": "📬 本地测试收件箱 (Mailpit - 仅限测试环境)",
+    "title": "本地测试收件箱 (Mailpit - 仅限测试环境)",
     "subtitle": "捕获本地测试验证邮件 (localhost, *.local)。绝不用于外部公共网站。",
     "table_from": "发件人",
     "table_to": "收件人",

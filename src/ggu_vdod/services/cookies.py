@@ -27,6 +27,8 @@ def inspect_netscape_cookie_file(path):
         if not line or (line.startswith("#") and not line.startswith("#HttpOnly_")):
             continue
         fields = raw_line.split("\t")
+        if len(fields) == 8 and fields[7] == "":
+            fields = fields[:7]
         if len(fields) != 7:
             invalid_rows += 1
             continue
@@ -45,9 +47,9 @@ def inspect_netscape_cookie_file(path):
 
 
 def get_temp_cookies_dir() -> Path:
-    """Return path to temporary cookie database copy folder."""
-    from ..config.paths import get_app_dir
-    tmp_dir = Path(get_app_dir()) / "temp_cookies"
+    """Return path to temporary cookie database copy folder (per-user config dir)."""
+    from ..config.paths import get_config_dir
+    tmp_dir = Path(get_config_dir()) / "temp_cookies"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     return tmp_dir
 

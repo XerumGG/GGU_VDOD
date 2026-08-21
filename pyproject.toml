@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ggu-vdod"
-version = "0.1.26.dev26"
+version = "0.2.10.dev66"
 description = "Windows desktop media downloader and local converter"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -78,13 +78,16 @@ def read_windows_credential(domain: str) -> tuple[str, str] | None:
         res = ctypes.windll.advapi32.CredReadW(
             target_name, CRED_TYPE_GENERIC, 0, ctypes.byref(cred_ptr)
         )
-        if res and cred_ptr:
+        if not res or not cred_ptr:
+            return None
+        try:
             cred = cred_ptr.contents
             blob_bytes = bytes(ctypes.string_at(cred.CredentialBlob, cred.CredentialBlobSize))
             secret = blob_bytes.decode("utf-16le")
             username = cred.UserName or ""
-            ctypes.windll.advapi32.CredFree(cred_ptr)
             return username, secret
+        finally:
+            ctypes.windll.advapi32.CredFree(cred_ptr)
     except Exception:
         pass
     return None

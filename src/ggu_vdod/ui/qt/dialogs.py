@@ -1,6 +1,7 @@
 """PySide6 dialog windows for preferences, help center, supported platforms, update checker, and shortcuts."""
 
 import importlib.metadata
+import html
 import json
 import os
 from pathlib import Path
@@ -11,9 +12,9 @@ import threading
 import urllib.parse
 import urllib.request
 from PySide6.QtCore import Qt, QThread, Signal, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QKeySequence
+from PySide6.QtGui import QColor, QDesktopServices, QFont, QFontDatabase, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QFormLayout,
+    QApplication, QAbstractItemView, QCheckBox, QColorDialog, QComboBox, QDialog, QFileDialog, QFormLayout,
     QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit,
     QMessageBox, QPlainTextEdit, QPushButton, QScrollArea, QSlider, QSpinBox,
     QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
@@ -26,11 +27,7 @@ from ...core.constants import (
 )
 from ...core.version import DEVELOPMENT_BUILD_LABEL, PACKAGE_VERSION
 from .theme import THEME_COLOR_FIELDS, THEME_PRESETS, is_valid_theme_color, normalize_theme, theme_name
-
-try:
-    import yt_dlp
-except ImportError:
-    yt_dlp = None
+from .widgets import detach_running_worker
 
 
 class KeyBindingsDialog(QDialog):
@@ -127,6 +124,10 @@ class SupportedPlatformsWorker(QThread):
 
     def run(self):
         extractors = []
+        try:
+            import yt_dlp
+        except ImportError:
+            yt_dlp = None
         if yt_dlp:
             try:
                 for ie in yt_dlp.list_extractors():
@@ -170,14 +171,13 @@ class SupportedPlatformsDialog(QDialog):
         layout.addLayout(header)
 
         self.table = QTableWidget()
-        self.table.setColumnCount(2)
+        self.table.setColumnCount(1)
         self.table.setHorizontalHeaderLabels([
             t("platforms.table_name", "Extractor / Platform Name"),
-            t("platforms.table_desc", "Description"),
         ])
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.table.setColumnWidth(0, 240)
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setAlternatingRowColors(True)
 
         layout.addWidget(self.table, 1)
@@ -203,21 +203,19 @@ class SupportedPlatformsDialog(QDialog):
         self._filter_table(self.search_input.text())
 
     def closeEvent(self, event):
-        if hasattr(self, "worker") and self.worker.isRunning():
-            self.worker.wait(1000)
+        detach_running_worker(getattr(self, "worker", None))
         super().closeEvent(event)
 
     def _filter_table(self, query):
         query = query.strip().lower()
         filtered = [
             (name, desc) for name, desc in self.all_extractors
-            if not query or query in name.lower() or query in desc.lower()
+            if not query or query in name.lower()
         ]
 
         self.table.setRowCount(len(filtered))
         for row, (name, desc) in enumerate(filtered):
             self.table.setItem(row, 0, QTableWidgetItem(name))
-            self.table.setItem(row, 1, QTableWidgetItem(desc))
 
 
 def get_installed_component_version(name: str, module_name: str) -> str:
@@ -451,7 +449,10 @@ class UpdateCheckDialog(QDialog):
             self.table.setItem(row, 2, QTableWidgetItem(installed))
             self.table.setItem(row, 3, QTableWidgetItem(latest))
             self.table.setItem(row, 4, QTableWidgetItem(status))
-        available = [name for name, _kind, _installed, _latest, status in results if status == "Update available" and name in UPDATEABLE_PACKAGES]
+        available = [
+            name for name, _kind, _installed, _latest, status in results
+            if status == "Update available" and name in UPDATEABLE_PACKAGES and name != "PySide6"
+        ]
         self.update_btn.setEnabled(bool(available))
         self.update_btn.setText(
             f"Update {len(available)} available component(s)" if available else "Everything is up to date"
@@ -459,12 +460,21 @@ class UpdateCheckDialog(QDialog):
         self.refresh_btn.setEnabled(True)
 
     def _update_available_components(self):
+        # PySide6 is deliberately excluded: replacing Qt DLLs under the running
+        # process can break this session and the next launch. Update it manually
+        # and rebuild instead.
         packages = [
             UPDATEABLE_PACKAGES[name]
             for name, _kind, _installed, _latest, status in self._results
-            if status == "Update available" and name in UPDATEABLE_PACKAGES
+            if status == "Update available" and name in UPDATEABLE_PACKAGES and name != "PySide6"
         ]
         if not packages:
+            QMessageBox.information(
+                self,
+                "Update components",
+                "Only PySide6 has an update, and it must be updated manually outside the running app "
+                "(pip install --upgrade PySide6), followed by a rebuild.",
+            )
             return
 
         answer = QMessageBox.question(
@@ -513,10 +523,8 @@ class UpdateCheckDialog(QDialog):
         self._check_versions()
 
     def closeEvent(self, event):
-        if hasattr(self, "worker") and self.worker.isRunning():
-            self.worker.wait(1000)
-        if self._update_worker and self._update_worker.isRunning():
-            self._update_worker.wait(1000)
+        detach_running_worker(getattr(self, "worker", None))
+        detach_running_worker(self._update_worker)
         super().closeEvent(event)
 
 
@@ -596,6 +604,7 @@ class DeepMediaInspectorDialog(QDialog):
         self.video_table.setColumnCount(8)
         self.video_table.setHorizontalHeaderLabels(["Index", "Codec", "Profile", "Resolution", "FPS", "Pix Format", "Bitrate", "Aspect Ratio"])
         self.video_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.video_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         vid_layout.addWidget(self.video_table)
         self.tabs.addTab(self.video_tab, "Video Tracks")
 
@@ -607,6 +616,7 @@ class DeepMediaInspectorDialog(QDialog):
         self.audio_table.setColumnCount(7)
         self.audio_table.setHorizontalHeaderLabels(["Index", "Codec", "Sample Rate", "Channels", "Layout", "Bitrate", "Language"])
         self.audio_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.audio_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         aud_layout.addWidget(self.audio_table)
         self.tabs.addTab(self.audio_tab, "Audio Tracks")
 
@@ -727,8 +737,7 @@ class DeepMediaInspectorDialog(QDialog):
                 QMessageBox.critical(self, "Error", f"Failed to save JSON report:\n{err}")
 
     def closeEvent(self, event):
-        if hasattr(self, "worker") and self.worker.isRunning():
-            self.worker.wait(1000)
+        detach_running_worker(getattr(self, "worker", None))
         super().closeEvent(event)
 
 
@@ -1026,6 +1035,7 @@ class LinkHistoryDialog(QDialog):
         self.table.setHorizontalHeaderLabels(["Title / URL", "Format", "Status", "Date"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         layout.addWidget(self.table, 1)
 
         btn_row = QHBoxLayout()
@@ -1080,6 +1090,49 @@ class LinkHistoryDialog(QDialog):
         self._load_data()
 
 
+def scan_library_files(output_dir):
+    """Walk the output directory and bucket files into videos/audios/images."""
+    video_exts = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".mpeg", ".ts", ".m4v", ".ogv", ".3gp"}
+    audio_exts = {".mp3", ".m4a", ".aac", ".wav", ".flac", ".opus", ".ogg", ".alac"}
+    image_exts = {".jpg", ".jpeg", ".png", ".webp"}
+
+    videos, audios, images = [], [], []
+    if os.path.exists(output_dir):
+        for root_path, _, filenames in os.walk(output_dir):
+            for fn in filenames:
+                ext = os.path.splitext(fn)[1].lower()
+                full_path = os.path.join(root_path, fn)
+                try:
+                    sz = os.path.getsize(full_path)
+                    from ...core.formatting import format_bytes
+                    sz_str = format_bytes(sz)
+                except Exception:
+                    sz_str = "Unknown"
+
+                entry = (fn, sz_str, ext[1:].upper(), full_path)
+                if ext in video_exts:
+                    videos.append(entry)
+                elif ext in audio_exts:
+                    audios.append(entry)
+                elif ext in image_exts:
+                    images.append(entry)
+    return videos, audios, images
+
+
+class LibraryScanWorker(QThread):
+    """Scan the media library off the UI loop so large folders never freeze it."""
+
+    scanned = Signal(list, list, list)
+
+    def __init__(self, output_dir, parent=None):
+        super().__init__(parent)
+        self.output_dir = output_dir
+
+    def run(self):
+        videos, audios, images = scan_library_files(self.output_dir)
+        self.scanned.emit(videos, audios, images)
+
+
 class LibraryDialog(QDialog):
     """Media library manager separating Videos, Audios, and Thumbnails."""
 
@@ -1108,9 +1161,9 @@ class LibraryDialog(QDialog):
         self.audio_table = self._create_table()
         self.image_table = self._create_table()
 
-        self.tabs.addTab(self.video_table, "🎬 Videos")
-        self.tabs.addTab(self.audio_table, "🎵 Audios")
-        self.tabs.addTab(self.image_table, "🖼️ Thumbnails")
+        self.tabs.addTab(self.video_table, "Videos")
+        self.tabs.addTab(self.audio_table, "Audios")
+        self.tabs.addTab(self.image_table, "Thumbnails")
 
         layout.addWidget(self.tabs, 1)
 
@@ -1143,35 +1196,20 @@ class LibraryDialog(QDialog):
         table.setHorizontalHeaderLabels(["File Name", "Size", "Type", "Path"])
         table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         return table
 
     def _scan_files(self):
-        video_exts = {".mp4", ".mkv", ".mov", ".avi", ".webm", ".flv", ".mpeg", ".ts", ".m4v", ".ogv", ".3gp"}
-        audio_exts = {".mp3", ".m4a", ".aac", ".wav", ".flac", ".opus", ".ogg", ".alac"}
-        image_exts = {".jpg", ".jpeg", ".png", ".webp"}
+        if getattr(self, "_scan_worker", None) and self._scan_worker.isRunning():
+            return
+        self._scan_worker = LibraryScanWorker(self.output_dir, self)
+        self._scan_worker.scanned.connect(self._on_library_scanned)
+        self._scan_worker.finished.connect(
+            lambda w=self._scan_worker: setattr(self, "_scan_worker", None)
+        )
+        self._scan_worker.start()
 
-        videos, audios, images = [], [], []
-
-        if os.path.exists(self.output_dir):
-            for root_path, _, filenames in os.walk(self.output_dir):
-                for fn in filenames:
-                    ext = os.path.splitext(fn)[1].lower()
-                    full_path = os.path.join(root_path, fn)
-                    try:
-                        sz = os.path.getsize(full_path)
-                        from ...core.formatting import format_bytes
-                        sz_str = format_bytes(sz)
-                    except Exception:
-                        sz_str = "Unknown"
-
-                    entry = (fn, sz_str, ext[1:].upper(), full_path)
-                    if ext in video_exts:
-                        videos.append(entry)
-                    elif ext in audio_exts:
-                        audios.append(entry)
-                    elif ext in image_exts:
-                        images.append(entry)
-
+    def _on_library_scanned(self, videos, audios, images):
         self._populate_table(self.video_table, videos)
         self._populate_table(self.audio_table, audios)
         self._populate_table(self.image_table, images)
@@ -1215,6 +1253,10 @@ class LibraryDialog(QDialog):
                 dlg.exec()
             else:
                 QMessageBox.warning(self, "File Missing", f"The selected file does not exist:\n{path}")
+
+    def closeEvent(self, event):
+        detach_running_worker(getattr(self, "_scan_worker", None))
+        super().closeEvent(event)
 
 
 class ErrorAlertDialog(QDialog):
@@ -1320,7 +1362,7 @@ class ErrorAlertDialog(QDialog):
     def _toggle_raw_log(self):
         show = not self.raw_log_edit.isVisible()
         self.raw_log_edit.setVisible(show)
-        self.toggle_log_btn.setText("Hide Technical Log [-]" if show else "Show Technical Log [+#]")
+        self.toggle_log_btn.setText("Hide Technical Log [-]" if show else "Show Technical Log [+]")
 
     def _copy_details(self):
         diag_text = f"=== GGU_VDOD ERROR DIAGNOSTIC REPORT ===\nTitle: {self.details.title}\nCode: {self.details.code}\nSeverity: {self.details.severity}\nMessage: {self.details.simple_message}\nFix Action: {self.details.recommendation}\n\n--- RAW TECHNICAL LOG ---\n{self.details.raw_log}"
@@ -1330,24 +1372,24 @@ class ErrorAlertDialog(QDialog):
 
 COMMON_SUBTITLE_LANGUAGES = [
     ("en", "English", "Global / Primary"),
-    ("es", "Spanish (Español)", "International"),
-    ("fr", "French (Français)", "International"),
+    ("es", "Spanish (EspaÃ±ol)", "International"),
+    ("fr", "French (FranÃ§ais)", "International"),
     ("de", "German (Deutsch)", "International"),
-    ("ja", "Japanese (日本語)", "Anime / East Asia"),
-    ("zh-Hans", "Chinese Simplified (简体中文)", "East Asia"),
-    ("zh-Hant", "Chinese Traditional (繁體中文)", "East Asia"),
-    ("hi", "Hindi (हिन्दी)", "South Asia"),
-    ("ru", "Russian (Русский)", "Eurasia"),
-    ("pt", "Portuguese (Português)", "International"),
+    ("ja", "Japanese (æ—¥æœ¬èªž)", "Anime / East Asia"),
+    ("zh-Hans", "Chinese Simplified (ç®€ä½“ä¸­æ–‡)", "East Asia"),
+    ("zh-Hant", "Chinese Traditional (ç¹é«”ä¸­æ–‡)", "East Asia"),
+    ("hi", "Hindi (à¤¹à¤¿à¤¨à¥à¤¦à¥€)", "South Asia"),
+    ("ru", "Russian (Ð ÑƒÑÑÐºÐ¸Ð¹)", "Eurasia"),
+    ("pt", "Portuguese (PortuguÃªs)", "International"),
     ("it", "Italian (Italiano)", "Europe"),
-    ("ar", "Arabic (العربية)", "Middle East"),
-    ("ko", "Korean (한국어)", "East Asia"),
-    ("tr", "Turkish (Türkçe)", "Eurasia"),
+    ("ar", "Arabic (Ø§Ù„Ø¹Ø±Ø¨ÙŠØ©)", "Middle East"),
+    ("ko", "Korean (í•œêµ­ì–´)", "East Asia"),
+    ("tr", "Turkish (TÃ¼rkÃ§e)", "Eurasia"),
     ("nl", "Dutch (Nederlands)", "Europe"),
     ("pl", "Polish (Polski)", "Europe"),
-    ("uk", "Ukrainian (Українська)", "Europe"),
-    ("vi", "Vietnamese (Tiếng Việt)", "Southeast Asia"),
-    ("th", "Thai (ไทย)", "Southeast Asia"),
+    ("uk", "Ukrainian (Ð£ÐºÑ€Ð°Ñ—Ð½ÑÑŒÐºÐ°)", "Europe"),
+    ("vi", "Vietnamese (Tiáº¿ng Viá»‡t)", "Southeast Asia"),
+    ("th", "Thai (à¹„à¸—à¸¢)", "Southeast Asia"),
     ("id", "Indonesian (Bahasa Indonesia)", "Southeast Asia"),
     ("all", "All Available Languages", "Wildcard"),
 ]
@@ -1476,7 +1518,7 @@ class FontPreferencesDialog(QDialog):
         form = QFormLayout()
 
         self.family_combo = QComboBox()
-        self.family_combo.addItems(["Segoe UI", "Roboto", "Inter", "Arial", "Consolas", "Segoe UI Variable Display"])
+        self.family_combo.addItems(self._font_choices())
         if self.family_combo.findText(self.font_family) < 0:
             self.family_combo.addItem(self.font_family)
         self.family_combo.setCurrentText(self.font_family)
@@ -1500,6 +1542,24 @@ class FontPreferencesDialog(QDialog):
         close_btn.clicked.connect(self.reject)
         btn_row.addWidget(close_btn)
         layout.addLayout(btn_row)
+
+    @staticmethod
+    def _font_choices():
+        """Curated favorites first (including Comic Sans MS), then every font
+        installed on the system, alphabetically."""
+        preferred = [
+            "Segoe UI", "Comic Sans MS", "Arial", "Verdana", "Tahoma",
+            "Trebuchet MS", "Georgia", "Times New Roman", "Courier New",
+            "Consolas", "Cascadia Mono", "Inter", "Roboto",
+            "Segoe UI Variable Display",
+        ]
+        try:
+            installed = set(QFontDatabase.families())
+        except Exception:
+            installed = set()
+        choices = list(preferred)
+        choices += sorted(f for f in installed if f not in choices)
+        return choices
 
     def get_font_choice(self):
         return self.family_combo.currentText(), self.size_spin.value()
@@ -1645,7 +1705,7 @@ class SignInPromptDialog(QDialog):
         layout.setSpacing(12)
 
         info_label = QLabel(
-            f"🔒 Content on <b>{domain or 'this website'}</b> requires sign-in or account verification.",
+            f" Content on <b>{html.escape(domain or 'this website')}</b> requires sign-in or account verification.",
             self,
         )
         info_label.setWordWrap(True)

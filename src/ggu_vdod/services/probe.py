@@ -179,9 +179,13 @@ def probe_media_file(target: str, timeout: int = 10) -> Dict[str, Any]:
         tags = format_obj.get("tags", {}) if isinstance(format_obj.get("tags"), dict) else {}
 
         # Stream Health Check
+        try:
+            duration_value = float(duration) if duration is not None else None
+        except (TypeError, ValueError):
+            duration_value = None
         is_healthy = bool(
             (video_streams or audio_streams)
-            and (duration is None or float(duration) > 0)
+            and (duration_value is None or duration_value > 0)
         )
 
         return {
