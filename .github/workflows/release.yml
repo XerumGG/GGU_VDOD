@@ -1,8 +1,8 @@
 name: Build and Release
 
 # Runs automatically whenever you push a version tag, e.g.:
-#   git tag v0.2.8
-#   git push origin v0.2.8
+#   git tag v0.2.10
+#   git push origin v0.2.10
 on:
   push:
     tags:
@@ -28,14 +28,26 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pyinstaller pillow
+          pip install pyinstaller pillow pytest
           choco install innosetup -y --no-progress
+
+      - name: Download FFmpeg toolchain
+        shell: pwsh
+        run: |
+          $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $zip -TimeoutSec 300
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg" -Force
+          $bin = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName + "\bin"
+          New-Item -ItemType Directory -Force -Path "ffmpeg" | Out-Null
+          Copy-Item "$bin\ffmpeg.exe"  "ffmpeg\ffmpeg.exe"
+          Copy-Item "$bin\ffprobe.exe" "ffmpeg\ffprobe.exe"
+          Copy-Item "bin\qjs.exe"      "ffmpeg\qjs.exe"
 
       - name: Run regression tests
         env:
           QT_QPA_PLATFORM: offscreen
           PYTHONPATH: src
-        run: python -m unittest discover -s tests -v
+        run: python -m pytest tests -q
 
       - name: Build GGU_VDOD app folder
         run: >
@@ -43,23 +55,20 @@ jobs:
           --add-data "src/ggu_vdod/locales;ggu_vdod/locales"
           --collect-all PySide6 --name GGU_VDOD --clean -y app.py
 
-      - name: Download FFmpeg for bundling
+      - name: Bundle FFmpeg into app folder
         shell: pwsh
         run: |
-          $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $zip
-          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg" -Force
-          $bin = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName + "\bin"
           New-Item -ItemType Directory -Force -Path "dist\GGU_VDOD\ffmpeg" | Out-Null
-          Copy-Item "$bin\ffmpeg.exe"  "dist\GGU_VDOD\ffmpeg\ffmpeg.exe"
-          Copy-Item "$bin\ffprobe.exe" "dist\GGU_VDOD\ffmpeg\ffprobe.exe"
-          Copy-Item "bin\qjs.exe"      "dist\GGU_VDOD\ffmpeg\qjs.exe"
+          Copy-Item "ffmpeg\ffmpeg.exe"  "dist\GGU_VDOD\ffmpeg\ffmpeg.exe"
+          Copy-Item "ffmpeg\ffprobe.exe" "dist\GGU_VDOD\ffmpeg\ffprobe.exe"
+          Copy-Item "ffmpeg\qjs.exe"     "dist\GGU_VDOD\ffmpeg\qjs.exe"
 
       - name: Read app version
         id: version
         shell: pwsh
         run: |
-          $v = (Get-Content src/ggu_vdod/core/version.py | Select-String 'MAJOR = (\d+)|MINOR = (\d+)|PATCH = (\d+)' |
+          $v = (Get-Content src/ggu_vdod/core/version.py |
+            Select-String 'MAJOR = (\d+)|MINOR = (\d+)|PATCH = (\d+)' |
             ForEach-Object { $_.Matches } | ForEach-Object { $_.Value -replace '\D','' }) -join '.'
           echo "version=$v" >> $env:GITHUB_OUTPUT
 
