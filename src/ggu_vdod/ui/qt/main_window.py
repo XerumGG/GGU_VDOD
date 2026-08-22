@@ -229,6 +229,39 @@ class QtDownloadWorker(QThread):
     def _process_single_url(self, url, settings):
         self.engine.process_url(url, dict(settings))
 
+class UpdateFetchWorker(QThread):
+    """Check GitHub for a newer release off the UI thread."""
+    checked = Signal(object)
+    failed = Signal(str)
+
+    def run(self):
+        try:
+            from ...services import updates
+            self.checked.emit(updates.fetch_latest_release())
+        except Exception as error:
+            self.failed.emit(str(error))
+
+
+class UpdateDownloadWorker(QThread):
+    """Stream the new setup exe with progress callbacks."""
+    progressed = Signal(int, int)
+    finished_ok = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, url, dest, parent=None):
+        super().__init__(parent)
+        self.url = url
+        self.dest = dest
+
+    def run(self):
+        try:
+            from ...services import updates
+            updates.download_installer(self.url, self.dest, progress_cb=lambda d, t: self.progressed.emit(d, t))
+            self.finished_ok.emit(self.dest)
+        except Exception as error:
+            self.failed.emit(str(error))
+
+
 class QtMainWindow(QMainWindow):
     """Production PySide6 MainWindow for GGU_VDOD bringing 100% legacy parity."""
 
@@ -909,6 +942,33 @@ class QtMainWindow(QMainWindow):
 
         self.content_scroll.setWidget(scroll_content)
 
+        # Header action row (top-right): Uninstall (red) + Check for Updates (blue)
+        header_actions = QHBoxLayout()
+        header_actions.setContentsMargins(8, 6, 12, 0)
+        header_actions.addStretch(1)
+
+        self.uninstall_btn = QPushButton("Uninstall")
+        self.uninstall_btn.setToolTip("Remove GGU_VDOD from this computer. Optionally wipe settings, sessions, and history.")
+        self.uninstall_btn.setStyleSheet(
+            "QPushButton { background: #b3261e; color: white; border: none;"
+            " border-radius: 5px; padding: 6px 16px; font-weight: 600; }"
+            "QPushButton:hover { background: #d93a30; }"
+        )
+        self.uninstall_btn.clicked.connect(self._run_uninstall_flow)
+
+        self.update_btn = QPushButton("Check for Updates")
+        self.update_btn.setToolTip("Download and install the latest version from GitHub Releases.")
+        self.update_btn.setStyleSheet(
+            "QPushButton { background: #1f6feb; color: white; border: none;"
+            " border-radius: 5px; padding: 6px 16px; font-weight: 600; }"
+            "QPushButton:hover { background: #3a86ff; }"
+        )
+        self.update_btn.clicked.connect(self._check_for_updates_clicked)
+
+        header_actions.addWidget(self.uninstall_btn)
+        header_actions.addWidget(self.update_btn)
+        main_vbox.addLayout(header_actions)
+
         # Main Tab Widget
         self.main_tab_widget = QTabWidget()
         self.main_tab_widget.addTab(self.content_scroll, "Downloader & Queue")
@@ -1333,6 +1393,10 @@ class QtMainWindow(QMainWindow):
         url = self._current_preview_url()
         if not url:
             return
+        # Serialize extractions: overlapping yt-dlp runs are GIL-heavy and
+        # starve the GUI thread (the classic multi-paste freeze).
+        if any(w.isRunning() for w in tuple(self._preview_workers)):
+            return
         token = self._preview_token
         cached = self._batch_previews.get(url)
         if cached is not None:
@@ -1536,7 +1600,14 @@ class QtMainWindow(QMainWindow):
             self.cancel_button.setEnabled(True)
             self.log_box.appendPlainText(f"\n=== Starting Download Operation for {len(urls)} item(s) ===")
 
+            old_worker = self._download_worker
+            if old_worker is not None:
+                try:
+                    old_worker.deleteLater()
+                except Exception:
+                    pass
             self._download_worker = QtDownloadWorker(urls, settings, self)
+            self._download_worker.finished.connect(self._download_worker.deleteLater)
             self._download_worker.log_emitted.connect(self.log_box.appendPlainText)
             self._download_worker.progress_updated.connect(self._on_progress_update)
             self._download_worker.status_updated.connect(self._on_status_update)
@@ -1635,7 +1706,7 @@ class QtMainWindow(QMainWindow):
             self._play_notification_sound()
 
     def closeEvent(self, event):
-        """Stop timers, purge temporary cookies, and give active workers a safe shutdown window."""
+        """Stop timers and detach workers fast; slow cleanup runs on a daemon thread."""
         self._ghost_timer.stop()
         self._preview_timer.stop()
         for child_name in ("account_widget", "test_inbox_widget"):
@@ -1644,20 +1715,26 @@ class QtMainWindow(QMainWindow):
                 child.shutdown()
         if self._download_worker and self._download_worker.isRunning():
             self._download_worker.cancel()
-            detach_running_worker(self._download_worker, grace_ms=8000)
+            detach_running_worker(self._download_worker, grace_ms=2500)
         for worker in tuple(self._preview_workers | self._thumbnail_workers | self._format_workers):
-            detach_running_worker(worker, grace_ms=750)
+            detach_running_worker(worker, grace_ms=400)
         scheduled = getattr(self, "_scheduled_update_worker", None)
-        detach_running_worker(scheduled, grace_ms=750)
+        detach_running_worker(scheduled, grace_ms=400)
         self._save_settings()
-        try:
-            from ...services.cookies import purge_all_temporary_cookie_files
-            from ...auth.manager import AuthManager
-            purge_all_temporary_cookie_files()
-            AuthManager.purge_expired_sessions()
-            _kill_own_ffmpeg_children()
-        except Exception:
-            pass
+
+        import threading
+
+        def _slow_cleanup():
+            try:
+                from ...services.cookies import purge_all_temporary_cookie_files
+                from ...auth.manager import AuthManager
+                purge_all_temporary_cookie_files()
+                AuthManager.purge_expired_sessions()
+                _kill_own_ffmpeg_children()
+            except Exception:
+                pass
+
+        threading.Thread(target=_slow_cleanup, name="ggu-close-cleanup", daemon=True).start()
         super().closeEvent(event)
 
     # Dialog Connectors
@@ -1768,6 +1845,125 @@ class QtMainWindow(QMainWindow):
     def _show_about_dialog(self):
         dlg = AboutDialog(self)
         dlg.exec()
+
+    def _check_for_updates_clicked(self):
+        self.update_btn.setEnabled(False)
+        self.update_btn.setText("Checking…")
+        self._update_fetch_worker = UpdateFetchWorker(self)
+        self._update_fetch_worker.checked.connect(self._on_update_check_done)
+        self._update_fetch_worker.failed.connect(self._on_update_check_failed)
+        self._update_fetch_worker.finished.connect(
+            lambda w=self._update_fetch_worker: (self.update_btn.setEnabled(True), self.update_btn.setText("Check for Updates"))
+        )
+        detach_running_worker(self._update_fetch_worker, grace_ms=0)
+        self._update_fetch_worker.start()
+
+    def _on_update_check_failed(self, error):
+        QMessageBox.warning(self, "Update check failed", f"Could not reach GitHub Releases:\n{error}")
+
+    def _on_update_check_done(self, release):
+        from ...services import updates
+        latest = updates.is_newer(release["version_tuple"])
+        if not latest:
+            QMessageBox.information(
+                self, "Up to date",
+                f"You are on the latest version ({release['tag_name']})."
+            )
+            return
+        answer = QMessageBox.question(
+            self,
+            "Update available",
+            f"Latest version: {release['tag_name']}\n\nDownload and install it now?\n"
+            "The app will close, the setup runs automatically, and your settings stay.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer != QMessageBox.StandardButton.Yes or not release["installer_url"]:
+            return
+
+        import tempfile
+        dest = os.path.join(tempfile.gettempdir(), f"GGU_VDOD-update-{release['tag_name']}.exe")
+        self._progress = QProgressDialog("Downloading update…", "Cancel", 0, 100, self)
+        self._progress.setWindowTitle("GGU_VDOD Update")
+        self._progress.setMinimumDuration(0)
+        self._progress.setWindowModality(Qt.WindowModality.WindowModal)
+
+        self._update_dl_worker = UpdateDownloadWorker(release["installer_url"], dest, self)
+        self._update_dl_worker.progressed.connect(self._on_update_download_progress)
+        self._update_dl_worker.finished_ok.connect(lambda p: self._launch_update(p))
+        self._update_dl_worker.failed.connect(self._on_update_download_failed)
+        self._update_dl_worker.start()
+
+    def _on_update_download_progress(self, done, total):
+        pct = int(done * 100 / total) if total else 0
+        self._progress.setValue(pct)
+        self._progress.setLabelText(f"Downloading update… {done // (1024 * 1024)} / {max(1, total // (1024 * 1024))} MB")
+
+    def _on_update_download_failed(self, error):
+        self._progress.cancel()
+        QMessageBox.critical(self, "Update download failed", str(error))
+
+    def _launch_update(self, path):
+        self._progress.setValue(100)
+        answer = QMessageBox.question(
+            self, "Ready to install",
+            "Update downloaded. Install now?\nThe app will close and the setup will run silently - your settings are kept.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            os.startfile(path)
+            return
+        import subprocess
+        subprocess.Popen([path, "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"], close_fds=True)
+        QApplication.quit()
+
+    def _run_uninstall_flow(self):
+        from ...services.updates import find_installed_uninstaller
+        uninstaller = find_installed_uninstaller()
+        box = QMessageBox(self)
+        box.setWindowTitle("Uninstall GGU_VDOD")
+        box.setIcon(QMessageBox.Icon.Question)
+        wipe = False
+        if uninstaller:
+            box.setText("Remove GGU_VDOD from this computer?")
+            wipe_btn = box.addButton("Uninstall + wipe settings/sessions", QMessageBox.ButtonRole.DestructiveRole)
+            keep_btn = box.addButton("Uninstall app only", QMessageBox.ButtonRole.AcceptRole)
+            cancel_btn = box.addButton(QMessageBox.StandardButton.Cancel)
+            box.setDefaultButton(cancel_btn)
+            box.exec()
+            clicked = box.clickedButton()
+            if clicked is cancel_btn:
+                return
+            wipe = clicked is wipe_btn
+        else:
+            box.setText(
+                "This copy looks portable or run from source.\n"
+                "Delete its folder to remove it.\n\nAlso wipe local data "
+                "(settings, history, sessions) now?"
+            )
+            yes = box.addButton("Wipe local data", QMessageBox.ButtonRole.DestructiveRole)
+            box.addButton(QMessageBox.StandardButton.Cancel)
+            box.exec()
+            if box.clickedButton() is not yes:
+                return
+            wipe = True
+            uninstaller = ""
+
+        if wipe:
+            import shutil
+            from ...services.updates import get_config_dir
+            try:
+                shutil.rmtree(get_config_dir(), ignore_errors=True)
+                self.log_box.appendPlainText("[INFO] Local data wiped (settings, sessions, history).")
+            except Exception as err:
+                self.log_box.appendPlainText(f"[ERROR] Could not fully wipe local data: {err}")
+
+        if uninstaller:
+            import subprocess
+            self.log_box.appendPlainText("[INFO] Launching uninstaller…")
+            subprocess.Popen([uninstaller, "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART"], close_fds=True)
+            QApplication.quit()
 
     def _force_restart_app(self):
         """Force restart application (reboot) on Ctrl+Shift+` or menu selection."""

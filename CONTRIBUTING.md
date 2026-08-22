@@ -1,7 +1,9 @@
 # Contributing
 
-Create focused branches, keep each commit buildable, add or update tests for
-behavior changes, and use Conventional Commit prefixes.
+1. Fork / branch from `GGU_MainBranch`
+2. Keep commits in the format: `#BUILD type(scope): summary` (e.g. `#069 fix(ui): ...`)
+3. Bump `src/ggu_vdod/core/version.py` (PATCH + BUILD) and `pyproject.toml` for app changes
+4. Run tests: `python -m pytest tests -q`
+5. Open a pull request — keep it focused
 
-Do not commit generated builds, downloaded media, credentials, cookies, or
-private configuration files.
+Developer: **XerumGG**

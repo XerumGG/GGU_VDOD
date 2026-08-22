@@ -1,6 +1,7 @@
 # Security Policy
 
-Do not report security concerns in public issues. Contact the project maintainer
-privately with reproduction steps, impact, and any mitigation you identified.
+- Report vulnerabilities privately via GitHub **Security Advisories** (Security tab → Report a vulnerability). Do not open public issues for security bugs.
+- Credentials are stored with Windows DPAPI / Credential Manager; cookies and tokens are never written to logs.
+- Supported: latest release only.
 
-Never include credentials, cookies, tokens, private media or personal info in a report.
+Developer: **XerumGG**

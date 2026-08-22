@@ -1,14 +1,10 @@
 # Installation
 
-Download the Windows release archive, extract it, and run `GGU_VDOD.exe`.
+**Installer (recommended):** grab GGU_VDOD-setup-vX.Y.Z.exe from
+[Releases](../../releases/latest), run it. Per-user install, no admin rights,
+Start Menu shortcut, uninstaller included in Windows Settings > Apps.
 
-FFmpeg is required for merging and conversion. The packaged release searches
-for a bundled copy automatically; it can also be selected in Advanced options.
+**Portable:** extract GGU_VDOD-windows-portable.zip anywhere and run GGU_VDOD.exe.
 
-For development, create a virtual environment and install the pinned packages:
-
-```powershell
-python -m venv venv
-venv\Scripts\pip install -r requirements.txt
-python app.py
-```
+User data lives in %LOCALAPPDATA%\GGU_VDOD and survives updates/uninstalls.
+Update from inside the app: **Check for Updates** button (top-right).

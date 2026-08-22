@@ -34,6 +34,7 @@ Thumbs.db
 
 # Logs
 *.log
+*.AGENTS.md
 
 # Zip backups
 *.zip

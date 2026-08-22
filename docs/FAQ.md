@@ -1,16 +1,11 @@
 # FAQ
 
-## Why does a download ask for sign-in?
+**Download says sign-in / bot verification?**
+Pick your browser under Advanced > Browser cookies, or add a session in the Account & Sessions tab. The app also auto-retries with alternate YouTube clients first.
 
-Some sites require an authorized account session for restricted content. Use
-content you are allowed to access and supply authorized cookies when needed.
+**Where do files go?**
+Your chosen Save folder (default: Downloads\\GGU_VDOD).
 
-## Why is FFmpeg needed?
+**Is it free?** Yes - MIT license.
 
-FFmpeg merges separate audio/video streams and performs local format
-conversion.
-
-## Why are some links unavailable?
-
-Private, deleted, region-restricted, DRM-protected, and currently-live media
-may not be downloadable for now . I am working on this issue to resolve it effectly..
+**Antivirus flags the exe?** False positive from PyInstaller; build from source or verify via GitHub Actions logs.

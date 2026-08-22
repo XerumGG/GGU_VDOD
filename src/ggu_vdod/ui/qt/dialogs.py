@@ -763,7 +763,7 @@ class AboutDialog(QDialog):
 
         title = QLabel(APP_NAME, self)
         title.setStyleSheet("font-size: 22px; font-weight: 700; color: #e5484d;")
-        sub = QLabel(f"Developer: XerumGG (GG_Uranium)\n{DEVELOPMENT_BUILD_LABEL} | Version: {PACKAGE_VERSION}", self)
+        sub = QLabel(f"Developer: XerumGG\n{DEVELOPMENT_BUILD_LABEL} | Version: {PACKAGE_VERSION}", self)
         sub.setStyleSheet("font-size: 13px; color: #ffffff; margin-top: 4px; font-weight: 500;")
         hdr_layout.addWidget(title)
         hdr_layout.addWidget(sub)
@@ -778,7 +778,7 @@ class AboutDialog(QDialog):
             
             <h3 style="color: #ffffff;">{t('about.dev_header', 'Developer & License Details')}</h3>
             <ul style="padding-left: 20px;">
-                <li><b>Developer / Maintainer:</b> XerumGG (GG_Uranium)</li>
+                <li><b>Developer / Maintainer:</b> XerumGG</li>
                 <li><b>License:</b> MIT License (Open Source Software)</li>
                 <li><b>UI Framework:</b> PySide6 (Qt 6 for Python)</li>
                 <li><b>Core Downloader & Muxer:</b> yt-dlp, curl_cffi, FFmpeg, & FFprobe</li>
