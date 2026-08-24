@@ -126,6 +126,7 @@ class DownloadEngine:
     def __init__(self, settings, log=None, status=None, progress=None, error=None, cancel=None):
         self.settings = dict(settings or {})
         self._log = log or (lambda message: None)
+        self.last_result = {}
         self._status = status or (lambda text: None)
         self._progress = progress or (lambda data: None)
         self._error = error or (lambda url, message: None)
@@ -133,6 +134,35 @@ class DownloadEngine:
 
     def cancelled(self) -> bool:
         return bool(self._cancel())
+
+    @staticmethod
+    def _disk_guard_message(free_bytes, required_bytes):
+        if free_bytes >= required_bytes:
+            return ""
+        return (
+            "insufficient disk space: need "
+            f"{format_bytes(required_bytes)}, only {format_bytes(free_bytes)} free on the target drive"
+        )
+
+    def _verify_integrity(self, final_file):
+        """Fail broken or placeholder outputs instead of reporting false success."""
+        if not final_file or not os.path.isfile(final_file):
+            raise ValueError("media integrity check failed: output file was not created")
+        size = os.path.getsize(final_file)
+        if size < 32 * 1024:
+            raise ValueError(
+                f"media integrity check failed: output is only {format_bytes(size)} - likely a broken placeholder"
+            )
+        try:
+            from ..services.probe import get_ffprobe_binary_path, probe_media_file
+            if get_ffprobe_binary_path():
+                res = probe_media_file(final_file, timeout=20)
+                if res.get("success") and not res.get("is_healthy", True):
+                    raise ValueError("media integrity check failed: ffprobe reports unhealthy streams")
+        except ValueError:
+            raise
+        except Exception:
+            pass
 
     def run_queue(self, urls):
         """Process every URL sequentially; returns (success_count, failure_count)."""
@@ -169,6 +199,7 @@ class DownloadEngine:
     def _download_with_retries(self, url):
         """Retry recoverable failures while keeping the final error visible."""
         settings = dict(self.settings)
+        self.last_result = {}
         cookie_fallback_used = False
         subtitle_fallback_used = False
         botcheck_fallback_used = False
@@ -248,6 +279,7 @@ class DownloadEngine:
             raise ValueError("Choose a valid output format before downloading.")
 
         last_emit = [0.0]
+        disk_state = {"checked": False}
 
         def progress_hook(d):
             if self.cancelled():
@@ -260,6 +292,19 @@ class DownloadEngine:
                     return
                 last_emit[0] = now
                 total = d.get("total_bytes") or d.get("total_bytes_estimate") or 0
+                if total and not disk_state["checked"]:
+                    # First time the real size is known: compare against free space.
+                    disk_state["checked"] = True
+                    try:
+                        import shutil
+                        free = shutil.disk_usage(output_dir).free
+                        msg = self._disk_guard_message(free, int(total * 1.05) + (64 << 20))
+                        if msg:
+                            raise OSError(msg)
+                    except OSError:
+                        raise
+                    except Exception:
+                        pass
                 downloaded = d.get("downloaded_bytes") or 0
                 speed = d.get("speed") or 0
                 eta = d.get("eta") or 0
@@ -456,6 +501,9 @@ class DownloadEngine:
 
         if settings.get("clean_sidecars", True):
             clean_video_sidecars(output_dir, started_at, target_ext)
+        final_file = info.get("filepath") if isinstance(info, dict) else ""
+        self.last_result = {"output_dir": output_dir, "final_file": final_file or ""}
+        self._verify_integrity(final_file)
         self._report_selected_format(info, settings, target_ext)
         self._log(f"[SUCCESS] Successfully processed: {url}")
 
@@ -483,10 +531,20 @@ class DownloadEngine:
             self._log("[FORMAT] Selected source " + " | ".join(stream_details))
         requested_height = HEIGHT_MAP.get(settings.get("quality"))
         if requested_height and selected_heights and max(selected_heights) < requested_height:
+            available = sorted(
+                {int(f.get("height")) for f in (info.get("formats") or [])
+                 if isinstance(f, dict) and f.get("height")}
+            )
+            closest = max([h for h in available if h <= requested_height], default=None)
             self._log(
                 f"[FORMAT] Requested {requested_height}p; source only provided {max(selected_heights)}p. "
                 "The highest accessible lower-quality stream was used."
             )
+            if available:
+                self._log(
+                    f"[FORMAT] Available heights: {', '.join(map(str, available))}. "
+                    f"Closest match to your request: {closest}p"
+                )
         conversion_resolution = settings.get("conversion_resolution", "Source")
         if conversion_resolution != "Source":
             self._log(

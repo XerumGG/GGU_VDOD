@@ -1,0 +1,26 @@
+NEXT THING TO IMPLEMENT 
+
+
+Structured logging : Keep the visible log simple and write full debug logs to file with no cookies, passwords, or tokens. #Fix
+
+Crash report file : On crash, save app version, OS, traceback, last action, and sanitized settings. #Fix
+
+Regression test matrix : Test YouTube single video, playlist, audio-only, MP4, unavailable quality, cookie-required content, network failure, and conversion on/off. #Test
+
+Reliable format selection : If user selects 2160p MP4, download that exact quality or clearly show the closest available option instead of silently falling back. #Fix
+
+File integrity check : Verify final file exists, has playable duration, and is not a tiny broken placeholder. #Fix
+
+Disk-space check : Warn before download if estimated size is larger than available free space. #Feat
+
+Simple error explanations : Convert raw yt-dlp/ffmpeg errors into simple messages with a Details button for raw logs. #Fix
+
+Proper queue manager : Playlist links should expand into individual queue rows with title, source, quality, progress, speed, ETA, and status. #Feat
+
+Pause, resume, cancel, retry controls : Resume partial files where platform and yt-dlp support it. #Feat
+
+Retry failed downloads : Add one-click retry with delay for 429, timeout, network, and temporary extractor errors. #Feat
+
+Download history upgrade : Show title, source, date, format, folder, status, open file, open folder, retry, and copy URL. #Feat
+
+Failed download recovery report : After a batch, generate a simple report listing failed links, reason, and recommended next action. #Feat

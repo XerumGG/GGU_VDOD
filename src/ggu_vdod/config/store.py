@@ -66,7 +66,7 @@ def load_history():
     return []
 
 
-def add_history_entry(url, title="", format_type="", status="Completed", fingerprint=""):
+def add_history_entry(url, title="", format_type="", status="Completed", fingerprint="", output_dir="", final_file=""):
     try:
         history = load_history()
         # Remove duplicate if exists
@@ -76,7 +76,7 @@ def add_history_entry(url, title="", format_type="", status="Completed", fingerp
             "title": title or url,
             "format": format_type,
             "status": status,
-            "fingerprint": fingerprint,
+            "fingerprint": fingerprint,"output_dir": output_dir,"final_file": final_file,
             "timestamp": _timestamp_now(),
         })
         # Keep latest 500 entries
@@ -87,7 +87,7 @@ def add_history_entry(url, title="", format_type="", status="Completed", fingerp
         pass
 
 
-def update_history_entry(url, status, title="", format_type="", fingerprint=""):
+def update_history_entry(url, status, title="", format_type="", fingerprint="", output_dir="", final_file=""):
     """Update the status of an existing queue item without duplicating it."""
     try:
         history = load_history()
@@ -100,6 +100,10 @@ def update_history_entry(url, status, title="", format_type="", fingerprint=""):
                     item["format"] = format_type
                 if fingerprint:
                     item["fingerprint"] = fingerprint
+                if output_dir:
+                    item["output_dir"] = output_dir
+                if final_file:
+                    item["final_file"] = final_file
                 break
         else:
             history.insert(0, {
@@ -107,7 +111,7 @@ def update_history_entry(url, status, title="", format_type="", fingerprint=""):
                 "title": title or url,
                 "format": format_type,
                 "status": status,
-                "fingerprint": fingerprint,
+                "fingerprint": fingerprint,"output_dir": output_dir,"final_file": final_file,
                 "timestamp": _timestamp_now(),
             })
         os.makedirs(CONFIG_DIR, exist_ok=True)

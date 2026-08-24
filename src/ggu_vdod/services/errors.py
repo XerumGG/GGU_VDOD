@@ -104,6 +104,19 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
             action_type="auth_setup",
         )
 
+    # 3b. GITHUB API RATE LIMIT (HTTP 403 rate limit exceeded)
+    if "rate limit" in full_text and (has_code("403") or "api.github.com" in full_text or "github" in full_text):
+        return ErrorDetails(
+            code="ERR_GITHUB_RATE_LIMIT",
+            title="Update Check Temporarily Blocked",
+            simple_message="GitHub is temporarily limiting update checks from your network. This is not a problem with your PC or your settings.",
+            recommendation="Wait about an hour and click 'Check for Updates' again. To update right now, open the Releases page in your browser and download the latest installer manually.",
+            severity="WARNING",
+            sound_type="MB_ICONEXCLAMATION",
+            raw_log=raw_log,
+            action_type="retry",
+        )
+
     # 4. HTTP 429 TOO MANY REQUESTS / RATE LIMITED
     if has_code("429") or "too many requests" in full_text or "rate limit" in full_text:
         return ErrorDetails(
@@ -115,6 +128,19 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
             sound_type="MB_ICONEXCLAMATION",
             raw_log=raw_log,
             action_type="retry",
+        )
+
+    # 4b. GENERIC HTTP 403 FORBIDDEN (not Cloudflare, not rate limit)
+    if has_code("403") or "forbidden" in full_text or "http error 403" in full_text:
+        return ErrorDetails(
+            code="ERR_HTTP_FORBIDDEN",
+            title="Access Denied by Server (403)",
+            simple_message="The server refused to serve this request, usually because it wants a signed-in session or blocks automated tools.",
+            recommendation="Load your browser cookies under 'Advanced > Browser cookies' and try again. If the site still refuses, open the link in your browser to confirm it works there.",
+            severity="WARNING",
+            sound_type="MB_ICONEXCLAMATION",
+            raw_log=raw_log,
+            action_type="auth_setup",
         )
 
     # 5. 18+ AGE RESTRICTED CONTENT
@@ -277,6 +303,25 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
             sound_type="MB_ICONHAND",
             raw_log=raw_log,
             action_type=None,
+        )
+
+    # 13b. FFMPEG POSTPROCESSING / MERGE FAILED
+    if (
+        "postprocessing:" in full_text
+        or "postprocessing:" in err_lower
+        or "error opening input files" in full_text
+        or "invalid data found when processing input" in full_text
+        or "muxing" in full_text and "error" in full_text
+    ):
+        return ErrorDetails(
+            code="ERR_POSTPROCESS_FAILED",
+            title="Conversion / Merge Step Failed",
+            simple_message="The media was fetched but FFmpeg could not process or merge it. The downloaded data was likely incomplete, corrupted, or the site served an error page instead of the real stream.",
+            recommendation="Click 'Retry Download' once. If it fails the same way again, switch to a different output format or quality (some sites serve broken streams for certain formats), and make sure the custom codec/bitrate fields are 'Auto' if you enabled conversion.",
+            severity="WARNING",
+            sound_type="MB_ICONEXCLAMATION",
+            raw_log=raw_log,
+            action_type="retry",
         )
 
     # 14. CORRUPTED STREAM OR FILE

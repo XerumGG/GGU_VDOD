@@ -1001,12 +1001,12 @@ class HelpCenterDialog(QDialog):
 
 
 class LinkHistoryDialog(QDialog):
-    """Dialog showing history of past media links."""
+    """Dialog showing history of past media links with retry and open actions."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Link History")
-        self.resize(750, 480)
+        self.resize(850, 520)
         self._build_ui()
         self._load_data()
 
@@ -1025,21 +1025,35 @@ class LinkHistoryDialog(QDialog):
 
         self.table = QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Title / URL", "Format", "Status", "Date"])
+        self.table.setHorizontalHeaderLabels(["Title / URL", "Status", "Format", "Date"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         layout.addWidget(self.table, 1)
 
         btn_row = QHBoxLayout()
-        copy_btn = QPushButton("Copy Selected Link")
+
+        copy_btn = QPushButton("Copy URL")
         copy_btn.clicked.connect(self._copy_selected)
         btn_row.addWidget(copy_btn)
 
-        add_btn = QPushButton("Add to Queue")
-        add_btn.setObjectName("primary")
-        add_btn.clicked.connect(self._add_to_queue)
-        btn_row.addWidget(add_btn)
+        open_file_btn = QPushButton("Open File")
+        open_file_btn.clicked.connect(self._open_selected_file)
+        btn_row.addWidget(open_file_btn)
+
+        open_folder_btn = QPushButton("Open Folder")
+        open_folder_btn.clicked.connect(self._open_selected_folder)
+        btn_row.addWidget(open_folder_btn)
+
+        retry_sel_btn = QPushButton("Retry Selected")
+        retry_sel_btn.setObjectName("primary")
+        retry_sel_btn.clicked.connect(lambda: self._retry_to_queue(only_failed=False))
+        btn_row.addWidget(retry_sel_btn)
+
+        retry_failed_btn = QPushButton("Retry All Failed")
+        retry_failed_btn.setObjectName("primary")
+        retry_failed_btn.clicked.connect(lambda: self._retry_to_queue(only_failed=True))
+        btn_row.addWidget(retry_failed_btn)
 
         btn_row.addStretch(1)
         close_btn = QPushButton("Close")
@@ -1052,30 +1066,75 @@ class LinkHistoryDialog(QDialog):
         history = load_history()
         self.table.setRowCount(len(history))
         for row, item in enumerate(history):
-            self.table.setItem(row, 0, QTableWidgetItem(item.get("title") or item.get("url")))
-            self.table.setItem(row, 1, QTableWidgetItem(item.get("format", "video")))
-            self.table.setItem(row, 2, QTableWidgetItem(item.get("status", "Completed")))
+            title_item = QTableWidgetItem(item.get("title") or item.get("url") or "")
+            title_item.setData(Qt.ItemDataRole.UserRole, item.get("url") or "")
+            title_item.setData(Qt.ItemDataRole.UserRole + 1, item.get("final_file") or "")
+            title_item.setToolTip(item.get("url") or "")
+            status_item = QTableWidgetItem(item.get("status", ""))
+            if str(item.get("status", "")).startswith("Failed"):
+                from PySide6.QtGui import QColor
+                status_item.setForeground(QColor("#ff6b6b"))
+            elif item.get("status") == "Completed":
+                from PySide6.QtGui import QColor
+                status_item.setForeground(QColor("#57c26a"))
+            self.table.setItem(row, 0, title_item)
+            self.table.setItem(row, 1, status_item)
+            self.table.setItem(row, 2, QTableWidgetItem(item.get("format", "")))
             self.table.setItem(row, 3, QTableWidgetItem(item.get("timestamp", "")))
-            # Store full URL in user data
-            self.table.item(row, 0).setData(Qt.ItemDataRole.UserRole, item.get("url"))
+
+    def _selected_url(self):
+        row = self.table.currentRow()
+        if row < 0:
+            return "", ""
+        item = self.table.item(row, 0)
+        return (item.data(Qt.ItemDataRole.UserRole) or "", item.data(Qt.ItemDataRole.UserRole + 1) or "")
 
     def _copy_selected(self):
-        row = self.table.currentRow()
-        if row >= 0:
-            url = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-            if url:
-                QApplication.clipboard().setText(url)
-                QMessageBox.information(self, "Copied", "Link copied to clipboard!")
+        url, _ = self._selected_url()
+        if url:
+            QApplication.clipboard().setText(url)
+            QMessageBox.information(self, "Copied", "Link copied to clipboard!")
 
-    def _add_to_queue(self):
-        row = self.table.currentRow()
-        if row >= 0 and self.parent():
-            url = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
-            if url and hasattr(self.parent(), "url_text"):
-                curr = self.parent().url_text.toPlainText().strip()
-                new_text = f"{curr}\n{url}" if curr else url
-                self.parent().url_text.setPlainText(new_text)
-                self.accept()
+    def _open_selected_file(self):
+        _, final_file = self._selected_url()
+        if final_file and os.path.isfile(final_file):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(final_file))
+        else:
+            QMessageBox.information(self, "Not available", "The output file for this entry was not recorded or no longer exists.")
+
+    def _open_selected_folder(self):
+        _, final_file = self._selected_url()
+        folder = os.path.dirname(final_file) if final_file else ""
+        if folder and os.path.isdir(folder):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(folder))
+        else:
+            QMessageBox.information(self, "Not available", "The folder for this entry was not recorded or no longer exists.")
+
+    def _retry_to_queue(self, only_failed: bool):
+        parent = self.parent()
+        if not parent or not hasattr(parent, "url_text"):
+            return
+        urls = []
+        rows = range(self.table.rowCount())
+        for row in rows:
+            item = self.table.item(row, 0)
+            status = self.table.item(row, 1)
+            url = item.data(Qt.ItemDataRole.UserRole) if item else ""
+            st = status.text() if status else ""
+            if only_failed and not st.startswith("Failed"):
+                continue
+            if not only_failed:
+                row_sel = self.table.currentRow()
+                if row_sel != row:
+                    continue
+            if url:
+                urls.append(url)
+        if not urls:
+            QMessageBox.information(self, "Nothing to retry", "Select a row (or use Retry All Failed).")
+            return
+        curr = parent.url_text.toPlainText().strip()
+        parent.url_text.setPlainText("\n".join(filter(None, [curr, *urls])))
+        self.accept()
 
     def _clear_history(self):
         from ...config.store import clear_history

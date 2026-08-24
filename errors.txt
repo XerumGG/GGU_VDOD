@@ -3,7 +3,7 @@
         Comprehensive Natural Language Error Classifications & Actions
 ===============================================================================
 
-This document specifies all 16 runtime error categories handled by GGU_VDOD.
+This document specifies all 19 runtime error categories handled by GGU_VDOD.
 Each category defines the technical trigger, natural language explanation,
 actionable user guidance, and associated Windows sound chime.
 
@@ -179,4 +179,39 @@ Simple Message    : An unexpected internal error occurred during the operation.
 User Action       : 1. A sanitized crash report has been recorded.
                     2. Click 'Copy Technical Details' and report this to support or retry.
 Audio Chime       : MB_ICONSTOP (System Stop Chime)
+
+-------------------------------------------------------------------------------
+17. GITHUB UPDATE CHECK RATE LIMITED (ERR_GITHUB_RATE_LIMIT)
+-------------------------------------------------------------------------------
+Technical Triggers: HTTP Error 403: rate limit exceeded, api.github.com quota
+                    (60 unauthenticated requests/hour per IP)
+Human Title       : Update Check Temporarily Blocked
+Simple Message    : GitHub is temporarily limiting update checks from your network. This is not a problem with your PC or your settings.
+User Action       : 1. Wait about an hour and click 'Check for Updates' again.
+                    2. Or open the Releases page in a browser and download the latest installer manually.
+Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
+Note              : The updater now falls back to the quota-free Releases page automatically.
+
+-------------------------------------------------------------------------------
+18. GENERIC HTTP 403 FORBIDDEN (ERR_HTTP_FORBIDDEN)
+-------------------------------------------------------------------------------
+Technical Triggers: HTTP Error 403: Forbidden (without Cloudflare impersonate
+                    or rate-limit keywords)
+Human Title       : Access Denied by Server (403)
+Simple Message    : The server refused to serve this request, usually because it wants a signed-in session or blocks automated tools.
+User Action       : 1. Load your browser cookies under 'Advanced > Browser cookies' and retry.
+                    2. Open the link in your browser to confirm it is still valid.
+Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
+
+-------------------------------------------------------------------------------
+19. FFMPEG POSTPROCESSING / MERGE FAILED (ERR_POSTPROCESS_FAILED)
+-------------------------------------------------------------------------------
+Technical Triggers: ERROR: Postprocessing: Error opening input files,
+                    Invalid data found when processing input, muxing errors
+Human Title       : Conversion / Merge Step Failed
+Simple Message    : The media was fetched but FFmpeg could not process or merge it. The downloaded data was likely incomplete, corrupted, or the site served an error page instead of the real stream.
+User Action       : 1. Click 'Retry Download' once.
+                    2. If it repeats, switch output format or quality (some sites serve broken streams for certain formats).
+                    3. Set custom codec/bitrate fields to 'Auto' if conversion was enabled.
+Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
 ===============================================================================

@@ -279,6 +279,7 @@ class QtMainWindow(QMainWindow):
         self._download_worker = None
         self._pending_error_alerts = []
         self._active_error_alert = None
+        self._failed_this_run = []
         self._current_preview_data = None
         self._cookie_file_approved = False
         self._cookie_summary = None
@@ -458,6 +459,37 @@ class QtMainWindow(QMainWindow):
             act.triggered.connect(lambda checked, c=code: self._change_language(c))
             self.lang_menu.addAction(act)
             self._lang_actions[code] = act
+
+        # Header actions live on the menu bar row itself (top-right corner) so
+        # they share the menubar height and inherit its font size.
+        corner = QWidget(self)
+        corner_row = QHBoxLayout(corner)
+        corner_row.setContentsMargins(0, 0, 8, 0)
+        corner_row.setSpacing(6)
+
+        self.uninstall_btn = QPushButton("Uninstall")
+        self.uninstall_btn.setToolTip("Remove GGU_VDOD from this computer. Optionally wipe settings, sessions, and history.")
+        self.uninstall_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.uninstall_btn.setStyleSheet(
+            "QPushButton { background: #b3261e; color: white; border: none;"
+            " border-radius: 4px; padding: 1px 12px; min-height: 16px; }"
+            "QPushButton:hover { background: #d93a30; }"
+        )
+        self.uninstall_btn.clicked.connect(self._run_uninstall_flow)
+        corner_row.addWidget(self.uninstall_btn)
+
+        self.update_btn = QPushButton("Check for Updates")
+        self.update_btn.setToolTip("Download and install the latest version from GitHub Releases.")
+        self.update_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.update_btn.setStyleSheet(
+            "QPushButton { background: #1f6feb; color: white; border: none;"
+            " border-radius: 4px; padding: 1px 12px; min-height: 16px; }"
+            "QPushButton:hover { background: #3a86ff; }"
+        )
+        self.update_btn.clicked.connect(self._check_for_updates_clicked)
+        corner_row.addWidget(self.update_btn)
+
+        menubar.setCornerWidget(corner, Qt.Corner.TopRightCorner)
 
     def _build_content(self):
         root = QWidget()
@@ -941,33 +973,6 @@ class QtMainWindow(QMainWindow):
         layout.addWidget(log_frame)
 
         self.content_scroll.setWidget(scroll_content)
-
-        # Header action row (top-right): Uninstall (red) + Check for Updates (blue)
-        header_actions = QHBoxLayout()
-        header_actions.setContentsMargins(8, 6, 12, 0)
-        header_actions.addStretch(1)
-
-        self.uninstall_btn = QPushButton("Uninstall")
-        self.uninstall_btn.setToolTip("Remove GGU_VDOD from this computer. Optionally wipe settings, sessions, and history.")
-        self.uninstall_btn.setStyleSheet(
-            "QPushButton { background: #b3261e; color: white; border: none;"
-            " border-radius: 5px; padding: 6px 16px; font-weight: 600; }"
-            "QPushButton:hover { background: #d93a30; }"
-        )
-        self.uninstall_btn.clicked.connect(self._run_uninstall_flow)
-
-        self.update_btn = QPushButton("Check for Updates")
-        self.update_btn.setToolTip("Download and install the latest version from GitHub Releases.")
-        self.update_btn.setStyleSheet(
-            "QPushButton { background: #1f6feb; color: white; border: none;"
-            " border-radius: 5px; padding: 6px 16px; font-weight: 600; }"
-            "QPushButton:hover { background: #3a86ff; }"
-        )
-        self.update_btn.clicked.connect(self._check_for_updates_clicked)
-
-        header_actions.addWidget(self.uninstall_btn)
-        header_actions.addWidget(self.update_btn)
-        main_vbox.addLayout(header_actions)
 
         # Main Tab Widget
         self.main_tab_widget = QTabWidget()
@@ -1599,6 +1604,7 @@ class QtMainWindow(QMainWindow):
             self.download_button.setEnabled(False)
             self.cancel_button.setEnabled(True)
             self.log_box.appendPlainText(f"\n=== Starting Download Operation for {len(urls)} item(s) ===")
+            self._failed_this_run = []
 
             old_worker = self._download_worker
             if old_worker is not None:
@@ -1655,7 +1661,25 @@ class QtMainWindow(QMainWindow):
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.log_box.appendPlainText(f"\n[FINISHED] Queue finished: {success_count} succeeded, {failure_count} failed.")
-        if failure_count > 0:
+        if failure_count > 0 and self._failed_this_run:
+            report_path = self._write_recovery_report()
+            if report_path:
+                self.log_box.appendPlainText(f"[INFO] Recovery report saved: {report_path}")
+                answer = QMessageBox.question(
+                    self,
+                    "Some downloads failed",
+                    f"{failure_count} item(s) failed.\nA recovery report with reasons and next actions was saved:\n"
+                    f"{report_path}\n\nOpen it now?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes,
+                )
+                if answer == QMessageBox.StandardButton.Yes:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(report_path))
+            else:
+                self.transfer_status.status_label.setText(
+                    f"Status: Finished with {failure_count} error(s). Review the alerts or log."
+                )
+        elif failure_count > 0:
             self.transfer_status.status_label.setText(
                 f"Status: Finished with {failure_count} error(s). Review the alerts or log."
             )
@@ -1663,12 +1687,48 @@ class QtMainWindow(QMainWindow):
             from ...services.audio import play_success_sound
             play_success_sound()
 
+    def _write_recovery_report(self):
+        """Plain-text failed-links report with raw error, classified reason, and next action."""
+        import time as _time
+        from ...services.errors import classify_error
+        from ...config.paths import get_config_dir
+
+        try:
+            lines = [
+                "=== GGU_VDOD FAILED DOWNLOAD RECOVERY REPORT ===",
+                f"generated: {_time.strftime('%Y-%m-%d %H:%M:%S')}",
+                f"failed items: {len(self._failed_this_run)}",
+                "",
+            ]
+            for url, message in self._failed_this_run:
+                details = classify_error(message, context=url)
+                raw_error = " ".join(str(message).split())
+                if len(raw_error) > 500:
+                    raw_error = raw_error[:500] + "…"
+                lines += [
+                    f"URL: {url}",
+                    f"raw error: {raw_error or 'unknown'}",
+                    f"reason: {details.title} ({details.code}) - {details.simple_message}",
+                    f"next action: {details.recommendation}",
+                    "-" * 70,
+                ]
+            reports_dir = os.path.join(get_config_dir(), "reports")
+            os.makedirs(reports_dir, exist_ok=True)
+            path = os.path.join(reports_dir, _time.strftime("recovery_%Y%m%d_%H%M%S") + ".txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("\n".join(lines))
+            return path
+        except Exception:
+            return ""
+
     def _queue_error_alert(self, url, error_message):
         """Show the original classified failure on the UI thread, one alert at a time."""
         from ...services.errors import classify_error
 
         if len(self._pending_error_alerts) >= 25:
             return
+        if url:
+            self._failed_this_run.append((url, str(error_message)))
         details = classify_error(error_message, context=url)
         self._pending_error_alerts.append(details)
         self._show_next_error_alert()
@@ -1694,13 +1754,19 @@ class QtMainWindow(QMainWindow):
 
     def _on_item_finished(self, url, succeeded, format_type):
         fingerprint = ""
-        if succeeded and self._download_worker is not None:
-            fingerprint = compute_settings_fingerprint(self._download_worker.settings)
+        result = {}
+        if self._download_worker is not None:
+            engine = getattr(self._download_worker, "engine", None)
+            result = getattr(engine, "last_result", {}) or {}
+            if succeeded:
+                fingerprint = compute_settings_fingerprint(self._download_worker.settings)
         update_history_entry(
             url,
             "Completed" if succeeded else "Failed or cancelled",
             format_type=format_type,
             fingerprint=fingerprint,
+            output_dir=str(result.get("output_dir") or ""),
+            final_file=str(result.get("final_file") or ""),
         )
         if succeeded:
             self._play_notification_sound()
@@ -1859,21 +1925,31 @@ class QtMainWindow(QMainWindow):
         self._update_fetch_worker.start()
 
     def _on_update_check_failed(self, error):
-        QMessageBox.warning(self, "Update check failed", f"Could not reach GitHub Releases:\n{error}")
+        """Explain update-check failures in simple English with a recommended fix."""
+        from ...services.errors import classify_error
+
+        details = classify_error(error, context="update check")
+        dlg = ErrorAlertDialog(details, self)
+        dlg.exec()
 
     def _on_update_check_done(self, release):
         from ...services import updates
+        from ...core.version import DEVELOPMENT_BUILD_LABEL
         latest = updates.is_newer(release["version_tuple"])
         if not latest:
             QMessageBox.information(
                 self, "Up to date",
-                f"You are on the latest version ({release['tag_name']})."
+                f"This app: {DEVELOPMENT_BUILD_LABEL}\n"
+                f"Latest GitHub release: {release['tag_name'] or 'unknown'}\n\n"
+                "You are running the newest published release."
+                + ("" if release.get("installer_url") else "\n\nNote: the installer asset for that release was not found; manual download from the Releases page may be needed.")
             )
             return
         answer = QMessageBox.question(
             self,
             "Update available",
-            f"Latest version: {release['tag_name']}\n\nDownload and install it now?\n"
+            f"This app: {DEVELOPMENT_BUILD_LABEL}\n"
+            f"Latest release: {release['tag_name']}\n\nDownload and install it now?\n"
             "The app will close, the setup runs automatically, and your settings stay.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,

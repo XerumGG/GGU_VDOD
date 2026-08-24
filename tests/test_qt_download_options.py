@@ -71,7 +71,14 @@ class QtDownloadOptionTests(unittest.TestCase):
 
             def extract_info(self, _url, download=False):
                 self.download = download
-                return {"requested_formats": [{"format_id": "401", "height": 2160, "resolution": "3840x2160", "ext": "webm", "vcodec": "av01"}]}
+                # Simulate a finished merge so the engine's integrity gate passes.
+                target = os.path.join(output_dir, "simulated_output.mp4")
+                with open(target, "wb") as handle:
+                    handle.write(os.urandom(64 * 1024))
+                return {
+                    "requested_formats": [{"format_id": "401", "height": 2160, "resolution": "3840x2160", "ext": "webm", "vcodec": "av01"}],
+                    "filepath": target,
+                }
 
         class FakeYTDLP:
             YoutubeDL = FakeYDL
@@ -113,7 +120,14 @@ class QtDownloadOptionTests(unittest.TestCase):
                 self.postprocessors.append(postprocessor)
 
             def extract_info(self, _url, download=False):
-                return {"requested_formats": [{"format_id": "251", "ext": "webm", "vcodec": "none", "acodec": "opus"}]}
+                # Simulate a finished audio conversion so the integrity gate passes.
+                target = os.path.join(output_dir, "simulated_audio.wma")
+                with open(target, "wb") as handle:
+                    handle.write(os.urandom(64 * 1024))
+                return {
+                    "requested_formats": [{"format_id": "251", "ext": "webm", "vcodec": "none", "acodec": "opus"}],
+                    "filepath": target,
+                }
 
         class FakeYTDLP:
             YoutubeDL = FakeYDL

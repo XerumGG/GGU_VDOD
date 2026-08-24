@@ -38,11 +38,14 @@ def install_popup_window_policy(application):
 def create_qt_application(arguments=None):
     """Create the shared Qt application instance and apply its base theme."""
     from PySide6.QtCore import Qt
+    from ...services.crash import install_crash_handlers
+
     QApplication.setHighDpiScaleFactorRoundingPolicy(
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
     application = QApplication.instance() or QApplication(arguments or sys.argv)
     application.setApplicationName("GGU_VDOD")
+    install_crash_handlers()
     apply_dark_theme(application)
     install_animated_tooltips(application)
     install_popup_window_policy(application)

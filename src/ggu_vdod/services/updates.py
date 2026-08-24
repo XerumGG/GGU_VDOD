@@ -3,10 +3,13 @@
 import json
 import os
 import re
+import urllib.parse
 import urllib.request
 
 RELEASES_API = "https://api.github.com/repos/XerumGG/GGU_VDOD/releases/latest"
 RELEASES_PAGE = "https://github.com/XerumGG/GGU_VDOD/releases/latest"
+EXPANDED_ASSETS = "https://github.com/XerumGG/GGU_VDOD/releases/expanded_assets/{tag}"
+USER_AGENT = "GGU_VDOD-Updater"
 
 
 def parse_version(text):
@@ -23,10 +26,25 @@ def current_version_tuple():
 
 
 def fetch_latest_release(timeout=10):
-    """Return dict(tag_name, version_tuple, installer_url, installer_size) or raise."""
+    """Return dict(tag_name, version_tuple, installer_url, installer_size) or raise.
+
+    The REST API allows only ~60 unauthenticated requests per hour per IP and
+    answers HTTP 403 'rate limit exceeded' beyond that, so on any API failure
+    we fall back to the public Releases page, which has no such quota.
+    """
+    try:
+        return _fetch_via_api(timeout)
+    except Exception as api_error:
+        try:
+            return _fetch_via_releases_page(timeout)
+        except Exception:
+            raise api_error
+
+
+def _fetch_via_api(timeout):
     request = urllib.request.Request(
         RELEASES_API,
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "GGU_VDOD-Updater"},
+        headers={"Accept": "application/vnd.github+json", "User-Agent": USER_AGENT},
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         data = json.loads(response.read(1024 * 1024).decode("utf-8"))
@@ -45,6 +63,40 @@ def fetch_latest_release(timeout=10):
         "installer_url": installer_url,
         "installer_size": installer_size,
         "html_url": data.get("html_url") or RELEASES_PAGE,
+    }
+
+
+def _fetch_via_releases_page(timeout):
+    """Rate-limit-free fallback: /releases/latest 302s to /releases/tag/<tag>."""
+    request = urllib.request.Request(RELEASES_PAGE, headers={"User-Agent": USER_AGENT}, method="HEAD")
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        final_url = response.geturl() or ""
+
+    match = re.search(r"/releases/tag/([^/?#]+)", final_url)
+    if not match:
+        raise RuntimeError("Could not resolve the latest release tag from the Releases page")
+    tag = urllib.parse.unquote(match.group(1))
+
+    installer_url = ""
+    try:
+        assets_request = urllib.request.Request(
+            EXPANDED_ASSETS.format(tag=tag), headers={"User-Agent": USER_AGENT}
+        )
+        with urllib.request.urlopen(assets_request, timeout=timeout) as response:
+            html = response.read(1024 * 1024).decode("utf-8", "ignore")
+        asset_match = re.search(r'href="(/[^"]*GGU_VDOD-setup-[^"]*\.exe|https://github\.com[^"]*GGU_VDOD-setup-[^"]*\.exe)"', html)
+        if asset_match:
+            href = asset_match.group(1)
+            installer_url = "https://github.com" + href if href.startswith("/") else href
+    except Exception:
+        pass  # tag alone still enables the update prompt; download URL stays optional
+
+    return {
+        "tag_name": tag,
+        "version_tuple": parse_version(tag),
+        "installer_url": installer_url,
+        "installer_size": 0,
+        "html_url": RELEASES_PAGE,
     }
 
 
