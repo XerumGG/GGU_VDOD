@@ -20,6 +20,14 @@ Downloads & reliability
 -----------------------
 Reliable format selection : Exact requested quality or clearly show the closest available option instead of silent fallback. #Fix #Done
 
+Proper queue manager : Live queue rows with title, status, progress, speed, and ETA; playlist links auto-expand into individual items. #Feat #Done
+
+Retry failed downloads : One-click 'Retry Failed' re-queues failed items; automatic back-off retries for 429, timeout, network, and temporary extractor errors. #Feat #Done
+
+Batch import and export : Import links from txt/csv/json/clipboard and export failed links as txt. #Feat #Done
+
+Complete playlist mass download : Playlists expand into the queue and download sequentially with per-item progress. #Feat #Done
+
 File integrity check : Final file must exist with playable streams and not be a tiny broken placeholder. #Fix #Done
 
 Disk-space pre-flight check : Warn/fail before download if estimated size exceeds available free space. #Fix #Done
@@ -80,23 +88,15 @@ PLANNED #Feat
 
 Queue management
 ----------------
-Proper queue manager : Playlist links expand into individual queue rows with title, source, quality, progress, speed, ETA, and status. #Feat
-
 Pause, resume, cancel, retry controls : Resume partial files where platform and yt-dlp support it. #Feat
 
-Retry failed downloads : One-click retry with delay for 429, timeout, network, and temporary extractor errors. #Feat
-
 Duplicate detection : If the same video already exists, ask to skip, overwrite, rename, or download better quality only. #Feat
-
-Batch import and export : Import links from txt/csv/clipboard and export failed links as txt. #Feat
 
 Broken link checker : Validate a pasted batch before starting download and mark unavailable/private/region-blocked links early. #Feat
 
 Speed limit option : Optional download speed limit so downloads do not consume the whole connection. #Feat
 
 Auto shutdown after queue : After all downloads finish: do nothing, sleep PC, shutdown PC, or open folder. #Feat
-
-Complete playlist mass download. #Feat
 
 Format & conversion tools
 -------------------------
@@ -164,4 +164,4 @@ Privacy cleanup center : One screen to clear cookies, temp files, logs, previews
 
 Exploratory / USP
 -----------------
-Bypass DRM, private access, age checks, bot checks, or regional blocks. #USP
+Universal site coverage (social, streaming, live, adult) with age/bot-check handling via the user's own sessions. DRM, private-access, and geo-block circumvention are out of scope by policy - see USP.md. #USP

@@ -11,7 +11,7 @@ import urllib.request
 from PySide6.QtCore import QEvent, QObject, QPoint, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QDesktopServices, QFont, QIcon, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog,
+    QApplication, QAbstractItemView, QButtonGroup, QCheckBox, QComboBox, QDialog, QFileDialog,
     QFormLayout, QFrame, QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar,
     QPushButton, QRadioButton, QScrollArea, QSizePolicy, QSlider, QSpinBox, QSplitter,
@@ -185,6 +185,7 @@ class FormatListWorker(QThread):
 from ...download.engine import (
     DownloadCancelled,
     DownloadEngine,
+    expand_playlist_urls,
     kill_own_ffmpeg_children as _kill_own_ffmpeg_children,
 )
 
@@ -194,6 +195,8 @@ class QtDownloadWorker(QThread):
     log_emitted = Signal(str)
     progress_updated = Signal(dict)
     status_updated = Signal(str)
+    items_planned = Signal(list)  # list of (title, url) after playlist expansion
+    item_started = Signal(str, int, int)
     item_finished = Signal(str, bool, str)
     error_occurred = Signal(str, str)
     queue_completed = Signal(int, int)
@@ -203,9 +206,15 @@ class QtDownloadWorker(QThread):
         self.urls = list(urls)
         self.settings = dict(settings or {})
         self.cancelled = False
+        self._current_index = 0
+        self.expanded_items = []
         worker = self
 
         class _Engine(DownloadEngine):
+            def _on_item_started(self, url, index, total):
+                worker._current_index = index
+                worker.item_started.emit(url, index, total)
+
             def _on_item_finished(self, url, success):
                 worker.item_finished.emit(url, success, worker.settings.get("format", "video"))
 
@@ -213,7 +222,7 @@ class QtDownloadWorker(QThread):
             self.settings,
             log=self.log_emitted.emit,
             status=self.status_updated.emit,
-            progress=self.progress_updated.emit,
+            progress=lambda data: self.progress_updated.emit({"item_index": worker._current_index, **data}),
             error=self.error_occurred.emit,
             cancel=lambda: self.cancelled,
         )
@@ -222,9 +231,25 @@ class QtDownloadWorker(QThread):
         self.cancelled = True
 
     def run(self):
-        success_count, failure_count = self.engine.run_queue(self.urls)
-        self.status_updated.emit("Ready.")
-        self.queue_completed.emit(success_count, failure_count)
+        success_count = 0
+        failure_count = 0
+        try:
+            # The checkbox is the source of truth.  When it is checked, the
+            # selected video remains one item even if the URL contains a
+            # playlist parameter.
+            if not self.settings.get("single_only", True):
+                pairs = expand_playlist_urls(self.urls, log=self.log_emitted.emit)
+                self.expanded_items = pairs
+                self.urls = [url for _title, url in pairs]
+                self.items_planned.emit(pairs)
+            success_count, failure_count = self.engine.run_queue(self.urls)
+        except Exception as error:
+            failure_count = max(1, len(self.urls))
+            self.log_emitted.emit(f"[ERROR] Download worker stopped unexpectedly: {error}")
+            self.error_occurred.emit("", str(error))
+        finally:
+            self.status_updated.emit("Ready.")
+            self.queue_completed.emit(success_count, failure_count)
 
     def _process_single_url(self, url, settings):
         self.engine.process_url(url, dict(settings))
@@ -280,6 +305,7 @@ class QtMainWindow(QMainWindow):
         self._pending_error_alerts = []
         self._active_error_alert = None
         self._failed_this_run = []
+        self._queue_rows = {}
         self._current_preview_data = None
         self._cookie_file_approved = False
         self._cookie_summary = None
@@ -326,6 +352,20 @@ class QtMainWindow(QMainWindow):
         self.open_folder_act.triggered.connect(self._open_output_folder)
         self.file_menu.addAction(self.open_folder_act)
 
+        self.file_menu.addSeparator()
+        self.import_file_act = QAction(t("menu.import_file", "Import link list from file..."), self)
+        self.import_file_act.triggered.connect(self._import_links_from_file)
+        self.file_menu.addAction(self.import_file_act)
+
+        self.import_clip_act = QAction(t("menu.import_clip", "Import links from clipboard"), self)
+        self.import_clip_act.triggered.connect(self._import_links_from_clipboard)
+        self.file_menu.addAction(self.import_clip_act)
+
+        self.export_failed_act = QAction(t("menu.export_failed", "Export failed links..."), self)
+        self.export_failed_act.triggered.connect(self._export_failed_links)
+        self.file_menu.addAction(self.export_failed_act)
+
+        self.file_menu.addSeparator()
         self.history_act = QAction(t("menu.history", "Link history..."), self)
         self.history_act.setShortcut(QKeySequence("Ctrl+H"))
         self.history_act.triggered.connect(self._show_history_dialog)
@@ -947,6 +987,41 @@ class QtMainWindow(QMainWindow):
         action_row.addStretch(1)
         layout.addLayout(action_row)
 
+        # Queue Section: one live row per media item (title, status, progress, speed, ETA)
+        queue_frame = QFrame()
+        queue_frame.setObjectName("panel")
+        queue_layout = QVBoxLayout(queue_frame)
+        queue_layout.setContentsMargins(12, 10, 12, 10)
+
+        queue_hdr = QHBoxLayout()
+        self.queue_title_lbl = QLabel(t("home.queue_title", "Download Queue"))
+        queue_hdr.addWidget(self.queue_title_lbl)
+        queue_hdr.addStretch(1)
+        self.queue_retry_btn = QPushButton("Retry Failed")
+        self.queue_retry_btn.setObjectName("primary")
+        self.queue_retry_btn.setEnabled(False)
+        self.queue_retry_btn.setToolTip("Re-queue every failed item from the last run.")
+        self.queue_retry_btn.clicked.connect(self._retry_failed_from_queue)
+        queue_hdr.addWidget(self.queue_retry_btn)
+        self.queue_clear_btn = QPushButton("Clear Queue")
+        self.queue_clear_btn.setEnabled(False)
+        self.queue_clear_btn.clicked.connect(self._clear_queue_view)
+        queue_hdr.addWidget(self.queue_clear_btn)
+        queue_layout.addLayout(queue_hdr)
+
+        self.queue_table = QTableWidget()
+        self.queue_table.setColumnCount(6)
+        self.queue_table.setHorizontalHeaderLabels(["#", "Title / URL", "Status", "Progress", "Speed", "ETA"])
+        self.queue_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.queue_table.verticalHeader().setVisible(False)
+        self.queue_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.queue_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.queue_table.setShowGrid(False)
+        self.queue_table.setAlternatingRowColors(True)
+        self.queue_table.setMinimumHeight(140)
+        queue_layout.addWidget(self.queue_table)
+        layout.addWidget(queue_frame)
+
         # Log Section
         log_frame = QFrame()
         log_frame.setObjectName("panel")
@@ -1516,6 +1591,13 @@ class QtMainWindow(QMainWindow):
                 QMessageBox.warning(self, "No links provided", "Please paste at least one valid video link before clicking Download.")
                 return
 
+            unique_urls = list(dict.fromkeys(urls))
+            if len(unique_urls) != len(urls):
+                self.log_box.appendPlainText(
+                    f"[INFO] Removed {len(urls) - len(unique_urls)} duplicate link(s) from the queue."
+                )
+            urls = unique_urls
+
             if not self._ensure_cookie_file_consent():
                 return
 
@@ -1605,6 +1687,7 @@ class QtMainWindow(QMainWindow):
             self.cancel_button.setEnabled(True)
             self.log_box.appendPlainText(f"\n=== Starting Download Operation for {len(urls)} item(s) ===")
             self._failed_this_run = []
+            self._queue_reset([("", u) for u in urls])
 
             old_worker = self._download_worker
             if old_worker is not None:
@@ -1616,7 +1699,12 @@ class QtMainWindow(QMainWindow):
             self._download_worker.finished.connect(self._download_worker.deleteLater)
             self._download_worker.log_emitted.connect(self.log_box.appendPlainText)
             self._download_worker.progress_updated.connect(self._on_progress_update)
+            self._download_worker.progress_updated.connect(self._on_queue_progress)
             self._download_worker.status_updated.connect(self._on_status_update)
+            self._download_worker.items_planned.connect(self._on_queue_items_planned)
+            self._download_worker.item_started.connect(self._on_queue_item_started)
+            self._download_worker.item_finished.connect(self._on_queue_item_finished)
+            self._download_worker.queue_completed.connect(self._on_queue_completed)
             self._download_worker.item_finished.connect(self._on_item_finished)
             self._download_worker.error_occurred.connect(self._queue_error_alert)
             self._download_worker.queue_completed.connect(self._on_download_complete)
@@ -1647,6 +1735,192 @@ class QtMainWindow(QMainWindow):
 
     def _on_status_update(self, status):
         self.transfer_status.status_label.setText(f"Status: {status}")
+
+    # ---- Download queue panel -------------------------------------------------
+
+    def _queue_reset(self, pairs):
+        """(Re)build queue rows from a list of (title, url) planned items."""
+        self._queue_rows = {}
+        self.queue_table.setRowCount(0)
+        self.queue_retry_btn.setEnabled(False)
+        self.queue_clear_btn.setEnabled(bool(pairs))
+        for index, (title, url) in enumerate(pairs, 1):
+            row = self.queue_table.rowCount()
+            self.queue_table.insertRow(row)
+            num_item = QTableWidgetItem(str(index))
+            title_item = QTableWidgetItem(title or url)
+            title_item.setToolTip(url)
+            title_item.setData(Qt.ItemDataRole.UserRole, url)
+            status_item = QTableWidgetItem("Queued")
+            for column, item in enumerate((num_item, title_item, status_item,
+                                           QTableWidgetItem("\u2014"),
+                                           QTableWidgetItem("\u2014"),
+                                           QTableWidgetItem("\u2014"))):
+                self.queue_table.setItem(row, column, item)
+            self._queue_rows.setdefault(url, row)
+
+    def _queue_row_for_url(self, url):
+        row = self._queue_rows.get(url)
+        if row is None or row >= self.queue_table.rowCount():
+            return None
+        return row
+
+    def _queue_set_status(self, url, status, color=None):
+        row = self._queue_row_for_url(url)
+        if row is None:
+            return
+        item = self.queue_table.item(row, 2)
+        item.setText(status)
+        if color:
+            item.setForeground(QColor(color))
+
+    def _on_queue_items_planned(self, pairs):
+        self._queue_reset(pairs)
+        worker = self._download_worker
+        if worker is not None:
+            fingerprint = compute_settings_fingerprint(worker.settings)
+            for title, url in pairs:
+                add_history_entry(
+                    url,
+                    title=title or url,
+                    format_type=worker.settings.get("format", "video"),
+                    status="Queued",
+                    fingerprint=fingerprint,
+                )
+
+    def _on_queue_item_started(self, url, _index, _total):
+        self._queue_set_status(url, "Downloading", "#3a86ff")
+        row = self._queue_row_for_url(url)
+        if row is not None:
+            self.queue_table.item(row, 3).setText("0%")
+
+    def _on_queue_progress(self, data):
+        index = data.get("item_index") or 0
+        if index < 1 or index > self.queue_table.rowCount():
+            return
+        row = index - 1
+        progress = data.get("progress") or 0
+        self.queue_table.item(row, 3).setText(f"{progress:.0f}%")
+        self.queue_table.item(row, 4).setText(data.get("download_rate") or "\u2014")
+        self.queue_table.item(row, 5).setText(data.get("eta") or "\u2014")
+
+    def _on_queue_item_finished(self, url, succeeded, _format_type):
+        row = self._queue_row_for_url(url)
+        if row is not None:
+            self.queue_table.item(row, 3).setText("100%" if succeeded else "\u2014")
+            self.queue_table.item(row, 4).setText("\u2014")
+            self.queue_table.item(row, 5).setText("\u2014")
+        if succeeded:
+            self._queue_set_status(url, "Completed", "#57c26a")
+        else:
+            self._queue_set_status(url, "Failed", "#ff6b6b")
+
+    def _on_queue_completed(self, _success_count, _failure_count):
+        # Anything still marked queued was skipped (cancel or duplicate skip).
+        for row in range(self.queue_table.rowCount()):
+            item = self.queue_table.item(row, 2)
+            if item and item.text() == "Queued":
+                item.setText("Skipped")
+        has_failures = any(
+            (self.queue_table.item(r, 2) or QTableWidgetItem("")).text() == "Failed"
+            for r in range(self.queue_table.rowCount())
+        )
+        self.queue_retry_btn.setEnabled(has_failures)
+
+    def _clear_queue_view(self):
+        self._queue_rows = {}
+        self.queue_table.setRowCount(0)
+        self.queue_clear_btn.setEnabled(False)
+        self.queue_retry_btn.setEnabled(False)
+
+    def _retry_failed_from_queue(self):
+        failed = []
+        for row in range(self.queue_table.rowCount()):
+            status = self.queue_table.item(row, 2)
+            if status and status.text() == "Failed":
+                title_item = self.queue_table.item(row, 1)
+                url = title_item.data(Qt.ItemDataRole.UserRole) if title_item else ""
+                if url and url not in failed:
+                    failed.append(url)
+        if not failed:
+            QMessageBox.information(self, "Nothing to retry", "No failed items in the current queue.")
+            return
+        self.url_text.setPlainText("\n".join(failed))
+        self._start_download()
+
+    # ---- Batch import / export ------------------------------------------------
+
+    @staticmethod
+    def _extract_urls_from_text(text):
+        """Pull unique http(s)/www URLs out of arbitrary text, CSV, or JSON."""
+        pattern = re.compile(r"https?://[^\s\"'<>)\],]+|www\.[^\s\"'<>)\],]+", re.IGNORECASE)
+        cleaned = []
+        for url in pattern.findall(text or ""):
+            url = url.rstrip(".,;:")
+            if url not in cleaned:
+                cleaned.append(url)
+        return cleaned
+
+    def _append_urls_to_box(self, urls):
+        existing = [line.strip() for line in self.url_text.toPlainText().splitlines() if line.strip()]
+        merged = existing + [u for u in urls if u not in existing]
+        self.url_text.setPlainText("\n".join(merged))
+        self.log_box.appendPlainText(f"[INFO] Imported {len(urls)} link(s) into the download box.")
+
+    def _import_links_from_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import link list", "",
+            "Link lists (*.txt *.csv *.json);;All files (*.*)",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+        except Exception as err:
+            QMessageBox.warning(self, "Import failed", f"Could not read the file:\n{err}")
+            return
+        urls = self._extract_urls_from_text(content)
+        if not urls:
+            QMessageBox.information(self, "No links found", "No http(s) links were found in that file.")
+            return
+        self._append_urls_to_box(urls)
+        QMessageBox.information(self, "Links imported", f"{len(urls)} link(s) added to the download box.")
+
+    def _import_links_from_clipboard(self):
+        urls = self._extract_urls_from_text(QApplication.clipboard().text())
+        if not urls:
+            QMessageBox.information(self, "Clipboard empty", "No http(s) links were found on the clipboard.")
+            return
+        self._append_urls_to_box(urls)
+        QMessageBox.information(self, "Links imported", f"{len(urls)} link(s) added to the download box.")
+
+    def _export_failed_links(self):
+        failed = list(self._failed_this_run)
+        if not failed:
+            from ...config.store import load_history as _load_history
+            failed = [
+                (h.get("url", ""), "from history")
+                for h in _load_history()
+                if str(h.get("status", "")).startswith("Failed")
+            ]
+        if not failed:
+            QMessageBox.information(self, "Nothing to export", "No failed downloads recorded.")
+            return
+        default_name = time.strftime("GGU_VDOD_failed_links_%Y%m%d_%H%M%S.txt")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export failed links", default_name, "Text files (*.txt);;All files (*.*)",
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                for url, _reason in failed:
+                    f.write(f"{url}\n")
+        except Exception as err:
+            QMessageBox.warning(self, "Export failed", f"Could not write the file:\n{err}")
+            return
+        QMessageBox.information(self, "Exported", f"{len(failed)} failed link(s) written to:\n{path}")
 
     def _play_notification_sound(self):
         """Play Windows default notification sound chime when a download finishes."""

@@ -1,12 +1,12 @@
 # Architecture
 
-src-layout package src/ggu_vdod. Entry: root pp.py -> ui/qt/application.py -> QtMainWindow.
+src-layout package `src/ggu_vdod`. Entry: root `app.py` -> `ui/qt/application.py` -> `QtMainWindow`.
 
 | Package | Responsibility |
 | --- | --- |
 | core | constants, formatting, version (single source of truth) |
 | config | paths, atomic settings store, central SettingsManager |
-| uth | DPAPI credential store, Windows Credential Manager, Mailpit client |
+| auth | DPAPI credential store, Windows Credential Manager, Mailpit client |
 | download | Qt-free DownloadEngine + structured DownloadJob model |
 | conversion | FFmpeg argument builders, post-processors, sidecar cleanup |
 | preview | metadata/thumbnail retrieval with bot-check fallbacks |

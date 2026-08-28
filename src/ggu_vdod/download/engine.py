@@ -88,6 +88,77 @@ def load_yt_dlp():
 
 yt_dlp = None
 
+PLAYLIST_EXPANSION_CAP = 500
+
+
+def expand_playlist_urls(urls, log=None, max_items=PLAYLIST_EXPANSION_CAP):
+    """Expand playlist URLs into individual (title, url) pairs via cheap flat extraction.
+
+    Non-playlist URLs pass through with an empty title. Anything that fails to
+    expand is kept as-is so the normal download path can report a proper error.
+    """
+    yt_dlp_mod = load_yt_dlp()
+    if yt_dlp_mod is None or not urls:
+        return [("", u) for u in urls]
+    expanded = []
+    max_items = max(1, int(max_items or PLAYLIST_EXPANSION_CAP))
+    seen_counts = {}
+    try:
+        with yt_dlp_mod.YoutubeDL({"quiet": True, "no_warnings": True, "extract_flat": True}) as ydl:
+            for url in urls:
+                info = None
+                try:
+                    info = ydl.extract_info(url, download=False)
+                except Exception as error:
+                    if log:
+                        log(f"[INFO] Playlist pre-check skipped for {url}: {error}")
+                if isinstance(info, dict) and info.get("_type") == "playlist" and info.get("entries"):
+                    entries = []
+                    for entry in info["entries"]:
+                        if not isinstance(entry, dict):
+                            continue
+                        entry_url = (
+                            entry.get("webpage_url")
+                            or entry.get("original_url")
+                            or entry.get("url")
+                            or ""
+                        )
+                        if entry_url.startswith("//"):
+                            entry_url = f"https:{entry_url}"
+                        if not urllib.parse.urlparse(entry_url).scheme:
+                            ie_key = str(entry.get("ie_key") or "").lower()
+                            if "youtube" in ie_key:
+                                entry_url = f"https://www.youtube.com/watch?v={entry_url}"
+                        if not entry_url.startswith(("http://", "https://")):
+                            continue
+                        if not entry_url:
+                            continue
+                        entries.append((entry.get("title") or entry_url, entry_url))
+                        if len(entries) >= max_items:
+                            break
+                    if log:
+                        log(
+                            f"[INFO] Playlist detected: expanding into {len(entries)} item(s)"
+                            + (" (capped)" if len(info.get("entries") or []) > len(entries) else "")
+                        )
+                    for title, entry_url in entries:
+                        seen_counts[entry_url] = seen_counts.get(entry_url, 0) + 1
+                        suffix = f" #{seen_counts[entry_url]}" if seen_counts[entry_url] > 1 else ""
+                        expanded.append((f"{title}{suffix}", entry_url))
+                else:
+                    expanded.append(("", url))
+    except Exception:
+        return [("", u) for u in urls]
+    # Deduplicate identical media URLs while keeping the first title.
+    result = []
+    seen = set()
+    for title, url in expanded:
+        if url in seen:
+            continue
+        seen.add(url)
+        result.append((title, url))
+    return result
+
 
 class YTDLPEventLogger:
     """Forward yt-dlp messages into a sink callable, throttled every 10 seconds."""
@@ -166,21 +237,22 @@ class DownloadEngine:
 
     def run_queue(self, urls):
         """Process every URL sequentially; returns (success_count, failure_count)."""
+        urls = list(urls)
         if load_yt_dlp() is None:
             error_message = "yt-dlp library is missing."
             self._log(f"[ERROR] {error_message}")
             self._error("", error_message)
-            return 0, len(list(urls))
+            return 0, len(urls)
 
         success_count = 0
         failure_count = 0
-        urls = list(urls)
 
         for index, url in enumerate(urls, 1):
             if self.cancelled():
                 self._log("[INFO] Download operation cancelled by user.")
                 break
 
+            self._on_item_started(url, index, len(urls))
             self._log(f"\n--- [Queue {index}/{len(urls)}] Processing {url} ---")
             self._status(f"Downloading item {index} of {len(urls)}...")
 
@@ -192,6 +264,9 @@ class DownloadEngine:
                 failure_count += 1
 
         return success_count, failure_count
+
+    def _on_item_started(self, url, index, total):
+        pass  # overridden by adapters that need per-item start events
 
     def _on_item_finished(self, url, success):
         pass  # overridden by adapters that need per-item completion events
