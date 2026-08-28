@@ -1,6 +1,39 @@
 """Qt application bootstrap kept separate from window composition."""
 
+import os
 import sys
+
+
+# Keep the bundled Qt DLLs ahead of any Qt installation on the user's PATH.
+# Without this, Windows can load a different Qt6Core.dll before PySide6's
+# matching library and report the misleading "specified procedure could not
+# be found" import error.
+_QT_DLL_HANDLES = []
+
+
+def _prepare_bundled_qt_dll_search_path():
+    if not getattr(sys, "frozen", False) or not hasattr(os, "add_dll_directory"):
+        return
+
+    executable_dir = os.path.dirname(sys.executable)
+    meipass_dir = getattr(sys, "_MEIPASS", "")
+    candidates = [
+        os.path.join(executable_dir, "_internal", "PySide6"),
+        os.path.join(executable_dir, "PySide6"),
+        os.path.join(meipass_dir, "PySide6") if meipass_dir else "",
+    ]
+    for directory in candidates:
+        if not directory or not os.path.isdir(directory):
+            continue
+        try:
+            _QT_DLL_HANDLES.append(os.add_dll_directory(directory))
+        except OSError:
+            continue
+        os.environ["PATH"] = directory + os.pathsep + os.environ.get("PATH", "")
+        break
+
+
+_prepare_bundled_qt_dll_search_path()
 
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtWidgets import QApplication, QDialog

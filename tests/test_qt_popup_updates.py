@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -47,6 +48,24 @@ class QtPopupAndUpdateTests(unittest.TestCase):
         self.assertTrue(dialog.update_btn.isEnabled())
         self.assertIn("1 available", dialog.update_btn.text())
         dialog.close()
+
+    def test_frozen_app_prepends_bundled_qt_directory(self):
+        import ggu_vdod.ui.qt.application as qt_application
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            exe_dir = Path(temp_dir)
+            qt_dir = exe_dir / "_internal" / "PySide6"
+            qt_dir.mkdir(parents=True)
+            fake_handle = object()
+            with patch.object(qt_application.sys, "frozen", True, create=True), \
+                    patch.object(qt_application.sys, "executable", str(exe_dir / "GGU_VDOD.exe")), \
+                    patch.object(qt_application.os, "add_dll_directory", return_value=fake_handle) as add_dll, \
+                    patch.dict(qt_application.os.environ, {"PATH": "existing-path"}, clear=False):
+                before = len(qt_application._QT_DLL_HANDLES)
+                qt_application._prepare_bundled_qt_dll_search_path()
+                self.assertEqual(len(qt_application._QT_DLL_HANDLES), before + 1)
+                add_dll.assert_called_once_with(str(qt_dir))
+                self.assertTrue(qt_application.os.environ["PATH"].startswith(str(qt_dir)))
 
 
 if __name__ == "__main__":

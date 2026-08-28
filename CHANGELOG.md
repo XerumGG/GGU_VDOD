@@ -4,6 +4,8 @@ See [Releases](../../releases) for the full, per-version notes — every release
 
 Highlights:
 
+- **v0.2.21 #077** — deterministic bundled-Qt DLL loading for reliable EXE startup
+
 - **v0.2.20 #076** — playlist-mode fix, safer playlist URL expansion, duplicate queue cleanup, and worker recovery
 
 - **v0.2.12** — platform bot-check classification + automatic alternate-player retries; previews hardened
