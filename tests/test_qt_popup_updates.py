@@ -55,16 +55,29 @@ class QtPopupAndUpdateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             exe_dir = Path(temp_dir)
             qt_dir = exe_dir / "_internal" / "PySide6"
+            shiboken_dir = exe_dir / "_internal" / "shiboken6"
             qt_dir.mkdir(parents=True)
+            shiboken_dir.mkdir(parents=True)
+            for name in ("Qt6Core.dll", "pyside6.abi3.dll"):
+                (qt_dir / name).write_bytes(b"placeholder")
+            (shiboken_dir / "shiboken6.abi3.dll").write_bytes(b"placeholder")
             fake_handle = object()
+            fake_native_handles = []
             with patch.object(qt_application.sys, "frozen", True, create=True), \
                     patch.object(qt_application.sys, "executable", str(exe_dir / "GGU_VDOD.exe")), \
                     patch.object(qt_application.os, "add_dll_directory", return_value=fake_handle) as add_dll, \
+                    patch.object(qt_application, "_load_native_library", side_effect=lambda path: fake_native_handles.append(path) or path) as win_dll, \
                     patch.dict(qt_application.os.environ, {"PATH": "existing-path"}, clear=False):
                 before = len(qt_application._QT_DLL_HANDLES)
                 qt_application._prepare_bundled_qt_dll_search_path()
-                self.assertEqual(len(qt_application._QT_DLL_HANDLES), before + 1)
-                add_dll.assert_called_once_with(str(qt_dir))
+                self.assertEqual(len(qt_application._QT_DLL_HANDLES), before + 3)
+                self.assertEqual([call.args[0] for call in add_dll.call_args_list], [
+                    str(exe_dir / "_internal"), str(shiboken_dir), str(qt_dir),
+                ])
+                self.assertEqual([Path(item).name for item in fake_native_handles], [
+                    "shiboken6.abi3.dll", "Qt6Core.dll", "pyside6.abi3.dll",
+                ])
+                self.assertTrue(win_dll.call_count == 3)
                 self.assertTrue(qt_application.os.environ["PATH"].startswith(str(qt_dir)))
 
 
