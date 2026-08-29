@@ -1935,65 +1935,14 @@ class QtMainWindow(QMainWindow):
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
         self.log_box.appendPlainText(f"\n[FINISHED] Queue finished: {success_count} succeeded, {failure_count} failed.")
-        if failure_count > 0 and self._failed_this_run:
-            report_path = self._write_recovery_report()
-            if report_path:
-                self.log_box.appendPlainText(f"[INFO] Recovery report saved: {report_path}")
-                answer = QMessageBox.question(
-                    self,
-                    "Some downloads failed",
-                    f"{failure_count} item(s) failed.\nA recovery report with reasons and next actions was saved:\n"
-                    f"{report_path}\n\nOpen it now?",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                    QMessageBox.StandardButton.Yes,
-                )
-                if answer == QMessageBox.StandardButton.Yes:
-                    QDesktopServices.openUrl(QUrl.fromLocalFile(report_path))
-            else:
-                self.transfer_status.status_label.setText(
-                    f"Status: Finished with {failure_count} error(s). Review the alerts or log."
-                )
-        elif failure_count > 0:
+        if failure_count > 0:
             self.transfer_status.status_label.setText(
-                f"Status: Finished with {failure_count} error(s). Review the alerts or log."
+                f"Status: Downloaded {success_count}; failed {failure_count}."
             )
         else:
+            self.transfer_status.status_label.setText(f"Status: Downloaded {success_count}; no failures.")
             from ...services.audio import play_success_sound
             play_success_sound()
-
-    def _write_recovery_report(self):
-        """Plain-text failed-links report with raw error, classified reason, and next action."""
-        import time as _time
-        from ...services.errors import classify_error
-        from ...config.paths import get_config_dir
-
-        try:
-            lines = [
-                "=== GGU_VDOD FAILED DOWNLOAD RECOVERY REPORT ===",
-                f"generated: {_time.strftime('%Y-%m-%d %H:%M:%S')}",
-                f"failed items: {len(self._failed_this_run)}",
-                "",
-            ]
-            for url, message in self._failed_this_run:
-                details = classify_error(message, context=url)
-                raw_error = " ".join(str(message).split())
-                if len(raw_error) > 500:
-                    raw_error = raw_error[:500] + "…"
-                lines += [
-                    f"URL: {url}",
-                    f"raw error: {raw_error or 'unknown'}",
-                    f"reason: {details.title} ({details.code}) - {details.simple_message}",
-                    f"next action: {details.recommendation}",
-                    "-" * 70,
-                ]
-            reports_dir = os.path.join(get_config_dir(), "reports")
-            os.makedirs(reports_dir, exist_ok=True)
-            path = os.path.join(reports_dir, _time.strftime("recovery_%Y%m%d_%H%M%S") + ".txt")
-            with open(path, "w", encoding="utf-8") as f:
-                f.write("\n".join(lines))
-            return path
-        except Exception:
-            return ""
 
     def _queue_error_alert(self, url, error_message):
         """Show the original classified failure on the UI thread, one alert at a time."""

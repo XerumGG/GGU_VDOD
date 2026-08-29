@@ -235,6 +235,60 @@ class DownloadEngine:
         except Exception:
             pass
 
+    @staticmethod
+    def _resolve_final_file(info, output_dir, started_at, target_ext):
+        """Find the actual post-processed output produced by yt-dlp.
+
+        yt-dlp does not reliably return ``filepath`` after remuxing or
+        recoding. Prefer an explicit final path, then locate the newly written
+        requested-format file so a successful MP4 is never reported as absent.
+        """
+        target_ext = str(target_ext or "").lower().lstrip(".")
+        candidates = []
+
+        def add_candidate(value):
+            if isinstance(value, str) and value and value not in candidates:
+                candidates.append(value)
+
+        if isinstance(info, dict):
+            for key in ("filepath", "_filename"):
+                add_candidate(info.get(key))
+            for item in info.get("requested_downloads") or []:
+                if isinstance(item, dict):
+                    add_candidate(item.get("filepath"))
+                    add_candidate(item.get("_filename"))
+            for source, destination in (info.get("__files_to_move") or {}).items():
+                add_candidate(destination)
+                add_candidate(source)
+
+        def matches_target(path):
+            return not target_ext or os.path.splitext(path)[1].lower() == f".{target_ext}"
+
+        for path in candidates:
+            if os.path.isfile(path) and matches_target(path):
+                return path
+
+        try:
+            recent_outputs = []
+            for name in os.listdir(output_dir):
+                path = os.path.join(output_dir, name)
+                lower_name = name.lower()
+                if (
+                    not os.path.isfile(path)
+                    or not matches_target(path)
+                    or lower_name.endswith((".part", ".ytdl"))
+                    or ".temp." in lower_name
+                    or re.search(r"\.f\d+\.", lower_name)
+                ):
+                    continue
+                if os.path.getmtime(path) >= started_at - 2:
+                    recent_outputs.append(path)
+            if recent_outputs:
+                return max(recent_outputs, key=os.path.getmtime)
+        except OSError:
+            pass
+        return ""
+
     def run_queue(self, urls):
         """Process every URL sequentially; returns (success_count, failure_count)."""
         urls = list(urls)
@@ -576,7 +630,7 @@ class DownloadEngine:
 
         if settings.get("clean_sidecars", True):
             clean_video_sidecars(output_dir, started_at, target_ext)
-        final_file = info.get("filepath") if isinstance(info, dict) else ""
+        final_file = self._resolve_final_file(info, output_dir, started_at, target_ext)
         self.last_result = {"output_dir": output_dir, "final_file": final_file or ""}
         self._verify_integrity(final_file)
         self._report_selected_format(info, settings, target_ext)

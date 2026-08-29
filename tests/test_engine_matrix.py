@@ -141,33 +141,20 @@ class CrashReportTests(unittest.TestCase):
         self.assertIn("ZeroDivisionError", body)
 
 
-class RecoveryReportQtTests(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        from ggu_vdod.ui.qt.application import create_qt_application
-
-        cls.application = create_qt_application([])
-
-    def test_failure_tracking_and_recovery_report(self):
-        from ggu_vdod.ui.qt.main_window import QtMainWindow
-
-        window = QtMainWindow(settings={}, persist_settings=False)
-        try:
-            window._queue_error_alert(
-                "https://www.youtube.com/watch?v=matrix",
-                "ERROR: HTTP Error 429: Too Many Requests",
+class FinalOutputResolutionTests(unittest.TestCase):
+    def test_finds_recent_requested_format_when_ytdlp_omits_filepath(self):
+        engine = DownloadEngine({})
+        with tempfile.TemporaryDirectory() as output_dir:
+            final_file = os.path.join(output_dir, "completed.mp4")
+            with open(final_file, "wb") as handle:
+                handle.write(os.urandom(64 * 1024))
+            resolved = engine._resolve_final_file(
+                {"_filename": os.path.join(output_dir, "source.webm")},
+                output_dir,
+                os.path.getmtime(final_file),
+                "mp4",
             )
-            self.assertEqual(len(window._failed_this_run), 1)
-
-            report = window._write_recovery_report()
-            self.assertTrue(report and os.path.isfile(report))
-            with open(report, "r", encoding="utf-8") as f:
-                body = f.read()
-            self.assertIn("RECOVERY REPORT", body)
-            self.assertIn("watch?v=matrix", body)
-            self.assertIn("ERR_RATE_LIMITED_429", body)
-        finally:
-            window.close()
+        self.assertEqual(resolved, final_file)
 
 
 if __name__ == "__main__":

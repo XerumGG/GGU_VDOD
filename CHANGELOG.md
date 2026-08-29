@@ -4,6 +4,8 @@ See [Releases](../../releases) for the full, per-version notes — every release
 
 Highlights:
 
+- **v0.2.27 #083** — correctly detect completed post-processed files and simplify failure alerts
+
 - **v0.2.26 #082** — prevent unrelated Poppler ICU DLLs from contaminating the Qt package
 
 - **v0.2.25 #081** — use the native Windows DLL loader for frozen Qt startup

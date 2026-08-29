@@ -1312,15 +1312,15 @@ class LibraryDialog(QDialog):
 
 
 class ErrorAlertDialog(QDialog):
-    """Interactive, user-friendly Error Alert Dialog with natural language explanations and actions."""
+    """Compact failure alert that keeps the outcome clear and actionable."""
 
     def __init__(self, error_details, parent=None):
         super().__init__(parent)
         from ...services.errors import ErrorDetails
         self.details: ErrorDetails = error_details
         self.setWindowTitle(f"Alert: {self.details.title}")
-        self.resize(640, 460)
-        self.setMinimumSize(540, 360)
+        self.resize(480, 190)
+        self.setMinimumSize(400, 160)
 
         from ...services.audio import play_error_sound
         play_error_sound(self.details.sound_type, self.details.code)
@@ -1329,63 +1329,19 @@ class ErrorAlertDialog(QDialog):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 18, 20, 18)
-        layout.setSpacing(14)
+        layout.setContentsMargins(18, 16, 18, 16)
+        layout.setSpacing(10)
 
-        # Header Title Banner
-        hdr_frame = QFrame()
-        hdr_frame.setObjectName("panel")
-
-        # Color accent based on severity
-        border_color = "#e5484d" if self.details.severity == "CRITICAL" else ("#f5a623" if self.details.severity == "WARNING" else "#3b82f6")
-        hdr_frame.setStyleSheet(f"QFrame#panel {{ background: #141414; border: 1px solid {border_color}; border-radius: 8px; }}")
-
-        hdr_layout = QHBoxLayout(hdr_frame)
-        hdr_layout.setContentsMargins(16, 12, 16, 12)
-
-        hdr_info = QVBoxLayout()
         title_lbl = QLabel(self.details.title, self)
-        title_lbl.setStyleSheet(f"font-size: 18px; font-weight: 700; color: {border_color};")
-        code_lbl = QLabel(f"Category: {self.details.code}  |  Severity: {self.details.severity}", self)
-        code_lbl.setObjectName("muted")
-        hdr_info.addWidget(title_lbl)
-        hdr_info.addWidget(code_lbl)
-        hdr_layout.addLayout(hdr_info, 1)
+        title_lbl.setStyleSheet("font-size: 16px; font-weight: 700;")
+        layout.addWidget(title_lbl)
 
-        layout.addWidget(hdr_frame)
-
-        # Simple Message & Recommended Solution Box
-        msg_box = QTextEdit(self)
-        msg_box.setReadOnly(True)
-        html_content = f"""
-        <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; color: #e0e0e0;">
-            <h4 style="margin-top: 0; color: #ffffff;">What Happened?</h4>
-            <p style="font-size: 14px; color: #ffffff;">{self.details.simple_message}</p>
-
-            <h4 style="color: #ffffff; margin-top: 14px;">Recommended Fix Action</h4>
-            <p style="font-size: 13px; color: #75f086; font-weight: 600;">{self.details.recommendation}</p>
-        </div>
-        """
-        msg_box.setHtml(html_content)
-        layout.addWidget(msg_box, 1)
-
-        # Collapsible Raw Log Section
-        self.raw_log_edit = QPlainTextEdit(self)
-        self.raw_log_edit.setPlainText(self.details.raw_log)
-        self.raw_log_edit.setReadOnly(True)
-        self.raw_log_edit.setVisible(False)
-        layout.addWidget(self.raw_log_edit, 1)
+        outcome_lbl = QLabel(f"Not downloaded. {self.details.simple_message}", self)
+        outcome_lbl.setWordWrap(True)
+        layout.addWidget(outcome_lbl)
 
         # Button Bar
         btn_row = QHBoxLayout()
-        self.toggle_log_btn = QPushButton("Show Technical Log [+]")
-        self.toggle_log_btn.clicked.connect(self._toggle_raw_log)
-        btn_row.addWidget(self.toggle_log_btn)
-
-        copy_btn = QPushButton("Copy Technical Details")
-        copy_btn.clicked.connect(self._copy_details)
-        btn_row.addWidget(copy_btn)
-
         btn_row.addStretch(1)
 
         # Contextual Action Button if available
@@ -1410,16 +1366,6 @@ class ErrorAlertDialog(QDialog):
         btn_row.addWidget(close_btn)
 
         layout.addLayout(btn_row)
-
-    def _toggle_raw_log(self):
-        show = not self.raw_log_edit.isVisible()
-        self.raw_log_edit.setVisible(show)
-        self.toggle_log_btn.setText("Hide Technical Log [-]" if show else "Show Technical Log [+]")
-
-    def _copy_details(self):
-        diag_text = f"=== GGU_VDOD ERROR DIAGNOSTIC REPORT ===\nTitle: {self.details.title}\nCode: {self.details.code}\nSeverity: {self.details.severity}\nMessage: {self.details.simple_message}\nFix Action: {self.details.recommendation}\n\n--- RAW TECHNICAL LOG ---\n{self.details.raw_log}"
-        QApplication.clipboard().setText(diag_text)
-        QMessageBox.information(self, "Copied", "Technical diagnostic details copied to clipboard.")
 
 
 COMMON_SUBTITLE_LANGUAGES = [
