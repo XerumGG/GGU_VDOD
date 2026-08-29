@@ -277,14 +277,42 @@ class UpdateDownloadWorker(QThread):
         super().__init__(parent)
         self.url = url
         self.dest = dest
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
 
     def run(self):
         try:
-            from ...services import updates
-            updates.download_installer(self.url, self.dest, progress_cb=lambda d, t: self.progressed.emit(d, t))
-            self.finished_ok.emit(self.dest)
+            import urllib.request
+            request = urllib.request.Request(self.url, headers={"User-Agent": "GGU_VDOD-Updater"})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                total = int(response.headers.get("Content-Length") or 0)
+                done = 0
+                last_pct = -1
+                with open(self.dest, "wb") as f:
+                    while True:
+                        if self._is_cancelled:
+                            try:
+                                if os.path.exists(self.dest):
+                                    os.remove(self.dest)
+                            except Exception:
+                                pass
+                            return
+                        chunk = response.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        done += len(chunk)
+                        pct = int(done * 100 / total) if total else 0
+                        if pct != last_pct or done == total:
+                            last_pct = pct
+                            self.progressed.emit(done, total)
+            if not self._is_cancelled:
+                self.finished_ok.emit(self.dest)
         except Exception as error:
-            self.failed.emit(str(error))
+            if not self._is_cancelled:
+                self.failed.emit(str(error))
 
 
 class QtMainWindow(QMainWindow):
@@ -2165,56 +2193,79 @@ class QtMainWindow(QMainWindow):
                 f"This app: {DEVELOPMENT_BUILD_LABEL}\n"
                 f"Latest GitHub release: {release['tag_name'] or 'unknown'}\n\n"
                 "You are running the newest published release."
-                + ("" if release.get("installer_url") else "\n\nNote: the installer asset for that release was not found; manual download from the Releases page may be needed.")
             )
             return
+
+        installer_url = release.get("installer_url")
+        if not installer_url:
+            answer = QMessageBox.question(
+                self,
+                "Update available",
+                f"This app: {DEVELOPMENT_BUILD_LABEL}\n"
+                f"Latest release: {release['tag_name']}\n\n"
+                "A newer version is available, but no direct installer asset was found.\n"
+                "Open the GitHub Releases page to download it manually?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                from PySide6.QtGui import QDesktopServices
+                from PySide6.QtCore import QUrl
+                QDesktopServices.openUrl(QUrl(release.get("html_url") or "https://github.com/XerumGG/GGU_VDOD/releases/latest"))
+            return
+
         answer = QMessageBox.question(
             self,
             "Update available",
             f"This app: {DEVELOPMENT_BUILD_LABEL}\n"
             f"Latest release: {release['tag_name']}\n\nDownload and install it now?\n"
-            "The app will close, the setup runs automatically, and your settings stay.",
+            "The app will close, the setup wizard will launch, and your settings stay.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.Yes,
         )
-        if answer != QMessageBox.StandardButton.Yes or not release["installer_url"]:
+        if answer != QMessageBox.StandardButton.Yes:
             return
 
         import tempfile
-        dest = os.path.join(tempfile.gettempdir(), f"GGU_VDOD-update-{release['tag_name']}.exe")
-        self._progress = QProgressDialog("Downloading update…", "Cancel", 0, 100, self)
+        dest = os.path.join(tempfile.gettempdir(), f"GGU_VDOD-setup-{release['tag_name']}.exe")
+        self._progress = QProgressDialog("Connecting to download update…", "Cancel", 0, 100, self)
         self._progress.setWindowTitle("GGU_VDOD Update")
         self._progress.setMinimumDuration(0)
         self._progress.setWindowModality(Qt.WindowModality.WindowModal)
+        self._progress.setAutoClose(False)
+        self._progress.setAutoReset(False)
+        self._progress.setValue(0)
+        self._progress.show()
 
-        self._update_dl_worker = UpdateDownloadWorker(release["installer_url"], dest, self)
+        self._update_dl_worker = UpdateDownloadWorker(installer_url, dest, self)
+        self._progress.canceled.connect(self._update_dl_worker.cancel)
         self._update_dl_worker.progressed.connect(self._on_update_download_progress)
-        self._update_dl_worker.finished_ok.connect(lambda p: self._launch_update(p))
+        self._update_dl_worker.finished_ok.connect(self._launch_update)
         self._update_dl_worker.failed.connect(self._on_update_download_failed)
         self._update_dl_worker.start()
 
     def _on_update_download_progress(self, done, total):
         pct = int(done * 100 / total) if total else 0
-        self._progress.setValue(pct)
-        self._progress.setLabelText(f"Downloading update… {done // (1024 * 1024)} / {max(1, total // (1024 * 1024))} MB")
+        if hasattr(self, "_progress") and self._progress:
+            self._progress.setValue(pct)
+            total_mb = max(1, total // (1024 * 1024)) if total else 0
+            done_mb = done // (1024 * 1024)
+            self._progress.setLabelText(f"Downloading update… {done_mb} / {total_mb} MB")
 
     def _on_update_download_failed(self, error):
-        self._progress.cancel()
-        QMessageBox.critical(self, "Update download failed", str(error))
+        if hasattr(self, "_progress") and self._progress:
+            self._progress.cancel()
+        QMessageBox.critical(self, "Update download failed", f"Could not download update installer:\n{error}")
 
     def _launch_update(self, path):
-        self._progress.setValue(100)
-        answer = QMessageBox.question(
-            self, "Ready to install",
-            "Update downloaded. Install now?\nThe app will close and the setup will run silently - your settings are kept.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
+        if hasattr(self, "_progress") and self._progress:
+            self._progress.setValue(100)
+            self._progress.close()
+        try:
             os.startfile(path)
-            return
-        import subprocess
-        subprocess.Popen([path, "/SILENT", "/CLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS"], close_fds=True)
+        except Exception:
+            import subprocess
+            subprocess.Popen([path], shell=True)
         QApplication.quit()
 
     def _run_uninstall_flow(self):

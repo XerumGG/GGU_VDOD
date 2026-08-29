@@ -89,14 +89,17 @@ def _fetch_via_releases_page(timeout):
             href = asset_match.group(1)
             installer_url = "https://github.com" + href if href.startswith("/") else href
     except Exception:
-        pass  # tag alone still enables the update prompt; download URL stays optional
+        pass
+
+    if not installer_url:
+        installer_url = f"https://github.com/XerumGG/GGU_VDOD/releases/download/{tag}/GGU_VDOD-setup-{tag}.exe"
 
     return {
         "tag_name": tag,
         "version_tuple": parse_version(tag),
         "installer_url": installer_url,
         "installer_size": 0,
-        "html_url": RELEASES_PAGE,
+        "html_url": f"https://github.com/XerumGG/GGU_VDOD/releases/tag/{tag}",
     }
 
 
