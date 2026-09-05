@@ -367,17 +367,19 @@ class DownloadEngine:
                         "[WARNING] Subtitle service rate-limited this request; retrying the media without subtitles."
                     )
                     continue
+                is_youtube_url = "youtube.com" in url.lower() or "youtu.be" in url.lower()
+                is_youtube_403 = is_youtube_url and ("403" in str(error) or "forbidden" in str(error).lower())
                 if (
                     not botcheck_fallback_used
                     and settings.get("cookies_browser") in (None, "", "None")
                     and not settings.get("cookies_file")
-                    and looks_like_bot_check(error)
+                    and (looks_like_bot_check(error) or is_youtube_403)
                 ):
                     botcheck_fallback_used = True
                     settings["youtube_alt_clients"] = True
                     self._log(
-                        "[WARNING] Platform bot-check detected; retrying once with alternate "
-                        "YouTube clients (TV/Safari). For reliable access configure browser cookies."
+                        "[WARNING] YouTube bot-check / 403 detected; retrying once with alternate "
+                        "YouTube clients (Android/iOS/TV). For reliable access configure browser cookies."
                     )
                     continue
                 if looks_like_connection_error(error) and attempt < MAX_RETRIES:
@@ -495,8 +497,9 @@ class DownloadEngine:
             ydl_opts["extractor_args"] = extractor_args
         if settings.get("youtube_alt_clients"):
             # Alternate clients frequently bypass YouTube's anonymous bot-check.
+            # Android/iOS clients currently bypass the 403 SABR challenge most reliably.
             ydl_opts.setdefault("extractor_args", {}).setdefault("youtube", {})["player_client"] = [
-                "tv", "web_safari", "web_embedded",
+                "android", "ios", "mweb", "tv", "web_safari", "web_embedded",
             ]
 
         # Automatic DPAPI Account & Session Injection for current target URL

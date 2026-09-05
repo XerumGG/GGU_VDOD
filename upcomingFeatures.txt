@@ -1,167 +1,41 @@
 GGU_VDOD - FEATURE ROADMAP
-==========================
 Sections: [DONE] shipped - [WIP] in progress - [PLANNED] queued work.
 Tags: #Refactor #Config #Fix #Feat #Test #UI #Security #USP
 
-
-==========================================================================================================
 COMPLETED / SHIPPED #Done
-=========================
-
 Core architecture
------------------
-Separate download engine from UI : UI sends a job request; engine returns structured progress, status, and errors. #Refactor #Done
-
-Central settings manager : Config controls defaults, paths, quality, UI, and user preferences. #Config #Done
-
-Crash report file : On crash, save app version, OS, traceback, and sanitized settings. #Fix #Done
-
+- Engine/UI separation: UI sends jobs, engine returns progress/status/errors. #Refactor #Done
+- Central settings manager for defaults, paths, quality, UI, preferences. #Config #Done
+- Crash reports: version, OS, traceback, sanitized settings. #Fix #Done
 Downloads & reliability
------------------------
-Reliable format selection : Exact requested quality or clearly show the closest available option instead of silent fallback. #Fix #Done
-
-Proper queue manager : Live queue rows with title, status, progress, speed, and ETA; playlist links auto-expand into individual items. #Feat #Done
-
-Retry failed downloads : One-click 'Retry Failed' re-queues failed items; automatic back-off retries for 429, timeout, network, and temporary extractor errors. #Feat #Done
-
-Batch import and export : Import links from txt/csv/json/clipboard and export failed links as txt. #Feat #Done
-
-Complete playlist mass download : Playlists expand into the queue and download sequentially with per-item progress. #Feat #Done
-
-File integrity check : Final file must exist with playable streams and not be a tiny broken placeholder. #Fix #Done
-
-Disk-space pre-flight check : Warn/fail before download if estimated size exceeds available free space. #Fix #Done
-
-Multiple video (.mp4, .mkv, .mov ...) and audio (.mp3, .wav ...) formats support and inter-conversion. #Done
-
-Advanced file, folder, path organization (preset templates). #Done
-
+- Reliable format selection: exact quality or closest-option notice, never silent fallback. #Fix #Done
+- Queue manager: live rows (title/status/progress/speed/ETA) + playlist auto-expansion. #Feat #Done
+- Retry failed: one-click re-queue + auto back-off retries (429/timeout/network). #Feat #Done
+- Batch import/export: txt/csv/json/clipboard in, failed links out. #Feat #Done
+- Playlist mass download: sequential per-item progress. #Feat #Done
+- Integrity check: real playable file, never a broken placeholder. #Fix #Done
+- Disk-space pre-flight check before download. #Fix #Done
+- 11 video + 10 audio formats with inter-conversion; preset path templates. #Done
 Errors & testing
-----------------
-Simple error explanations & natural-language error alert dialogs. #Fix #Done
-
-Master error specification dictionary (errors.txt). #Done
-
-Failed download recovery report : After a batch, generate a report listing failed links, reason, and recommended next action. #Feat #Done
-
-Download history upgrade : Title, source, date, format, folder, status, open file, open folder, retry, and copy URL. #Feat #Done
-
-Regression test matrix : Offline coverage for engine safeguards, error classification, UI bindings, and conversion options. #Test #Done
-
+- Plain-English error dialogs (21-category engine, see errors.txt). #Fix #Done
+- Failed-batch recovery reports with reason + next action. #Feat #Done
+- History upgrade: open file/folder, retry, copy URL. #Feat #Done
+- Offline regression test matrix. #Test #Done
 UI & experience
----------------
-Changeable key binds and zoom-in/out within boundary (Ctrl+"+"/"-"/scroll). #Done
+- Key bindings, zoom, font panel, 5 themes + custom colors. #Done
+- Ghost thumbnail loading, HQ thumbnail download with source label. #Done
+- Component update checker, ISO subtitle picker, link history, timestamp cutter. #Done
 
-Ghost interface loading : Ghosting on thumbnail loader. #Done
-
-Font panel for changing fonts. #Done
-
-Themes : Dark, fainted, orange, green-hacker, custom theme with save option exposing all UI color parameters. #Done
-
-Video thumbnail download with source mention (YouTube/x/Facebook) in high quality. #Done
-
-Update library : Check whether every component/library is up-to-date. #Done
-
-ISO subtitle language picker / show all supported languages. #Done
-
-History of video links. #Done
-
-Video time-stamp cutter (limited). #Done
-
-
-==============================================================================================================
 IN PROGRESS #WIP
-====================
+- Structured download job model (URL/title/format/path/status/error/progress/file). #Refactor
+- Test matrix expansion: live YouTube cases, cookie content, network failure. #Test
+- No duplicate converted output when source already matches. #Fix
+- Multi-link/playlist titles and previews. #Feat
 
-Structured download job model : Track URL, title, selected format, output path, status, error, progress, and final file for every item. #Refactor
-
-Regression test matrix expansion : Live YouTube single video, playlist, audio-only, MP4, unavailable quality, cookie-required content, network failure, conversion on/off. #Test
-
-No duplicate converted output by default : If the selected output is already correct, do not create both normal and .ggu-converted files. #Fix
-
-Handling multiple video titles and previews while pasting multiple different links or a playlist link. #Feat
-
-
-===============
-PLANNED #Feat
-===============
-
-Queue management
-----------------
-Pause, resume, cancel, retry controls : Resume partial files where platform and yt-dlp support it. #Feat
-
-Duplicate detection : If the same video already exists, ask to skip, overwrite, rename, or download better quality only. #Feat
-
-Broken link checker : Validate a pasted batch before starting download and mark unavailable/private/region-blocked links early. #Feat
-
-Speed limit option : Optional download speed limit so downloads do not consume the whole connection. #Feat
-
-Auto shutdown after queue : After all downloads finish: do nothing, sleep PC, shutdown PC, or open folder. #Feat
-
-Format & conversion tools
--------------------------
-Available qualities preview : Show actual video/audio qualities, codecs, containers, file size, and bitrate from yt-dlp after link preview. #Feat
-
-In-app format compare : Compare two formats by size, codec, resolution, FPS, and estimated quality before choosing. #Feat
-
-Download plan preview : Before download, show exactly what will happen: video quality, audio quality, merge format, conversion format, final filename. #Feat
-
-Smart preset buttons : Best MP4, Small File, Audio MP3, Archive Quality, Mobile Friendly, Editing Friendly. #Feat
-
-Creator export presets : Premiere Pro, DaVinci Resolve, Unreal Engine, Blender, FL Studio friendly codec/audio presets. #Feat
-
-Filename organizer : Templates like source/channel/title/quality/ext to keep output folders clean automatically. #Feat
-
-Audio loudness normalization : Optional local normalization for MP3/WAV/FLAC exports. #Feat
-
-Chapter-aware downloads : Detect chapters and optionally split output by chapters with clean filenames. #Feat
-
-Sponsor/intro segment tools : Optional chapter/segment skipping only when metadata is publicly available and user enables it. #Feat
-
-UI & interface
---------------
-Log filters : Simple, Details, and Errors-only views so normal users are not forced to read huge raw logs. #UI
-
-Better status bar : Ready/downloading state, active jobs, failed jobs, total speed, current ETA, and development build version clearly. #UI
-
-Output preview after download : Final filename, size, duration, format, and quick open/open-folder buttons. #UI
-
-Cleaner advanced panel : Split advanced settings into Download, Authentication, Conversion, Naming, Network, and Logs sections. #UI
-
-Consistent font and spacing system : Global font sizes, margins, and spacing defined once so every screen has the same proportion. #UI
-
-Theme stability : Dark default, validated custom colors, Reset theme button, safe fallback if saved theme is broken. #UI
-
-Automation & extras
--------------------
-Clipboard watcher : Optional mode that detects copied video links and offers preview automatically. #Feat
-
-Per-site rules : Remember preferred format, folder, filename pattern, cookies choice, and proxy per source domain. #Feat
-
-Thumbnail gallery : Save thumbnails and show downloaded thumbnail history by source and video title. #Feat
-
-Import from browser bookmarks/history : Pick copied/saved media links from browser exports. #Feat
-
-Manual update checker polish : App version, yt-dlp, ffmpeg, Python packages status without annoying popups. #Feat
-
-Portable mode : Config, logs, sessions, temp files, and downloads inside the app folder for USB/offline use. #Feat
-
-Background action : Runs silently in the background after main screen termination. #Feat
-
-Localization. #Feat                                               
-
-Library interface of all downloaded content separated for videos, audios, and images. #Feat
-
-Standalone audio player for downloaded audio with playlist-level organization. #Feat
-
-In-app video streaming with advanced fine-tuned controls. #Feat
-
-Security & privacy
-------------------
-Authorized session helper : Guide users through legal sign-in/cookies import when a site requires login; no DRM/private-access bypass. #Security
-
-Privacy cleanup center : One screen to clear cookies, temp files, logs, previews, history, and cached thumbnails. #Security
-
-Exploratory / USP
------------------
-Universal site coverage (social, streaming, live, adult) with age/bot-check handling via the user's own sessions. DRM, private-access, and geo-block circumvention are out of scope by policy - see USP.md. #USP
+PLANNED
+Queue: pause/resume partials #Feat · duplicate upgrade (skip/overwrite/rename/better-only) #Feat · broken-link pre-check #Feat · speed limit #Feat · auto shutdown/sleep/open-folder #Feat
+Formats: live quality preview #Feat · format compare #Feat · download plan preview #Feat · smart presets (Best MP4/Small/MP3/Archive/Mobile/Editing) #Feat · creator presets (Premiere/DaVinci/Unreal/Blender/FL Studio) #Feat · filename organizer #Feat · loudness normalization #Feat · chapter split #Feat · sponsor skipping #Feat
+UI: log filters (Simple/Details/Errors) #UI · richer status bar #UI · post-download preview card #UI · split advanced panel #UI · font/spacing system #UI · theme stability + reset #UI
+Extras: clipboard watcher #Feat · per-site rules #Feat · thumbnail gallery #Feat · browser bookmark import #Feat · updater polish #Feat · portable mode #Feat · background action #Feat · localization #Feat · media library #Feat · audio player #Feat · in-app streaming #Feat
+Security: authorized session helper (no DRM/private bypass) #Security · privacy cleanup center #Security
+Policy: universal coverage via user's own sessions; DRM/private/geo circumvention out of scope — see USP.md. #USP

@@ -61,6 +61,11 @@ def looks_like_bot_check(error):
             "sign in to confirm",
             "--cookies-from-browser",
             "use --cookies",
+            "unable to download video data",
+            "player response",
+            "nsig extraction failed",
+            "po token",
+            "sabr streaming",
         )
     )
 

@@ -130,19 +130,6 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
             action_type="retry",
         )
 
-    # 4b. GENERIC HTTP 403 FORBIDDEN (not Cloudflare, not rate limit)
-    if has_code("403") or "forbidden" in full_text or "http error 403" in full_text:
-        return ErrorDetails(
-            code="ERR_HTTP_FORBIDDEN",
-            title="Access Denied by Server (403)",
-            simple_message="The server refused to serve this request, usually because it wants a signed-in session or blocks automated tools.",
-            recommendation="Load your browser cookies under 'Advanced > Browser cookies' and try again. If the site still refuses, open the link in your browser to confirm it works there.",
-            severity="WARNING",
-            sound_type="MB_ICONEXCLAMATION",
-            raw_log=raw_log,
-            action_type="auth_setup",
-        )
-
     # 5. 18+ AGE RESTRICTED CONTENT
     if any(
         kw in full_text
@@ -203,6 +190,31 @@ def classify_error(error_input: Any, context: Optional[str] = None) -> ErrorDeta
             title="Platform Sign-In Verification",
             simple_message="The platform wants proof of a real browser session before serving this media. This happens regularly on YouTube and similar sites.",
             recommendation="Pick your browser under 'Browser cookies' in the Advanced panel, or store a session in the 'Account & Sessions' tab - then start the download again.",
+            severity="WARNING",
+            sound_type="MB_ICONEXCLAMATION",
+            raw_log=raw_log,
+            action_type="auth_setup",
+        )
+
+    # 7b. GENERIC HTTP 403 FORBIDDEN (fallback after specific 403 handlers)
+    if has_code("403") or "forbidden" in full_text or "http error 403" in full_text:
+        # Special handling for YouTube's common 403
+        if "youtube" in full_text or "youtu.be" in full_text or "unable to download video data" in full_text:
+            return ErrorDetails(
+                code="ERR_YOUTUBE_403",
+                title="YouTube Blocked the Download (403)",
+                simple_message="YouTube refused this download. This is YouTube's bot-check, not your internet. It happens on most anonymous downloads right now.",
+                recommendation="1. Click 'Retry Download' — the app will automatically retry with alternate YouTube clients (Android/iOS/TV).\n2. If it still fails: Advanced → Browser cookies → pick your browser (Chrome/Edge/Firefox) OR paste the YouTube link without &list=... part.\n3. Update yt-dlp: Help → Check for Updates & Dependencies → Update.",
+                severity="WARNING",
+                sound_type="MB_ICONEXCLAMATION",
+                raw_log=raw_log,
+                action_type="auth_setup",
+            )
+        return ErrorDetails(
+            code="ERR_HTTP_FORBIDDEN",
+            title="Access Denied by Server (403)",
+            simple_message="The server refused to serve this request, usually because it wants a signed-in session or blocks automated tools.",
+            recommendation="Load your browser cookies under 'Advanced > Browser cookies' and try again. If the site still refuses, open the link in your browser to confirm it works there.",
             severity="WARNING",
             sound_type="MB_ICONEXCLAMATION",
             raw_log=raw_log,

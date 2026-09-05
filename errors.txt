@@ -1,217 +1,67 @@
-===============================================================================
-                       GGU_VDOD MASTER ERROR DICTIONARY
-        Comprehensive Natural Language Error Classifications & Actions
-===============================================================================
+GGU_VDOD MASTER ERROR DICTIONARY
+=================================
+21 runtime error categories. Each shows what the app tells the user and what to do.
+Format: [CODE] Title | Trigger -> Fix (sound)
 
-This document specifies all 19 runtime error categories handled by GGU_VDOD.
-Each category defines the technical trigger, natural language explanation,
-actionable user guidance, and associated Windows sound chime.
+[ERR_NET_DISCONNECTED] Network Connection Lost
+  Trigger: reset/timeout/DNS errors -> Check Wi-Fi, click 'Retry Download'. (HAND)
 
--------------------------------------------------------------------------------
-1. NETWORK CONNECTION LOST (ERR_NET_DISCONNECTED)
--------------------------------------------------------------------------------
-Technical Triggers: ConnectionResetError, URLError, socket.timeout,
-                    DNSLookupError, NetworkUnreachable, NameResolutionError
-Human Title       : Network Connection Lost
-Simple Message    : Your internet or network connection was interrupted while communicating with the server.
-User Action       : 1. Check your Wi-Fi or Ethernet connection.
-                    2. Click 'Retry Download' to resume from where it left off.
-Audio Chime       : MB_ICONHAND (System Hand / Error Chime)
+[ERR_DISK_FULL] Disk Space Full
+  Trigger: Errno 28 / free space too low -> Free space or pick another drive. (STOP)
 
--------------------------------------------------------------------------------
-2. DISK SPACE FULL (ERR_DISK_FULL)
--------------------------------------------------------------------------------
-Technical Triggers: OSError [Errno 28] No space left on device,
-                    shutil.disk_usage() free space < 500 MB
-Human Title       : Disk Space Full
-Simple Message    : Your target hard drive does not have enough free space to save this media file.
-User Action       : 1. Delete unnecessary files to free up disk space.
-                    2. Or click 'Browse Save Folder' to select another drive (e.g. D:\ or E:\).
-Audio Chime       : MB_ICONSTOP (System Stop Chime)
+[ERR_CLOUDFLARE_403] Cloudflare Protection Blocked
+  Trigger: 403 + anti-bot/impersonate -> Import browser cookies. (EXCLAMATION)
 
--------------------------------------------------------------------------------
-3. CLOUDFLARE ANTI-BOT BLOCK (ERR_CLOUDFLARE_403)
--------------------------------------------------------------------------------
-Technical Triggers: HTTP Error 403: Forbidden, Cloudflare anti-bot challenge,
-                    generic:impersonate required
-Human Title       : Cloudflare Protection Blocked
-Simple Message    : The site's security system blocked automated requests with a Cloudflare anti-bot challenge.
-User Action       : 1. Impersonation is automatically active.
-                    2. Import browser cookies under 'Advanced > Browser cookies' to pass verification.
-Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
+[ERR_RATE_LIMITED_429] Server Rate Limited (HTTP 429)
+  Trigger: 429 / too many requests -> Wait 1-2 min, retry. (EXCLAMATION)
 
--------------------------------------------------------------------------------
-4. TOO MANY REQUESTS / RATE LIMITED (ERR_RATE_LIMITED_429)
--------------------------------------------------------------------------------
-Technical Triggers: HTTP Error 429: Too Many Requests, rate limited by server
-Human Title       : Server Rate Limited (HTTP 429)
-Simple Message    : The website is temporarily limiting downloads because too many requests were sent in a short time.
-User Action       : 1. Wait 1 to 2 minutes for the site rate limit to cool down.
-                    2. Click 'Retry Download' or use a proxy under Advanced settings.
-Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
+[ERR_AGE_RESTRICTED] 18+ Age Verification Required
+  Trigger: age gate -> Import age-verified browser cookies. (ASTERISK)
 
--------------------------------------------------------------------------------
-5. 18+ AGE VERIFICATION REQUIRED (ERR_AGE_RESTRICTED)
--------------------------------------------------------------------------------
-Technical Triggers: AgeRestricted, Sign in to confirm your age,
-                    adult content age-verification required
-Human Title       : 18+ Age Verification Required
-Simple Message    : This video is age-restricted and requires age confirmation before it can be downloaded.
-User Action       : 1. Click 'Confirm Age / Setup Auth' in the pop-up dialog.
-                    2. Import browser cookies or use Mailpit local test inbox for test accounts.
-Audio Chime       : MB_ICONASTERISK (System Asterisk / Information Chime)
+[ERR_PRIVATE_VIDEO] Private or Member-Only Content
+  Trigger: private/members-only -> Use cookies from an account with access. (EXCLAMATION)
 
--------------------------------------------------------------------------------
-6. PRIVATE OR MEMBER-ONLY CONTENT (ERR_PRIVATE_VIDEO)
--------------------------------------------------------------------------------
-Technical Triggers: Private video, Sign in if you have been granted access,
-                    This video is available to channel members only
-Human Title       : Private or Member-Only Content
-Simple Message    : This video is marked private or restricted to channel members only.
-User Action       : 1. Ensure you have an active subscription or access permission on the site.
-                    2. Load authenticated cookies from your browser under 'Advanced > Browser cookies'.
-Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
+[ERR_BOT_CHECK] Platform Sign-In Verification
+  Trigger: "confirm you're not a bot" / use --cookies -> Set Browser cookies or Account session. (EXCLAMATION)
 
--------------------------------------------------------------------------------
-7. VIDEO REMOVED OR DELETED (ERR_VIDEO_DELETED_404)
--------------------------------------------------------------------------------
-Technical Triggers: HTTP Error 404: Not Found, Video unavailable,
-                    This video has been removed by the uploader
-Human Title       : Video Removed or Deleted (404)
-Simple Message    : The requested video link is no longer available because it was deleted or removed.
-User Action       : 1. Verify that the link is correct and accessible in your web browser.
-                    2. If deleted by uploader, try searching for alternative upload mirrors.
-Audio Chime       : MB_ICONHAND (System Hand Chime)
+[ERR_YOUTUBE_403] YouTube Blocked the Download (403)
+  Trigger: YouTube 403 / unable to download video data -> Retry (auto alternate clients); else browser cookies or plain watch?v= link. (EXCLAMATION)
 
--------------------------------------------------------------------------------
-8. REGIONAL OR GEOGRAPHIC BLOCK (ERR_GEOBLOCKED)
--------------------------------------------------------------------------------
-Technical Triggers: The uploader has not made this video available in your country,
-                    Geoblocked, HTTP Error 451
-Human Title       : Country / Regional Block
-Simple Message    : The video uploader has restricted viewing to specific countries or geographical regions.
-User Action       : 1. Configure an allowed country proxy under 'Advanced > Proxy'.
-                    2. Or use a VPN set to an allowed region (e.g. US/UK).
-Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
+[ERR_VIDEO_DELETED_404] Video Removed or Deleted (404)
+  Trigger: 404 / unavailable / removed -> Check link in browser or find a mirror. (HAND)
 
--------------------------------------------------------------------------------
-9. FFMPEG / FFPROBE BINARY MISSING (ERR_FFMPEG_MISSING)
--------------------------------------------------------------------------------
-Technical Triggers: ffmpeg not found, FFmpeg/FFprobe binary missing,
-                    ffmpeg_location error
-Human Title       : FFmpeg / FFprobe Binary Missing
-Simple Message    : The FFmpeg encoder binary is missing or could not be loaded for media merging.
-User Action       : 1. Verify that 'ffmpeg.exe' and 'ffprobe.exe' exist in 'D:\GGU_VDOD\ffmpeg\'.
-                    2. Click 'Browse' under Advanced options to select your ffmpeg.exe path manually.
-Audio Chime       : MB_ICONSTOP (System Stop Chime)
+[ERR_GEOBLOCKED] Country / Regional Block
+  Trigger: not available in your country / 451 -> Use an allowed-country proxy/VPN. (EXCLAMATION)
 
--------------------------------------------------------------------------------
-10. FORMAT OR RESOLUTION UNAVAILABLE (ERR_FORMAT_UNAVAILABLE)
--------------------------------------------------------------------------------
-Technical Triggers: Requested format is not available,
-                    No video/audio format matching height
-Human Title       : Format / Resolution Unavailable
-Simple Message    : The exact requested resolution or codec is not offered for this specific video.
-User Action       : 1. Set Quality to 'Best available' or select another resolution (e.g. 1080p/720p).
-                    2. Use 'List Formats' under Advanced settings to see all live format codes.
-Audio Chime       : MB_ICONASTERISK (System Asterisk Chime)
+[ERR_FFMPEG_MISSING] FFmpeg / FFprobe Binary Missing
+  Trigger: ffmpeg not found -> Check D:\GGU_VDOD\ffmpeg\ or Browse FFmpeg. (STOP)
 
--------------------------------------------------------------------------------
-11. FOLDER PERMISSION DENIED (ERR_PERMISSION_DENIED)
--------------------------------------------------------------------------------
-Technical Triggers: PermissionError: [WinError 5] Access is denied,
-                    EACCES write error
-Human Title       : Folder Access Denied (Permission Error)
-Simple Message    : Windows denied permission to write files into the selected save directory.
-User Action       : 1. Click 'Browse Save Folder' and pick a directory in your user folder (e.g. Downloads/Videos).
-                    2. Run GGU_VDOD as Administrator if saving to system protected folders.
-Audio Chime       : MB_ICONSTOP (System Stop Chime)
+[ERR_FORMAT_UNAVAILABLE] Format / Resolution Unavailable
+  Trigger: requested format not available -> 'Best available' or List Formats. (ASTERISK)
 
--------------------------------------------------------------------------------
-12. CORRUPTED STREAM OR FILE (ERR_CORRUPT_STREAM)
--------------------------------------------------------------------------------
-Technical Triggers: 0-byte output file created, FFprobe health verification failed,
-                    truncated stream download
-Human Title       : Media Stream Integrity Failed
-Simple Message    : The downloaded output file is incomplete, 0 bytes, or failed media health inspection.
-User Action       : 1. Click 'Retry Download' to re-fetch the stream segments.
-                    2. If using custom format IDs, switch Quality to 'Best available'.
-Audio Chime       : MB_ICONHAND (System Hand Chime)
+[ERR_PERMISSION_DENIED] Folder Access Denied
+  Trigger: WinError 5 / access denied -> Pick a user folder (Downloads/Videos). (STOP)
 
--------------------------------------------------------------------------------
-13. COOKIE DATABASE LOCKED (ERR_DPAPI_COOKIE_LOCK)
--------------------------------------------------------------------------------
-Technical Triggers: Failed to decrypt with DPAPI, Cookie database locked,
-                    Chrome App-Bound Encryption error
-Human Title       : Browser Cookie Database Locked
-Simple Message    : Chrome or your web browser is currently open and locking its cookie database file.
-User Action       : 1. Close Chrome/Edge/Firefox completely before downloading.
-                    2. Or export a Netscape 'cookies.txt' file and use 'Import and validate'.
-Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
+[ERR_POSTPROCESS_FAILED] Conversion / Merge Step Failed
+  Trigger: postprocessing error / invalid input data -> Retry once, then switch format or reset codec fields to Auto. (EXCLAMATION)
 
--------------------------------------------------------------------------------
-14. PROXY CONNECTION FAILED (ERR_PROXY_FAILED)
--------------------------------------------------------------------------------
-Technical Triggers: ProxyError, SOCKS proxy connection refused,
-                    407 Proxy Authentication Required
-Human Title       : Proxy Connection Failed
-Simple Message    : Could not connect to the proxy server configured in Advanced settings.
-User Action       : 1. Check that the proxy host, port, username, and password are correct.
-                    2. Clear the proxy input field if you do not intend to use a proxy.
-Audio Chime       : MB_ICONHAND (System Hand Chime)
+[ERR_CORRUPT_STREAM] Media Stream Integrity Failed
+  Trigger: 0-byte / integrity check failed -> Retry to re-fetch segments. (HAND)
 
--------------------------------------------------------------------------------
-15. STREAM FRAGMENT HTTP DROP (ERR_FRAGMENT_FAILED)
--------------------------------------------------------------------------------
-Technical Triggers: Fragment download failed, HLS/DASH segment HTTP 502/503 error
-Human Title       : Stream Fragment Download Drop
-Simple Message    : One or more live stream segments (HLS/DASH) timed out or failed to download.
-User Action       : 1. Click 'Retry Download'. yt-dlp will automatically resume from the last saved fragment.
-                    2. Check your network stability.
-Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
+[ERR_DPAPI_COOKIE_LOCK] Browser Cookie Database Locked
+  Trigger: DPAPI decrypt / cookie copy failed -> Close the browser or use cookies.txt. (EXCLAMATION)
 
--------------------------------------------------------------------------------
-16. UNHANDLED APPLICATION ERROR (ERR_UNHANDLED_EXCEPTION)
--------------------------------------------------------------------------------
-Technical Triggers: General unhandled Python runtime exception
-Human Title       : Unexpected Application Error
-Simple Message    : An unexpected internal error occurred during the operation.
-User Action       : 1. A sanitized crash report has been recorded.
-                    2. Click 'Copy Technical Details' and report this to support or retry.
-Audio Chime       : MB_ICONSTOP (System Stop Chime)
+[ERR_PROXY_FAILED] Proxy Connection Failed
+  Trigger: proxy error / 407 -> Check host/port/credentials or clear proxy. (HAND)
 
--------------------------------------------------------------------------------
-17. GITHUB UPDATE CHECK RATE LIMITED (ERR_GITHUB_RATE_LIMIT)
--------------------------------------------------------------------------------
-Technical Triggers: HTTP Error 403: rate limit exceeded, api.github.com quota
-                    (60 unauthenticated requests/hour per IP)
-Human Title       : Update Check Temporarily Blocked
-Simple Message    : GitHub is temporarily limiting update checks from your network. This is not a problem with your PC or your settings.
-User Action       : 1. Wait about an hour and click 'Check for Updates' again.
-                    2. Or open the Releases page in a browser and download the latest installer manually.
-Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
-Note              : The updater now falls back to the quota-free Releases page automatically.
+[ERR_FRAGMENT_FAILED] Stream Fragment Download Drop
+  Trigger: HLS/DASH fragment failed -> Retry (auto-resumes from last fragment). (EXCLAMATION)
 
--------------------------------------------------------------------------------
-18. GENERIC HTTP 403 FORBIDDEN (ERR_HTTP_FORBIDDEN)
--------------------------------------------------------------------------------
-Technical Triggers: HTTP Error 403: Forbidden (without Cloudflare impersonate
-                    or rate-limit keywords)
-Human Title       : Access Denied by Server (403)
-Simple Message    : The server refused to serve this request, usually because it wants a signed-in session or blocks automated tools.
-User Action       : 1. Load your browser cookies under 'Advanced > Browser cookies' and retry.
-                    2. Open the link in your browser to confirm it is still valid.
-Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
+[ERR_GITHUB_RATE_LIMIT] Update Check Temporarily Blocked
+  Trigger: 403 rate limit on api.github.com -> Wait ~1h or download installer manually. App also falls back to the quota-free Releases page. (EXCLAMATION)
 
--------------------------------------------------------------------------------
-19. FFMPEG POSTPROCESSING / MERGE FAILED (ERR_POSTPROCESS_FAILED)
--------------------------------------------------------------------------------
-Technical Triggers: ERROR: Postprocessing: Error opening input files,
-                    Invalid data found when processing input, muxing errors
-Human Title       : Conversion / Merge Step Failed
-Simple Message    : The media was fetched but FFmpeg could not process or merge it. The downloaded data was likely incomplete, corrupted, or the site served an error page instead of the real stream.
-User Action       : 1. Click 'Retry Download' once.
-                    2. If it repeats, switch output format or quality (some sites serve broken streams for certain formats).
-                    3. Set custom codec/bitrate fields to 'Auto' if conversion was enabled.
-Audio Chime       : MB_ICONEXCLAMATION (System Exclamation Chime)
-===============================================================================
+[ERR_HTTP_FORBIDDEN] Access Denied by Server (403)
+  Trigger: generic 403 -> Load browser cookies and retry; verify link in browser. (EXCLAMATION)
+
+[ERR_UNHANDLED_EXCEPTION] Unexpected Application Error
+  Trigger: anything else -> Crash report recorded; Copy Technical Details / retry. (STOP)

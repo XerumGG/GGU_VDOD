@@ -4,6 +4,8 @@ See [Releases](../../releases) for the full, per-version notes — every release
 
 Highlights:
 
+- **v0.2.29 #085** — YouTube 403 auto-recovery via alternate player clients + dedicated blocked-download message
+
 - **v0.2.27 #083** — correctly detect completed post-processed files and simplify failure alerts
 
 - **v0.2.26 #082** — prevent unrelated Poppler ICU DLLs from contaminating the Qt package
