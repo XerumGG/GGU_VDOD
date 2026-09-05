@@ -1,5 +1,6 @@
 """Regression coverage: GitHub rate-limit classification, generic 403, and update fallback."""
 
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -110,6 +111,115 @@ class UpdateFallbackTests(unittest.TestCase):
 
         self.assertEqual(release["tag_name"], "v1.2.3")
         self.assertEqual(release["installer_size"], 123)
+
+
+class ChunkedResponse(FakeResponse):
+    """Fake response that yields the body in small chunks like a real download."""
+
+    def read(self, n=-1):
+        if not self._body:
+            return b""
+        out, self._body = self._body[:64], self._body[64:]
+        return out
+
+
+class InstallerDownloadTests(unittest.TestCase):
+    def _run_download(self, fake_urlopen, **kwargs):
+        import tempfile
+
+        dest = os.path.join(tempfile.gettempdir(), "ggu_test_setup.exe")
+        try:
+            if os.path.exists(dest):
+                os.remove(dest)
+        except OSError:
+            pass
+        with mock.patch.object(updates.urllib.request, "urlopen", side_effect=fake_urlopen):
+            result = updates.download_installer("https://x/s.exe", dest, **kwargs)
+        return dest, result
+
+    def test_successful_download_reports_progress(self):
+        seen = []
+        body = b"MZ" + b"\x00" * 500
+
+        def fake_urlopen(request, timeout=30):
+            return ChunkedResponse(url=request.full_url, body=body,
+                                   headers={"Content-Length": str(len(body))})
+
+        dest, result = self._run_download(
+            fake_urlopen, progress_cb=lambda done, total: seen.append((done, total))
+        )
+        try:
+            self.assertEqual(result, dest)
+            self.assertTrue(seen)
+            self.assertEqual(seen[-1][0], len(body))
+        finally:
+            os.remove(dest)
+
+    def test_cancel_removes_partial_file(self):
+        body = b"MZ" + b"\x00" * 500
+
+        def fake_urlopen(request, timeout=30):
+            return ChunkedResponse(url=request.full_url, body=body)
+
+        import tempfile
+        dest = os.path.join(tempfile.gettempdir(), "ggu_test_cancel.exe")
+        with mock.patch.object(updates.urllib.request, "urlopen", side_effect=fake_urlopen):
+            with self.assertRaises(InterruptedError):
+                updates.download_installer(
+                    "https://x/s.exe", dest, should_stop=lambda: True
+                )
+        self.assertFalse(os.path.exists(dest))
+
+    def test_stalled_connection_raises_timeout(self):
+        body = b"MZ" + b"\x00" * 500
+
+        def fake_urlopen(request, timeout=30):
+            return ChunkedResponse(url=request.full_url, body=body)
+
+        import tempfile
+        dest = os.path.join(tempfile.gettempdir(), "ggu_test_stall.exe")
+        try:
+            with mock.patch.object(updates.urllib.request, "urlopen", side_effect=fake_urlopen):
+                with self.assertRaises(TimeoutError):
+                    updates.download_installer(
+                        "https://x/s.exe", dest, stall_deadline_s=0
+                    )
+        finally:
+            if os.path.exists(dest):
+                os.remove(dest)
+
+
+class VerifyInstallerTests(unittest.TestCase):
+    def test_missing_and_small_and_html_files_rejected(self):
+        import tempfile
+
+        self.assertFalse(updates.verify_installer_file(""))
+        self.assertFalse(updates.verify_installer_file(os.path.join(tempfile.gettempdir(), "nope.exe")))
+        small = os.path.join(tempfile.gettempdir(), "ggu_small.exe")
+        html = os.path.join(tempfile.gettempdir(), "ggu_html.exe")
+        try:
+            with open(small, "wb") as f:
+                f.write(b"MZ" + b"\x00" * 100)
+            with open(html, "wb") as f:
+                f.write(b"<html>Not Found</html>" + b" " * (6 * 1024 * 1024))
+            self.assertFalse(updates.verify_installer_file(small))
+            self.assertFalse(updates.verify_installer_file(html))
+        finally:
+            for path in (small, html):
+                if os.path.exists(path):
+                    os.remove(path)
+
+    def test_realistic_installer_accepted(self):
+        import tempfile
+
+        path = os.path.join(tempfile.gettempdir(), "ggu_good.exe")
+        try:
+            with open(path, "wb") as f:
+                f.write(b"MZ" + b"\x00" * (6 * 1024 * 1024))
+            self.assertTrue(updates.verify_installer_file(path))
+        finally:
+            if os.path.exists(path):
+                os.remove(path)
 
 
 if __name__ == "__main__":

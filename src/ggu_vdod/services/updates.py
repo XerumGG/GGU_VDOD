@@ -107,21 +107,64 @@ def is_newer(latest_tuple):
     return latest_tuple > current_version_tuple()
 
 
-def download_installer(url, dest_path, progress_cb=None, timeout=30):
-    """Stream the setup exe to dest_path; progress_cb(bytes_done, total_bytes)."""
+MIN_INSTALLER_BYTES = 5 * 1024 * 1024
+
+
+def verify_installer_file(path, min_bytes=MIN_INSTALLER_BYTES):
+    """True only if path exists, is plausibly large, and starts with the MZ exe header.
+
+    Catches truncated downloads and HTML error pages saved with an .exe name.
+    """
+    try:
+        if not path or not os.path.isfile(path):
+            return False
+        if os.path.getsize(path) < min_bytes:
+            return False
+        with open(path, "rb") as f:
+            return f.read(2) == b"MZ"
+    except OSError:
+        return False
+
+
+def download_installer(url, dest_path, progress_cb=None, timeout=30,
+                       stall_deadline_s=90, should_stop=None):
+    """Stream the setup exe to dest_path; progress_cb(bytes_done, total_bytes).
+
+    Raises TimeoutError if no bytes arrive for stall_deadline_s seconds, and
+    InterruptedError if should_stop() returns True (partial file is removed).
+    """
+    import time as _time
     request = urllib.request.Request(url, headers={"User-Agent": "GGU_VDOD-Updater"})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         total = int(response.headers.get("Content-Length") or 0)
         done = 0
-        with open(dest_path, "wb") as f:
-            while True:
-                chunk = response.read(65536)
-                if not chunk:
-                    break
-                f.write(chunk)
-                done += len(chunk)
-                if progress_cb:
-                    progress_cb(done, total)
+        last_activity = _time.monotonic()
+        try:
+            with open(dest_path, "wb") as f:
+                while True:
+                    if should_stop is not None and should_stop():
+                        raise InterruptedError("cancelled")
+                    if _time.monotonic() - last_activity > stall_deadline_s:
+                        raise TimeoutError(
+                            f"no data received for {stall_deadline_s}s (stalled connection)"
+                        )
+                    chunk = response.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    done += len(chunk)
+                    last_activity = _time.monotonic()
+                    if progress_cb:
+                        progress_cb(done, total)
+        except BaseException:
+            if should_stop is not None and should_stop():
+                try:
+                    if os.path.exists(dest_path):
+                        os.remove(dest_path)
+                except OSError:
+                    pass
+                raise InterruptedError("cancelled")
+            raise
     return dest_path
 
 

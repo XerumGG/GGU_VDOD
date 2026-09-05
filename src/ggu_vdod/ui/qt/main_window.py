@@ -284,32 +284,47 @@ class UpdateDownloadWorker(QThread):
 
     def run(self):
         try:
-            import urllib.request
-            request = urllib.request.Request(self.url, headers={"User-Agent": "GGU_VDOD-Updater"})
-            with urllib.request.urlopen(request, timeout=30) as response:
-                total = int(response.headers.get("Content-Length") or 0)
-                done = 0
-                last_pct = -1
-                with open(self.dest, "wb") as f:
-                    while True:
-                        if self._is_cancelled:
-                            try:
-                                if os.path.exists(self.dest):
-                                    os.remove(self.dest)
-                            except Exception:
-                                pass
-                            return
-                        chunk = response.read(65536)
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        done += len(chunk)
-                        pct = int(done * 100 / total) if total else 0
-                        if pct != last_pct or done == total:
-                            last_pct = pct
-                            self.progressed.emit(done, total)
-            if not self._is_cancelled:
-                self.finished_ok.emit(self.dest)
+            from ...services import updates
+            last_error = ""
+            for _attempt in (1, 2):
+                if self._is_cancelled:
+                    return
+                last_pct = [-1]
+
+                def _throttled_progress(done, total):
+                    pct = int(done * 100 / total) if total else 0
+                    if pct != last_pct[0]:
+                        last_pct[0] = pct
+                        self.progressed.emit(done, total)
+
+                try:
+                    updates.download_installer(
+                        self.url,
+                        self.dest,
+                        progress_cb=_throttled_progress,
+                        should_stop=lambda: self._is_cancelled,
+                    )
+                    if self._is_cancelled:
+                        return
+                    if not updates.verify_installer_file(self.dest):
+                        raise RuntimeError(
+                            "the downloaded file failed verification "
+                            "(incomplete download or a server error page, not an installer)"
+                        )
+                    self.finished_ok.emit(self.dest)
+                    return
+                except InterruptedError:
+                    return
+                except Exception as error:
+                    last_error = str(error) or type(error).__name__
+                    if self._is_cancelled:
+                        return
+                    try:
+                        if os.path.exists(self.dest):
+                            os.remove(self.dest)
+                    except Exception:
+                        pass
+            self.failed.emit(last_error or "download failed")
         except Exception as error:
             if not self._is_cancelled:
                 self.failed.emit(str(error))
@@ -2209,8 +2224,6 @@ class QtMainWindow(QMainWindow):
                 QMessageBox.StandardButton.Yes,
             )
             if answer == QMessageBox.StandardButton.Yes:
-                from PySide6.QtGui import QDesktopServices
-                from PySide6.QtCore import QUrl
                 QDesktopServices.openUrl(QUrl(release.get("html_url") or "https://github.com/XerumGG/GGU_VDOD/releases/latest"))
             return
 
@@ -2228,6 +2241,9 @@ class QtMainWindow(QMainWindow):
 
         import tempfile
         dest = os.path.join(tempfile.gettempdir(), f"GGU_VDOD-setup-{release['tag_name']}.exe")
+        self.log_box.appendPlainText(
+            f"[UPDATE] Downloading {release['tag_name']} — the app will close when the setup launches."
+        )
         self._progress = QProgressDialog("Connecting to download update…", "Cancel", 0, 100, self)
         self._progress.setWindowTitle("GGU_VDOD Update")
         self._progress.setMinimumDuration(0)
@@ -2254,18 +2270,66 @@ class QtMainWindow(QMainWindow):
 
     def _on_update_download_failed(self, error):
         if hasattr(self, "_progress") and self._progress:
-            self._progress.cancel()
-        QMessageBox.critical(self, "Update download failed", f"Could not download update installer:\n{error}")
+            try:
+                self._progress.cancel()
+            except Exception:
+                pass
+        self.log_box.appendPlainText(f"[UPDATE] Download failed: {error}")
+        box = QMessageBox(self)
+        box.setWindowTitle("Update download failed")
+        box.setIcon(QMessageBox.Icon.Critical)
+        box.setText(
+            f"Could not download the update installer:\n{error}\n\n"
+            "Open the Releases page to download it manually?"
+        )
+        open_btn = box.addButton("Open Releases page", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+        if box.clickedButton() is open_btn:
+            QDesktopServices.openUrl(QUrl("https://github.com/XerumGG/GGU_VDOD/releases/latest"))
 
     def _launch_update(self, path):
+        from ...services import updates
         if hasattr(self, "_progress") and self._progress:
-            self._progress.setValue(100)
-            self._progress.close()
+            try:
+                self._progress.setValue(100)
+                self._progress.close()
+            except Exception:
+                pass
+        if not updates.verify_installer_file(path):
+            try:
+                if path and os.path.exists(path):
+                    os.remove(path)
+            except Exception:
+                pass
+            self.log_box.appendPlainText("[UPDATE] Downloaded file failed verification; deleted.")
+            box = QMessageBox(self)
+            box.setWindowTitle("Update failed verification")
+            box.setIcon(QMessageBox.Icon.Critical)
+            box.setText(
+                "The downloaded update file was incomplete or invalid, so it was deleted.\n\n"
+                "Open the Releases page to download it manually?"
+            )
+            open_btn = box.addButton("Open Releases page", QMessageBox.ButtonRole.AcceptRole)
+            box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
+            box.exec()
+            if box.clickedButton() is open_btn:
+                QDesktopServices.openUrl(QUrl("https://github.com/XerumGG/GGU_VDOD/releases/latest"))
+            return  # do NOT quit: the app is still the working version
+        self.log_box.appendPlainText(f"[UPDATE] Launching installer: {path}")
         try:
             os.startfile(path)
         except Exception:
             import subprocess
-            subprocess.Popen([path], shell=True)
+            try:
+                subprocess.Popen([path], shell=True)
+            except Exception as err:
+                QMessageBox.critical(
+                    self,
+                    "Could not launch installer",
+                    f"The update downloaded to:\n{path}\n\nRun it manually to finish updating.\n\nError: {err}",
+                )
+                return  # do NOT quit: let the user run it by hand
         QApplication.quit()
 
     def _run_uninstall_flow(self):
