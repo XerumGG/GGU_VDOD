@@ -1,55 +1,46 @@
 # GGU_VDOD
 
-Free Windows desktop app to download **video, audio, and images from 1,700+ websites** — then convert them to any format. Paste a link, pick quality, download. No ads, no accounts, no telemetry.
+A free Windows app for downloading videos, audio and images, and converting them to whatever format you need. Paste a link, pick a quality, hit download. That's pretty much it.
 
-## Where it downloads from
+It's built on yt-dlp (1700+ supported sites) with FFmpeg bundled in, so there's nothing else to install. No ads, no accounts, nothing phoning home.
 
-Engine: yt-dlp (1,752 extractors, verified in this build) + bundled FFmpeg.
+## What you can download from
 
-| Category | Sites |
-|---|---|
-| Video platforms | YouTube (videos, playlists, channels, Shorts), Vimeo, Dailymotion, Rumble, Bilibili, NicoNico, VK, PeerTube, Streamable, Wistia |
-| Social media | TikTok, Instagram, X/Twitter, Facebook, Reddit, Snapchat, Pinterest, Tumblr, LinkedIn |
-| Live & streams | Twitch (live + VODs), YouTube Live, Kick, any HLS/DASH stream, arte, BBC, CNN, ESPN |
-| Music & audio | SoundCloud, Bandcamp, Mixcloud, podcasts |
-| Adult (18+) | Pornhub, XHamster, XVideos, RedTube, YouPorn, SpankBang — same pipeline, no separate flow |
-| Anything else | Direct MP4/WebM links, generic HLS/DASH, plus any local file (convert / inspect) |
+YouTube (videos, playlists, channels, Shorts), TikTok, Instagram, X/Twitter, Facebook, Reddit, Twitch (live and VODs), Kick, Vimeo, Dailymotion, Rumble, Bilibili, NicoNico, SoundCloud, Bandcamp, Mixcloud, BBC / CNN / ESPN / arte, Pornhub, XHamster, XVideos and other adult tubes, direct MP4 links, HLS/DASH streams — and any file already sitting on your disk, if you just want to convert it.
 
-Why it works where others fail: automatic retry with alternate YouTube clients (Android/iOS/TV), browser-cookie import for sign-in and age-gated content, TLS impersonation — and every failure explained in plain English with a fix.
+If a video needs you logged in or age-verified, import your browser cookies and it downloads the same way it plays in your browser. If YouTube throws a 403 or bot check at you, the app retries by itself with different clients.
 
-One honest limit: DRM-protected content (Netflix, Spotify, …) can't be downloaded — by anyone, legally. See [USP.md](USP.md).
+One thing it can't do: DRM stuff like Netflix or Spotify. Nothing can legally download those, so don't bother trying.
 
-## Strengths
+## What it does
 
-- **Errors that talk to humans** — a 21-category classifier turns `HTTP Error 403` into cause + fix (full spec: [errors.txt](errors.txt))
-- **Self-healing downloads** — alternate-client retry, cookieless fallback, subtitle fallback, network back-off
-- **Safe by default** — disk-space pre-flight check, download integrity verification, duplicate detection, failed-batch recovery reports
-- **Real queue manager** — live rows (status / progress / speed / ETA), playlist auto-expansion, one-click Retry Failed
-- **Batch friendly** — import links from txt/csv/json/clipboard, export failed links
-- **Full converter** — 11 video + 10 audio formats, codec/bitrate/resolution control, timestamp trim, subtitle & thumbnail embedding
-- **Private** — local-first, DPAPI-encrypted sessions, sanitized crash reports, clean uninstaller
-- **Personal** — 11 languages, 5 themes + fully custom colors, fonts, zoom, key bindings, history, media library
-- **Maintained** — in-app updater with silent install
+- Downloads up to 4K with playlists, batch links and a live queue showing progress, speed and ETA per item
+- Converts between MP4, MKV, MOV, AVI, WebM, MP3, FLAC, WAV, OGG, Opus, M4A, WMA, AIFF, ALAC and more
+- Explains errors in normal words and tells you how to fix them
+- Checks free disk space before downloading, verifies files aren't broken, and writes a recovery report for failed batches
+- Remembers your history, spots duplicates, trims clips by timestamp
+- 11 languages, dark themes you can recolor completely, zoom, custom shortcuts
+- Updates itself from inside the app
 
 ## Install
 
-- **Setup (recommended):** download `GGU_VDOD-setup-vX.Y.Z.exe` from [Releases](../../releases/latest) → run it. No admin needed.
-- **Portable:** grab `GGU_VDOD-windows-portable.zip`, extract, run.
-- **Update:** click **Check for Updates** inside the app (top-right).
+Grab `GGU_VDOD-setup-vX.Y.Z.exe` from [Releases](../../releases/latest) and run it (no admin needed). Or take the portable zip if you'd rather not install anything.
+
+To update later, click **Check for Updates** in the top-right of the app.
 
 | | |
 |---|---|
-| **Developer** | XerumGG |
-| **Stack** | Python · PySide6 · yt-dlp · FFmpeg |
-| **License** | MIT |
+| Made by | XerumGG |
+| Built with | Python, PySide6, yt-dlp, FFmpeg |
+| License | MIT |
 
-More docs: [USP](USP.md) · [FAQ](docs/FAQ.md) · [Installation](docs/Installation.md) · [Architecture](docs/Architecture.md) · [Roadmap](docs/Roadmap.md) · [Changelog](CHANGELOG.md)
+More reading: [why this exists](USP.md) · [FAQ](docs/FAQ.md) · [install details](docs/Installation.md) · [how it's built](docs/Architecture.md) · [roadmap](docs/Roadmap.md) · [changelog](CHANGELOG.md)
 
-## Build from source
+## Build it yourself
 
 ```powershell
 pip install -r requirements.txt pyinstaller
 .\build_exe.ps1
 ```
 
-Output: `dist\GGU_VDOD\`. Installer requires [Inno Setup 6](https://jrsoftware.org/isdl.php).
+It lands in `dist\GGU_VDOD\`. The installer step needs [Inno Setup 6](https://jrsoftware.org/isdl.php).

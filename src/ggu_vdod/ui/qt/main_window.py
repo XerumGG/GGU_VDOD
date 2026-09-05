@@ -554,9 +554,9 @@ class QtMainWindow(QMainWindow):
         self.uninstall_btn.setToolTip("Remove GGU_VDOD from this computer. Optionally wipe settings, sessions, and history.")
         self.uninstall_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.uninstall_btn.setStyleSheet(
-            "QPushButton { background: #b3261e; color: white; border: none;"
+            "QPushButton { background: transparent; color: #e5484d; border: 1px solid #b3261e;"
             " border-radius: 4px; padding: 1px 12px; min-height: 16px; }"
-            "QPushButton:hover { background: #d93a30; }"
+            "QPushButton:hover { background: rgba(179, 38, 30, 0.18); border-color: #e5484d; }"
         )
         self.uninstall_btn.clicked.connect(self._run_uninstall_flow)
         corner_row.addWidget(self.uninstall_btn)
@@ -565,9 +565,9 @@ class QtMainWindow(QMainWindow):
         self.update_btn.setToolTip("Download and install the latest version from GitHub Releases.")
         self.update_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.update_btn.setStyleSheet(
-            "QPushButton { background: #1f6feb; color: white; border: none;"
+            "QPushButton { background: transparent; color: #4c9aff; border: 1px solid #1f6feb;"
             " border-radius: 4px; padding: 1px 12px; min-height: 16px; }"
-            "QPushButton:hover { background: #3a86ff; }"
+            "QPushButton:hover { background: rgba(31, 111, 235, 0.18); border-color: #4c9aff; }"
         )
         self.update_btn.clicked.connect(self._check_for_updates_clicked)
         corner_row.addWidget(self.update_btn)
