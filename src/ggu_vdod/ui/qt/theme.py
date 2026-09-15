@@ -14,9 +14,7 @@ from PySide6.QtGui import QColor, QPalette
 # ---------------------------------------------------------------------------
 # Theme presets
 # ---------------------------------------------------------------------------
-# The palettes avoid absolute black/white wherever possible.  That reduces
-# harsh contrast while keeping normal text comfortably readable for long
-# sessions.  Light themes use dark text and dark-theme presets use soft-white
+#   Light themes use dark text and dark-theme presets use soft-white
 # text instead of pure white.
 
 DEFAULT_THEME = {
@@ -27,16 +25,37 @@ DEFAULT_THEME = {
     "text": "#ffffff",
     "muted_text": "#939597",
     "border": "#303540",
-    "accent": "#e62727e7",
-    "accent_hover": "#8f0808e6",
+    "accent": "#676767",
+    "accent_hover": "#2b2a2aff",
     "accent_text": "#ffffff",
     "success": "#70d6a0",
     "warning": "#efc77c",
+    "media_background": "#101014",
 }
 
 THEME_PRESETS = {
     # Balanced everyday dark theme.  This is the recommended default.
     "Dark": DEFAULT_THEME,
+   # Clean light theme.  Slightly warm neutrals prevent the starkness of
+    # pure white while retaining strong text contrast.
+    "White": {
+        **DEFAULT_THEME,
+        "window_background": "#ffffff",
+        "panel_background": "#ffffff",
+        "input_background": "#eff5f5",
+        "log_background": "#f5f5f699",
+        "text": "#0F0E0E",
+        "muted_text": "#333334",
+        "border": "#abafb7",
+        "accent": "#565758",
+        "accent_hover": "#2a2a2b",
+        "accent_text": "#ffffff",
+        "success": "#1D2A24",
+        "warning": "#9a6d00",
+        "media_background": "#AEAEB0",
+
+    },
+
 
     # Low-saturation dark grey for long sessions / reduced visual fatigue.
     "Grey": {
@@ -55,39 +74,21 @@ THEME_PRESETS = {
         "warning": "#efc77c",
     },
 
-    # Clean light theme.  Slightly warm neutrals prevent the starkness of
-    # pure white while retaining strong text contrast.
-    "White": {
-        **DEFAULT_THEME,
-        "window_background": "#ffffff",
-        "panel_background": "#ffffff",
-        "input_background": "#eff5f5",
-        "log_background": "#f5f5f699",
-        "text": "#0F0E0E",
-        "muted_text": "#333334",
-        "border": "#abafb7",
-        "accent": "#565758",
-        "accent_hover": "#2a2a2b",
-        "accent_text": "#ffffff",
-        "success": "#278457",
-        "warning": "#9a6d00",
-    },
-
-    # A softer light-grey option for users who find a white UI too bright.
+    # Softer light-grey theme with stronger surface separation and readability.
     "Light Grey": {
         **DEFAULT_THEME,
-        "window_background": "#a8abb0",
-        "panel_background": "#a8abb0",
-        "input_background": "#969494",
-        "log_background": "#656666",
-        "text": "#27292d",
-        "muted_text": "#686d75",
-        "border": "#8b8c90",
-        "accent": "#565758",
-        "accent_hover": "#2a2a2b",
-        "accent_text": "#989393",
-        "success": "#385e4c",
-        "warning": "#8c6800",
+        "window_background": "#d6d6d7",
+        "panel_background": "#d6d6d7",
+        "input_background": "#e2e6eb",
+        "log_background": "#e8ebef",
+        "text": "#17191c",
+        "muted_text": "#4f565f",
+        "border": "#aeb5bd",
+        "accent": "#4b5563",
+        "accent_hover": "#303844",
+        "accent_text": "#ffffff",
+        "success": "#246b45",
+        "warning": "#8a5a00",
     },
 
     "Orange": {
@@ -96,10 +97,27 @@ THEME_PRESETS = {
         "accent_hover": "#dc8740",
         "accent_text": "#21170e",
     },
+    
+    "Yellow": {
+        **DEFAULT_THEME,
+        "window_background": "#171717",
+        "panel_background": "#1e1e1e",
+        "input_background": "#282820",
+        "log_background": "#121212",
+        "text": "#f2f2ee",
+        "muted_text": "#b8b8a8",
+        "border": "#4a4938",
+        "accent": "#f6c945",
+        "accent_hover": "#d9aa24",
+        "accent_text": "#17130a",
+        "success": "#72d39a",
+        "warning": "#f0b429",
+        "media_background": "#1a1a17",
+    },
 
     "Midnight Blue": {
         **DEFAULT_THEME,
-        "window_background": "#020127",
+        "window_background": "#020B1C",
         "panel_background": "#020B1C",
         "input_background": "#202c43",
         "log_background": "#0c1220",
@@ -117,8 +135,8 @@ THEME_PRESETS = {
         **DEFAULT_THEME,
         "window_background": "#271D22",
         "panel_background": "#271D22",
-        "input_background": "#2b2025",
-        "log_background": "#120e10",
+        "input_background": "#513944",
+        "log_background": "#301824",
         "text": "#f0e7ea",
         "muted_text": "#b39da4",
         "border": "#46343b",
@@ -127,6 +145,8 @@ THEME_PRESETS = {
         "accent_text": "#26151c",
         "success": "#fb21e5",
         "warning": "#f79efa",
+        "media_background": "#301128",
+
     },
 
             "Purple": {
@@ -134,7 +154,7 @@ THEME_PRESETS = {
         "window_background": "#1d1928",
         "panel_background": "#1d1928",
         "input_background": "#272033",
-        "log_background": "#100e15",
+        "log_background": "#1c1129",
         "text": "#eeeaf7",
         "muted_text": "#9288ab",
         "border": "#393047",
@@ -143,6 +163,8 @@ THEME_PRESETS = {
         "accent_text": "#17111f",
         "success": "#662dec",
         "warning": "#be90f3",
+        "media_background": "#210a2b",
+
     },
 
             "Natural Green": {
@@ -150,7 +172,7 @@ THEME_PRESETS = {
         "window_background": "#101613",
         "panel_background": "#101613",
         "input_background": "#1d2720",
-        "log_background": "#0b100d",
+        "log_background": "#04130a",
         "text": "#dcefe2",
         "muted_text": "#91ab98",
         "border": "#30483a",
@@ -159,6 +181,8 @@ THEME_PRESETS = {
         "accent_text": "#0c1a11",
         "success": "#7ee8a7",
         "warning": "#d8c17b",
+        "media_background": "#0a1a0d",
+
     },
 }
 
@@ -176,33 +200,50 @@ THEME_COLOR_FIELDS = (
     ("accent_text", "Accent text"),
     ("success", "Success text"),
     ("warning", "Warning text"),
+    ("media_background", "Media surfaces"),
 )
 
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
+HEX_COLOR_ALPHA_RE = re.compile(r"^#[0-9a-fA-F]{8}$")
 
 
 # Typography and spacing are deliberately stable. Zoom changes the base size,
 # while these ratios keep labels, fields and headings proportional.
 BASE_FONT_SIZE = 10
 MIN_FONT_SIZE = 8
-MAX_FONT_SIZE = 18
+MAX_FONT_SIZE = 16
 BASE_SPACING = 10
 BASE_MARGIN = 16
 
 
 def is_valid_theme_color(value):
-    """Return whether *value* is a complete six-digit hex color."""
-    return bool(HEX_COLOR_RE.fullmatch(str(value or "").strip()))
+    """Return whether *value* is a six- or eight-digit hex color.
+
+    Eight-digit values use trailing-alpha form (#RRGGBBAA); QSS cannot parse
+    them, so normalize_theme() folds them down to opaque #RRGGBB.
+    """
+    text = str(value or "").strip()
+    return bool(HEX_COLOR_RE.fullmatch(text) or HEX_COLOR_ALPHA_RE.fullmatch(text))
+
+
+def _fold_alpha(text):
+    """Drop the trailing alpha byte from #RRGGBBAA so QSS can parse it."""
+    text = str(text or "").strip()
+    if HEX_COLOR_ALPHA_RE.fullmatch(text):
+        return ("#" + text[1:7]).lower()
+    return text.strip().lower()
 
 
 def normalize_theme(theme=None):
     """Return a safe complete theme, falling back to Dark per invalid field."""
     source = theme if isinstance(theme, dict) else {}
     result = deepcopy(DEFAULT_THEME)
+    for key in result:
+        result[key] = _fold_alpha(result[key])
     for key, _label in THEME_COLOR_FIELDS:
         value = source.get(key)
         if is_valid_theme_color(value):
-            result[key] = value.strip().lower()
+            result[key] = _fold_alpha(value)
     return result
 
 
@@ -239,6 +280,7 @@ def apply_theme(application, theme=None, base_font_size=BASE_FONT_SIZE):
     accent_text = colors["accent_text"]
     success = colors["success"]
     warning = colors["warning"]
+    media = colors["media_background"]
 
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor(window))
@@ -325,6 +367,23 @@ def apply_theme(application, theme=None, base_font_size=BASE_FONT_SIZE):
 
         QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus {{
             border-color: {accent};
+        }}
+
+        QComboBox:hover {{
+            border-color: {accent};
+        }}
+
+        QLabel#previewImage {{
+            background: {media};
+            border: 1px solid {border};
+            border-radius: 6px;
+        }}
+
+        QPlainTextEdit#mailContent {{
+            background: {media};
+            color: {text};
+            font-family: Consolas, monospace;
+            font-size: 12px;
         }}
 
         QPlainTextEdit#logBox {{

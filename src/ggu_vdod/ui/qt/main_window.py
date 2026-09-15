@@ -559,6 +559,7 @@ class QtMainWindow(QMainWindow):
             "QPushButton:hover { background: rgba(179, 38, 30, 0.18); border-color: #e5484d; }"
         )
         self.uninstall_btn.clicked.connect(self._run_uninstall_flow)
+        self.uninstall_btn.setMinimumWidth(self.uninstall_btn.sizeHint().width() + 16)
         corner_row.addWidget(self.uninstall_btn)
 
         self.update_btn = QPushButton("Check for Updates")
@@ -570,6 +571,7 @@ class QtMainWindow(QMainWindow):
             "QPushButton:hover { background: rgba(31, 111, 235, 0.18); border-color: #4c9aff; }"
         )
         self.update_btn.clicked.connect(self._check_for_updates_clicked)
+        self.update_btn.setMinimumWidth(self.update_btn.sizeHint().width() + 16)
         corner_row.addWidget(self.update_btn)
 
         menubar.setCornerWidget(corner, Qt.Corner.TopRightCorner)
@@ -597,6 +599,7 @@ class QtMainWindow(QMainWindow):
         self.subtitle_lbl = QLabel(t("app.subtitle", "Paste one or more video links below (one per line)"))
         self.subtitle_lbl.setObjectName("muted")
         self.subtitle_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self.subtitle_lbl.setWordWrap(True)
         layout.addWidget(self.page_title_lbl)
         layout.addWidget(self.subtitle_lbl)
 
@@ -627,6 +630,8 @@ class QtMainWindow(QMainWindow):
         self.prev_batch_btn.clicked.connect(self._nav_prev_batch)
 
         self.batch_counter_lbl = QLabel(t("preview.item_counter", "Item 0 / 0", current=0, total=0))
+        self.batch_counter_lbl.setMinimumWidth(84)
+        self.batch_counter_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
         self.batch_counter_lbl.setObjectName("muted")
         self.batch_counter_lbl.setStyleSheet("font-weight: 600; padding: 0 6px;")
 
@@ -644,16 +649,18 @@ class QtMainWindow(QMainWindow):
 
         preview_body = QHBoxLayout()
         self.preview_image = QLabel(t("preview.no_preview", "No preview"))
+        self.preview_image.setObjectName("previewImage")
         self.preview_image.setFixedSize(PREVIEW_WIDTH, PREVIEW_HEIGHT)
         self.preview_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_image.setStyleSheet("border: 1px solid #303030; border-radius: 6px; background: #111;")
         preview_body.addWidget(self.preview_image)
 
         preview_text_vbox = QVBoxLayout()
         self.preview_title = QLabel(t("preview.title_placeholder", "Paste a link to preview it"))
         self.preview_title.setObjectName("sectionTitle")
+        self.preview_title.setWordWrap(True)
         self.preview_source = QLabel(t("preview.source_waiting", "Source: waiting for a link"))
         self.preview_source.setObjectName("muted")
+        self.preview_source.setWordWrap(True)
         self.preview_details = QLabel(t("preview.details_placeholder", "Title, duration, uploader, and platform will appear here."))
         self.preview_details.setObjectName("muted")
         self.preview_details.setWordWrap(True)
@@ -894,6 +901,11 @@ class QtMainWindow(QMainWindow):
         conv_grid.setContentsMargins(12, 10, 12, 10)
         conv_grid.setHorizontalSpacing(14)
         conv_grid.setVerticalSpacing(8)
+        conv_grid.setColumnStretch(0, 0)
+        conv_grid.setColumnStretch(1, 0)
+        conv_grid.setColumnStretch(2, 0)
+        conv_grid.setColumnStretch(3, 0)
+        conv_grid.setColumnStretch(4, 1)
 
         self.video_codec_combo = QComboBox()
         self.video_codec_combo.addItems(VIDEO_CODEC_OPTIONS)
@@ -1094,10 +1106,10 @@ class QtMainWindow(QMainWindow):
 
         # Main Tab Widget
         self.main_tab_widget = QTabWidget()
-        self.main_tab_widget.addTab(self.content_scroll, "Downloader & Queue")
+        self.main_tab_widget.addTab(self.content_scroll, self._tab_label(t("nav.home", "Downloader Queue")))
 
         self.account_widget = AccountSessionWidget(self)
-        self.main_tab_widget.addTab(self.account_widget, "Account & Sessions")
+        self.main_tab_widget.addTab(self.account_widget, self._tab_label(t("nav.auth", "Account Sessions")))
 
         self.test_inbox_widget = MailpitTestInboxWidget(self)
         self.main_tab_widget.addTab(self.test_inbox_widget, "Local Test Inbox (Mailpit)")
@@ -1549,7 +1561,7 @@ class QtMainWindow(QMainWindow):
         self.preview_status.setText("Waiting for a link")
         self.download_thumbnail_btn.setEnabled(False)
         self.preview_image.setPixmap(QPixmap())
-        self.preview_image.setText("No preview")
+        self.preview_image.setText(t("preview.no_preview", "No preview"))
 
     def _set_preview_loading(self):
         self._ghost_step = 0
@@ -1778,6 +1790,11 @@ class QtMainWindow(QMainWindow):
 
     def _on_status_update(self, status):
         self.transfer_status.status_label.setText(f"Status: {status}")
+
+    @staticmethod
+    def _tab_label(text):
+        """Tab titles never use mnemonics: drop & so no stray underline renders."""
+        return str(text or "").replace("&", "")
 
     # ---- Download queue panel -------------------------------------------------
 
@@ -2476,8 +2493,8 @@ class QtMainWindow(QMainWindow):
         preview_active = bool(getattr(self, "_current_preview_data", None))
         if hasattr(self, "preview_image"):
             has_pixmap = not self.preview_image.pixmap().isNull()
-            if not has_pixmap and not preview_active:
-                self.preview_image.setText(t("home.no_preview", "No preview"))
+        if not has_pixmap and not preview_active:
+            self.preview_image.setText(t("preview.no_preview", "No preview"))
         if hasattr(self, "preview_title") and not preview_active:
             self.preview_title.setText(t("preview.title_placeholder", "Paste a link to preview it"))
         if hasattr(self, "preview_source") and not preview_active:
@@ -2583,8 +2600,8 @@ class QtMainWindow(QMainWindow):
 
         # Navigation Tabs
         if hasattr(self, "main_tab_widget"):
-            self.main_tab_widget.setTabText(0, t("nav.home", "Downloader & Queue"))
-            self.main_tab_widget.setTabText(1, t("nav.auth", "Account & Sessions"))
+            self.main_tab_widget.setTabText(0, self._tab_label(t("nav.home", "Downloader Queue")))
+            self.main_tab_widget.setTabText(1, self._tab_label(t("nav.auth", "Account Sessions")))
             if self.main_tab_widget.count() > 2:
                 self.main_tab_widget.setTabText(2, t("nav.mailpit", "Local Test Inbox (Mailpit)"))
 

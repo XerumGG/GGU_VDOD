@@ -528,6 +528,23 @@ class UpdateCheckDialog(QDialog):
         super().closeEvent(event)
 
 
+def _dialog_palette():
+    """Live theme colors for dialogs with custom surfaces (never hardcoded)."""
+    from PySide6.QtWidgets import QApplication
+    from .theme import normalize_theme
+    app = QApplication.instance()
+    colors = normalize_theme(app.property("ggu_theme") if app else None)
+    return {
+        "window": colors["window_background"],
+        "panel": colors["panel_background"],
+        "input": colors["input_background"],
+        "border": colors["border"],
+        "text": colors["text"],
+        "muted": colors["muted_text"],
+        "accent": colors["accent"],
+    }
+
+
 class MediaProbeWorker(QThread):
     """Background worker executing ffprobe.exe stream analysis."""
     probe_completed = Signal(dict)
@@ -564,13 +581,17 @@ class DeepMediaInspectorDialog(QDialog):
         # Header Title
         hdr_frame = QFrame()
         hdr_frame.setObjectName("panel")
-        hdr_frame.setStyleSheet("QFrame#panel { background: #141414; border: 1px solid #333; border-radius: 8px; }")
+        pal = _dialog_palette()
+        hdr_frame.setStyleSheet(
+            f"QFrame#panel {{ background: {pal['panel']};"
+            f" border: 1px solid {pal['border']}; border-radius: 8px; }}"
+        )
         hdr_layout = QHBoxLayout(hdr_frame)
         hdr_layout.setContentsMargins(16, 12, 16, 12)
 
         hdr_info = QVBoxLayout()
         self.title_lbl = QLabel("Inspecting Media Stream…", self)
-        self.title_lbl.setStyleSheet("font-size: 16px; font-weight: 700; color: #ffffff;")
+        self.title_lbl.setStyleSheet(f"font-size: 16px; font-weight: 700; color: {pal['text']};")
         self.target_lbl = QLabel(os.path.basename(self.target) or self.target, self)
         self.target_lbl.setObjectName("muted")
         hdr_info.addWidget(self.title_lbl)
@@ -578,7 +599,10 @@ class DeepMediaInspectorDialog(QDialog):
         hdr_layout.addLayout(hdr_info, 1)
 
         self.health_badge = QLabel("ANALYZING…", self)
-        self.health_badge.setStyleSheet("background: #2a2a2a; color: #aaa; font-weight: 700; border-radius: 4px; padding: 6px 12px; font-size: 12px;")
+        self.health_badge.setStyleSheet(
+            f"background: {pal['panel']}; color: {pal['muted']}; font-weight: 700;"
+            " border-radius: 4px; padding: 6px 12px; font-size: 12px;"
+        )
         hdr_layout.addWidget(self.health_badge)
         layout.addWidget(hdr_frame)
 
@@ -757,14 +781,18 @@ class AboutDialog(QDialog):
 
         hdr = QFrame()
         hdr.setObjectName("panel")
-        hdr.setStyleSheet("QFrame#panel { background: #141414; border: 1px solid #333; border-radius: 8px; }")
+        pal = _dialog_palette()
+        hdr.setStyleSheet(
+            f"QFrame#panel {{ background: {pal['panel']};"
+            f" border: 1px solid {pal['border']}; border-radius: 8px; }}"
+        )
         hdr_layout = QVBoxLayout(hdr)
         hdr_layout.setContentsMargins(18, 14, 18, 14)
 
         title = QLabel(APP_NAME, self)
-        title.setStyleSheet("font-size: 22px; font-weight: 700; color: #e5484d;")
+        title.setStyleSheet(f"font-size: 22px; font-weight: 700; color: {pal['accent']};")
         sub = QLabel(f"Developer: XerumGG\n{DEVELOPMENT_BUILD_LABEL} | Version: {PACKAGE_VERSION}", self)
-        sub.setStyleSheet("font-size: 13px; color: #ffffff; margin-top: 4px; font-weight: 500;")
+        sub.setStyleSheet(f"font-size: 13px; color: {pal['text']}; margin-top: 4px; font-weight: 500;")
         hdr_layout.addWidget(title)
         hdr_layout.addWidget(sub)
         layout.addWidget(hdr)
@@ -772,11 +800,11 @@ class AboutDialog(QDialog):
         text_edit = QTextEdit(self)
         text_edit.setReadOnly(True)
         html = f"""
-        <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; color: #d0d0d0;">
-            <h3 style="color: #ffffff; margin-top: 0;">{t('about.summary_header', 'Application Summary')}</h3>
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6; color: {pal['text']};">
+            <h3 style="color: {pal['text']}; margin-top: 0;">{t('about.summary_header', 'Application Summary')}</h3>
             <p><b>{APP_NAME}</b> {t('about.summary_body', 'is a high-performance desktop media downloader, batch queue processor, and local converter designed for video/audio streams, HLS/DASH fragments, and playlists.')}</p>
             
-            <h3 style="color: #ffffff;">{t('about.dev_header', 'Developer & License Details')}</h3>
+            <h3 style="color: {pal['text']};">{t('about.dev_header', 'Developer & License Details')}</h3>
             <ul style="padding-left: 20px;">
                 <li><b>Developer / Maintainer:</b> XerumGG</li>
                 <li><b>License:</b> MIT License (Open Source Software)</li>
@@ -784,7 +812,7 @@ class AboutDialog(QDialog):
                 <li><b>Core Downloader & Muxer:</b> yt-dlp, curl_cffi, FFmpeg, & FFprobe</li>
             </ul>
 
-            <h3 style="color: #ffffff;">{t('about.cap_header', 'Key Capabilities & Use Cases')}</h3>
+            <h3 style="color: {pal['text']};">{t('about.cap_header', 'Key Capabilities & Use Cases')}</h3>
             <ol style="padding-left: 20px;">
                 <li><b>{t('about.cap1_title', 'High-Res Downloads & Transcoding:')}</b> {t('about.cap1_body', 'Bulk download 4K/2K/1080p videos or convert audio to MP3, WAV, FLAC, AAC, OPUS, and M4A.')}</li>
                 <li><b>{t('about.cap2_title', 'Cloudflare Anti-Bot Impersonation:')}</b> {t('about.cap2_body', 'Uses native TLS Chrome browser impersonation to bypass HTTP 403 Cloudflare challenges.')}</li>
@@ -808,6 +836,23 @@ class AboutDialog(QDialog):
 class HelpCenterDialog(QDialog):
     """Modern Help Center & User Guide Dialog."""
 
+    @staticmethod
+    def _doc_palette():
+        """Live theme colors so help surfaces follow every theme incl. light ones."""
+        from PySide6.QtWidgets import QApplication
+        from .theme import normalize_theme
+        app = QApplication.instance()
+        colors = normalize_theme(app.property("ggu_theme") if app else None)
+        return {
+            "window": colors["window_background"],
+            "panel": colors["panel_background"],
+            "input": colors["input_background"],
+            "border": colors["border"],
+            "text": colors["text"],
+            "muted": colors["muted_text"],
+            "accent": colors["accent"],
+        }
+
     def __init__(self, parent=None):
         super().__init__(parent)
         from ...services.i18n import t
@@ -815,6 +860,7 @@ class HelpCenterDialog(QDialog):
         self.setWindowTitle(t("help.center_title", "GGU_VDOD Help Center & Quick Guide"))
         self.resize(780, 580)
         self.setMinimumSize(700, 500)
+        self._doc = self._doc_palette()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(20, 20, 20, 20)
@@ -823,14 +869,18 @@ class HelpCenterDialog(QDialog):
         # Header Title Banner
         hdr_box = QFrame()
         hdr_box.setObjectName("panel")
-        hdr_box.setStyleSheet("QFrame#panel { background: #141414; border: 1px solid #333333; border-radius: 8px; }")
+        hdr_box.setStyleSheet(
+            f"QFrame#panel {{ background: {self._doc['panel']};"
+            f" border: 1px solid {self._doc['border']}; border-radius: 8px; }}"
+        )
         hdr_layout = QVBoxLayout(hdr_box)
         hdr_layout.setContentsMargins(16, 12, 16, 12)
 
         title = QLabel(t("help.doc_header", f"{APP_NAME} Documentation & User Guide"), self)
-        title.setStyleSheet("font-size: 17px; font-weight: 700; color: #ffffff;")
+        title.setStyleSheet(f"font-size: 17px; font-weight: 700; color: {self._doc['text']};")
         subtitle = QLabel(t("help.doc_subtitle", "Reference guide for account sessions, local mailpit testing, media downloads, and conversion options."), self)
-        subtitle.setStyleSheet("font-size: 12px; color: #a0a0a0; margin-top: 2px;")
+        subtitle.setStyleSheet(f"font-size: 12px; color: {self._doc['muted']}; margin-top: 2px;")
+        subtitle.setWordWrap(True)
         hdr_layout.addWidget(title)
         hdr_layout.addWidget(subtitle)
         layout.addWidget(hdr_box)
@@ -839,19 +889,19 @@ class HelpCenterDialog(QDialog):
         from PySide6.QtWidgets import QTabWidget
 
         self.tabs = QTabWidget(self)
-        self.tabs.setStyleSheet("""
-            QTabWidget::pane { border: 1px solid #303030; border-radius: 8px; background: #0a0a0a; }
-            QTabBar::tab {
-                background: #121212; color: #a0a0a0; border: 1px solid #303030;
+        self.tabs.setStyleSheet(f"""
+            QTabWidget::pane {{ border: 1px solid {self._doc['border']}; border-radius: 8px; background: {self._doc['window']}; }}
+            QTabBar::tab {{
+                background: {self._doc['panel']}; color: {self._doc['muted']}; border: 1px solid {self._doc['border']};
                 padding: 9px 18px; font-size: 12px; font-weight: 600; border-top-left-radius: 6px; border-top-right-radius: 6px;
                 margin-right: 4px;
-            }
-            QTabBar::tab:selected { background: #1c1c1c; color: #ffffff; border-bottom: 2px solid #e5484d; font-weight: 700; }
-            QTabBar::tab:hover { color: #ffffff; background: #181818; }
+            }}
+            QTabBar::tab:selected {{ background: {self._doc['input']}; color: {self._doc['text']}; border-bottom: 2px solid {self._doc['accent']}; font-weight: 700; }}
+            QTabBar::tab:hover {{ color: {self._doc['text']}; background: {self._doc['input']}; }}
         """)
 
         # Tab 1: Account Sessions & Local Test Inbox (Extreme Top / First Tab!)
-        self.tabs.addTab(self._build_account_mailpit_tab(), t("help.tab_account", "Account Sessions & Local Inbox"))
+        self.tabs.addTab(self._build_account_mailpit_tab(), t("help.tab_account", "Account Sessions and Local Inbox").replace("&", ""))
         # Tab 2: How to Download Media
         self.tabs.addTab(self._build_download_tab(), t("help.tab_download", "Downloading Media"))
         # Tab 3: Complex Conversion Options
@@ -875,15 +925,19 @@ class HelpCenterDialog(QDialog):
         from PySide6.QtWidgets import QTextBrowser
         browser = QTextBrowser(self)
         browser.setOpenExternalLinks(True)
-        browser.setStyleSheet("QTextBrowser { background: #0a0a0a; color: #e2e2e2; border: none; padding: 16px; font-size: 13px; line-height: 1.6; }")
-        
-        html = """
+        d = self._doc
+        browser.setStyleSheet(
+            f"QTextBrowser {{ background: {d['window']}; color: {d['text']};"
+            " border: none; padding: 16px; font-size: 13px; line-height: 1.6; }"
+        )
+
+        html = f"""
         <div style="font-family: 'Segoe UI', system-ui, sans-serif; line-height: 1.6;">
-            <div style="background: #141414; border: 1px solid #e5484d; border-radius: 8px; padding: 16px; margin-bottom: 18px;">
-                <h3 style="margin-top: 0; color: #e5484d; font-size: 16px;">1. Account Sessions & Local Test Inbox Guide</h3>
-                <p style="color: #a7a7a7; font-size: 12px; margin-top: -6px;"><i>Example Targets: Protected media platforms (e.g. <b>example.com</b> or <b>staging.local</b>)</i></p>
-                
-                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">B. Authentication Options for Age-Restricted Sites</h4>
+            <div style="background: {d['panel']}; border: 1px solid {d['accent']}; border-radius: 8px; padding: 16px; margin-bottom: 18px;">
+                <h3 style="margin-top: 0; color: {d['accent']}; font-size: 16px;">1. Account Sessions & Local Test Inbox Guide</h3>
+                <p style="color: {d['muted']}; font-size: 12px; margin-top: -6px;"><i>Example Targets: Protected media platforms (e.g. <b>example.com</b> or <b>staging.local</b>)</i></p>
+
+                <h4 style="color: {d['text']}; margin-bottom: 6px; font-size: 14px;">B. Authentication Options for Age-Restricted Sites</h4>
                 <ul style="margin-top: 4px; padding-left: 20px;">
                     <li><b>Option 1 (Auto-Import Browser Cookies):</b> Imports active session cookies from Chrome, Firefox, Edge, Brave, Vivaldi, etc., to bypass age verification gates automatically.</li>
                     <li><b>Option 2 (Account Sessions Tab):</b> Registers stored account credentials (username/password/token) under DPAPI encryption for the domain.</li>
@@ -892,14 +946,14 @@ class HelpCenterDialog(QDialog):
                 </ul>
             </div>
 
-            <div style="background: #141414; border: 1px solid #303030; border-radius: 8px; padding: 16px; margin-bottom: 18px;">
-                <h3 style="margin-top: 0; color: #ffffff; font-size: 16px;">2. Elaborate Local Mailpit Test Inbox Guide</h3>
-                <p style="color: #a7a7a7; font-size: 12px; margin-top: -6px;"><i>Complete walkthrough for testing local registration & email verification workflows</i></p>
+            <div style="background: {d['panel']}; border: 1px solid {d['border']}; border-radius: 8px; padding: 16px; margin-bottom: 18px;">
+                <h3 style="margin-top: 0; color: {d['text']}; font-size: 16px;">2. Elaborate Local Mailpit Test Inbox Guide</h3>
+                <p style="color: {d['muted']}; font-size: 12px; margin-top: -6px;"><i>Complete walkthrough for testing local registration & email verification workflows</i></p>
 
-                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">What is Mailpit?</h4>
-                <p style="color: #cccccc; margin-top: 4px;">Mailpit is a lightweight, zero-dependency local email capture server running directly inside GGU_VDOD on <code>127.0.0.1:8025</code>. It intercepts all outgoing emails sent to test domains (e.g. <code>localhost</code>, <code>127.0.0.1</code>, <code>*.local</code>, <code>*.test</code>, <code>happyadults.com</code>) without sending real messages over the internet.</p>
+                <h4 style="color: {d['text']}; margin-bottom: 6px; font-size: 14px;">What is Mailpit?</h4>
+                <p style="color: {d['text']}; margin-top: 4px;">Mailpit is a lightweight, zero-dependency local email capture server running directly inside GGU_VDOD on <code>127.0.0.1:8025</code>. It intercepts all outgoing emails sent to test domains (e.g. <code>localhost</code>, <code>127.0.0.1</code>, <code>*.local</code>, <code>*.test</code>, <code>happyadults.com</code>) without sending real messages over the internet.</p>
 
-                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">Step-by-Step Mailpit Workflow</h4>
+                <h4 style="color: {d['text']}; margin-bottom: 6px; font-size: 14px;">Step-by-Step Mailpit Workflow</h4>
                 <ol style="margin-top: 4px; padding-left: 20px;">
                     <li><b>Open Local Inbox:</b> Switch to the <b>Local Test Inbox (Mailpit)</b> tab at the top of GGU_VDOD or click <i>Open Mailpit Web UI (127.0.0.1:8025)</i> to launch the web dashboard in Chrome, Firefox, or Edge.</li>
                     <li><b>Trigger Signup / Verification Email:</b> On your staging platform (e.g. <code>happyadults.com</code> or local auth server), register a new test user account or trigger a password reset email.</li>
@@ -908,7 +962,7 @@ class HelpCenterDialog(QDialog):
                     <li><b>Clear Mailbox:</b> Click <b>Clear Test Mailbox</b> at any time to purge captured test messages.</li>
                 </ol>
 
-                <h4 style="color: #ffffff; margin-bottom: 6px; font-size: 14px;">Mailpit Technical Details & Port Specs</h4>
+                <h4 style="color: {d['text']}; margin-bottom: 6px; font-size: 14px;">Mailpit Technical Details & Port Specs</h4>
                 <ul style="margin-top: 4px; padding-left: 20px;">
                     <li><b>Web Dashboard URL:</b> <code>http://127.0.0.1:8025/</code> or <code>http://localhost:8025/</code></li>
                     <li><b>REST API Endpoint:</b> <code>http://127.0.0.1:8025/api/v1/messages</code></li>
@@ -924,10 +978,14 @@ class HelpCenterDialog(QDialog):
     def _build_download_tab(self) -> QWidget:
         from PySide6.QtWidgets import QTextBrowser
         browser = QTextBrowser(self)
-        browser.setStyleSheet("QTextBrowser { background: #0a0a0a; color: #e2e2e2; border: none; padding: 16px; font-size: 13px; line-height: 1.6; }")
-        html = """
+        d = self._doc
+        browser.setStyleSheet(
+            f"QTextBrowser {{ background: {d['window']}; color: {d['text']};"
+            " border: none; padding: 16px; font-size: 13px; line-height: 1.6; }"
+        )
+        html = f"""
         <div style="font-family: 'Segoe UI', system-ui, sans-serif;">
-            <h3 style="color: #ffffff; margin-top: 0; font-size: 16px;">2. How to Download Media</h3>
+            <h3 style="color: {d['text']}; margin-top: 0; font-size: 16px;">2. How to Download Media</h3>
             <ol style="padding-left: 20px;">
                 <li>Paste video or audio links into the main URL text box (one link per line).</li>
                 <li>Select media format: <b>Video</b> or <b>Audio only</b>.</li>
@@ -943,10 +1001,14 @@ class HelpCenterDialog(QDialog):
     def _build_complex_tab(self) -> QWidget:
         from PySide6.QtWidgets import QTextBrowser
         browser = QTextBrowser(self)
-        browser.setStyleSheet("QTextBrowser { background: #0a0a0a; color: #e2e2e2; border: none; padding: 16px; font-size: 13px; line-height: 1.6; }")
-        html = """
+        d = self._doc
+        browser.setStyleSheet(
+            f"QTextBrowser {{ background: {d['window']}; color: {d['text']};"
+            " border: none; padding: 16px; font-size: 13px; line-height: 1.6; }"
+        )
+        html = f"""
         <div style="font-family: 'Segoe UI', system-ui, sans-serif;">
-            <h3 style="color: #ffffff; margin-top: 0; font-size: 16px;">3. Complex Conversion & Advanced Options</h3>
+            <h3 style="color: {d['text']}; margin-top: 0; font-size: 16px;">3. Complex Conversion & Advanced Options</h3>
             <ul style="padding-left: 20px;">
                 <li><b>Expand [+] Button:</b> Located on the <i>Complex & Advanced Conversion Options</i> section header to reveal granular FFmpeg controls.</li>
                 <li><b>FFmpeg Location:</b> Custom path to <code>ffmpeg.exe</code> binary for local re-encoding and audio extraction.</li>
@@ -964,33 +1026,37 @@ class HelpCenterDialog(QDialog):
     def _build_shortcuts_tab(self) -> QWidget:
         from PySide6.QtWidgets import QTextBrowser
         browser = QTextBrowser(self)
-        browser.setStyleSheet("QTextBrowser { background: #0a0a0a; color: #e2e2e2; border: none; padding: 16px; font-size: 13px; line-height: 1.6; }")
-        html = """
+        d = self._doc
+        browser.setStyleSheet(
+            f"QTextBrowser {{ background: {d['window']}; color: {d['text']};"
+            " border: none; padding: 16px; font-size: 13px; line-height: 1.6; }"
+        )
+        html = f"""
         <div style="font-family: 'Segoe UI', system-ui, sans-serif;">
-            <h3 style="color: #ffffff; margin-top: 0; font-size: 16px;">4. Keyboard & Mouse Shortcuts</h3>
+            <h3 style="color: {d['text']}; margin-top: 0; font-size: 16px;">4. Keyboard & Mouse Shortcuts</h3>
             <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
-                <tr style="border-bottom: 1px solid #333; text-align: left;">
-                    <th style="padding: 8px; color: #888;">Shortcut</th>
-                    <th style="padding: 8px; color: #888;">Action</th>
+                <tr style="border-bottom: 1px solid {d['border']}; text-align: left;">
+                    <th style="padding: 8px; color: {d['muted']};">Shortcut</th>
+                    <th style="padding: 8px; color: {d['muted']};">Action</th>
                 </tr>
-                <tr style="border-bottom: 1px solid #222;">
-                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + + / Ctrl + -</td>
+                <tr style="border-bottom: 1px solid {d['border']};">
+                    <td style="padding: 8px; font-family: monospace; color: {d['accent']};">Ctrl + + / Ctrl + -</td>
                     <td style="padding: 8px;">Zoom interface in or out uniformly</td>
                 </tr>
-                <tr style="border-bottom: 1px solid #222;">
-                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + 0</td>
+                <tr style="border-bottom: 1px solid {d['border']};">
+                    <td style="padding: 8px; font-family: monospace; color: {d['accent']};">Ctrl + 0</td>
                     <td style="padding: 8px;">Reset zoom to 100% baseline</td>
                 </tr>
-                <tr style="border-bottom: 1px solid #222;">
-                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + Mouse Wheel</td>
+                <tr style="border-bottom: 1px solid {d['border']};">
+                    <td style="padding: 8px; font-family: monospace; color: {d['accent']};">Ctrl + Mouse Wheel</td>
                     <td style="padding: 8px;">Dynamic zoom scaling</td>
                 </tr>
-                <tr style="border-bottom: 1px solid #222;">
-                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + N</td>
+                <tr style="border-bottom: 1px solid {d['border']};">
+                    <td style="padding: 8px; font-family: monospace; color: {d['accent']};">Ctrl + N</td>
                     <td style="padding: 8px;">Clear text area and prepare new link list</td>
                 </tr>
-                <tr style="border-bottom: 1px solid #222;">
-                    <td style="padding: 8px; font-family: monospace; color: #e5484d;">Ctrl + H</td>
+                <tr style="border-bottom: 1px solid {d['border']};">
+                    <td style="padding: 8px; font-family: monospace; color: {d['accent']};">Ctrl + H</td>
                     <td style="padding: 8px;">Open Link History dialog</td>
                 </tr>
             </table>

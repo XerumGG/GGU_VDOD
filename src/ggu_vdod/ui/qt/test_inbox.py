@@ -135,7 +135,7 @@ class MailpitTestInboxWidget(QWidget):
 
         self.preview_box = QPlainTextEdit(self)
         self.preview_box.setReadOnly(True)
-        self.preview_box.setStyleSheet("font-family: Consolas, monospace; font-size: 12px; background: #111;")
+        self.preview_box.setObjectName("mailContent")
         prev_layout.addWidget(self.preview_box)
 
         splitter.addWidget(preview_container)

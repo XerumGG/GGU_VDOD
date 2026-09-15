@@ -30,13 +30,13 @@ class QtThemeTests(unittest.TestCase):
 
     def test_theme_dialog_reset_restores_dark_defaults(self):
         from ggu_vdod.ui.qt.dialogs import ThemePreferencesDialog
-        from ggu_vdod.ui.qt.theme import DEFAULT_THEME
+        from ggu_vdod.ui.qt.theme import normalize_theme
 
         dialog = ThemePreferencesDialog({"accent": "#123456"})
         dialog._reset_theme()
         name, colors = dialog.get_theme_settings()
         self.assertEqual(name, "Dark")
-        self.assertEqual(colors, DEFAULT_THEME)
+        self.assertEqual(colors, normalize_theme(None))
         dialog.close()
 
     def test_window_applies_saved_theme_and_proportional_font_scale(self):
