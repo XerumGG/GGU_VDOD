@@ -141,7 +141,7 @@ class QtDownloadOptionTests(unittest.TestCase):
                 settings = self._settings(output_dir, format_type="audio", quality="320 kbps (Best)", output_format="WMA")
                 worker = module.QtDownloadWorker(["https://example.invalid/audio"], settings)
                 worker._process_single_url("https://example.invalid/audio", settings)
-            self.assertEqual(captured[0].options["format"], "bestaudio/best")
+            self.assertEqual(captured[0].options["format"], "bestaudio[protocol^=http]/bestaudio/best")
             self.assertTrue(any(isinstance(item, FFmpegCustomAudioConvertPP) for item in captured[0].postprocessors))
         finally:
             engine_module.yt_dlp = original_ytdlp
@@ -176,7 +176,7 @@ class QtDownloadOptionTests(unittest.TestCase):
             "clean_sidecars": False,
         }
 
-    def test_youtube_alt_clients_uses_tv_embedded(self):
+    def test_youtube_alt_clients_uses_visionos(self):
         import ggu_vdod.ui.qt.main_window as module
         captured = []
 
@@ -211,7 +211,7 @@ class QtDownloadOptionTests(unittest.TestCase):
                 worker = module.QtDownloadWorker(["https://example.invalid/video"], settings)
                 worker._process_single_url("https://example.invalid/video", settings)
             clients = captured[0].options.get("extractor_args", {}).get("youtube", {}).get("player_client", [])
-            self.assertIn("tv_embedded", clients)
+            self.assertIn("visionos", clients)
             self.assertNotIn("android", clients)
         finally:
             engine_module.yt_dlp = original_ytdlp

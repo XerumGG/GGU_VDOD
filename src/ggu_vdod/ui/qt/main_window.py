@@ -157,7 +157,19 @@ class FormatListWorker(QThread):
             yt_dlp = _load_yt_dlp()
             if not yt_dlp:
                 raise RuntimeError("yt-dlp library is missing.")
-            options = {"quiet": True, "no_warnings": True, "noplaylist": True}
+            options = {
+                "quiet": True,
+                "no_warnings": True,
+                "noplaylist": True,
+                "remote_components": ["ejs:github"],
+            }
+            try:
+                from ...config.paths import get_default_qjs_path
+                qjs_bin = get_default_qjs_path()
+                if qjs_bin and os.path.exists(qjs_bin):
+                    options["js_runtimes"] = {"quickjs": {"path": qjs_bin}}
+            except Exception:
+                pass
             if self.cookies_file and os.path.exists(self.cookies_file):
                 options["cookiefile"] = self.cookies_file
             elif self.browser and self.browser not in ("None", "Custom cookies.txt file..."):

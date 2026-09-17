@@ -42,14 +42,14 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
     except Exception:
         pass
 
+    options["remote_components"] = ["ejs:github"]
+
     extractor_args = {}
     try:
         from yt_dlp.networking.impersonate import ImpersonateTarget
         target = ImpersonateTarget.from_str("chrome")
-        from yt_dlp.networking._curlcffi import CurlCffiRH
-        if CurlCffiRH.is_supported_target(target):
-            options["impersonate"] = target
-            extractor_args["generic"] = ["impersonate"]
+        options["impersonate"] = target
+        extractor_args["generic"] = ["impersonate"]
     except Exception:
         pass
     if extractor_args:
@@ -95,7 +95,7 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
             alt_opts = dict(options)
             alt_args = dict(alt_opts.get("extractor_args") or {})
             yt_args = dict(alt_args.get("youtube") or {})
-            yt_args["player_client"] = ["tv_embedded"]
+            yt_args["player_client"] = ["visionos", "web"]
             alt_args["youtube"] = yt_args
             alt_opts["extractor_args"] = alt_args
             try:

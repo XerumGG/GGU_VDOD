@@ -382,7 +382,7 @@ class DownloadEngine:
                     settings["youtube_alt_clients"] = True
                     self._log(
                         "[WARNING] YouTube bot-check / 403 detected; retrying once with alternate "
-                        "YouTube client (TV Embedded). For reliable access configure browser cookies."
+                        "YouTube client (VisionOS/Web). For reliable access configure browser cookies."
                     )
                     continue
                 if looks_like_connection_error(error) and attempt < MAX_RETRIES:
@@ -486,24 +486,23 @@ class DownloadEngine:
         except Exception:
             pass
 
+        ydl_opts["remote_components"] = ["ejs:github"]
+
         extractor_args = {}
         try:
             from yt_dlp.networking.impersonate import ImpersonateTarget
             target = ImpersonateTarget.from_str("chrome")
-            from yt_dlp.networking._curlcffi import CurlCffiRH
-            if CurlCffiRH.is_supported_target(target):
-                ydl_opts["impersonate"] = target
-                extractor_args["generic"] = ["impersonate"]
+            ydl_opts["impersonate"] = target
+            extractor_args["generic"] = ["impersonate"]
         except Exception:
             pass
         if extractor_args:
             ydl_opts["extractor_args"] = extractor_args
         if settings.get("youtube_alt_clients"):
-            # Alternate client tv_embedded bypasses YouTube's anonymous bot-check
-            # while providing the full 4K/2K/1080p/720p stream catalog (unlike mobile
-            # android/ios clients which restrict streams to legacy 360p).
+            # Alternate clients visionos/web provide the full 4K/2K/1080p/720p stream
+            # catalog while bypassing standard browser bot-checks.
             ydl_opts.setdefault("extractor_args", {}).setdefault("youtube", {})["player_client"] = [
-                "tv_embedded",
+                "visionos", "web",
             ]
 
         # Automatic DPAPI Account & Session Injection for current target URL
@@ -597,23 +596,31 @@ class DownloadEngine:
         if exact_format_id:
             ydl_opts["format"] = exact_format_id
         elif is_audio:
-            ydl_opts["format"] = "bestaudio/best"
-            ydl_opts["format_sort"] = ["abr", "quality"]
+            ydl_opts["format"] = "bestaudio[protocol^=http]/bestaudio/best"
+            ydl_opts["format_sort"] = ["abr", "quality", "proto:https:m3u8"]
         else:
             quality = settings.get("quality", "Best available")
             height = HEIGHT_MAP.get(quality)
             if height:
                 ydl_opts["format"] = (
-                    f"bestvideo[height={height}]+bestaudio"
+                    f"bestvideo[height={height}]+bestaudio[protocol^=http]"
+                    f"/bestvideo[height={height}]+bestaudio"
+                    f"/bestvideo[height<={height}]+bestaudio[protocol^=http]"
                     f"/bestvideo[height<={height}]+bestaudio"
+                    f"/bestvideo[width<={height}]+bestaudio[protocol^=http]"
                     f"/bestvideo[width<={height}]+bestaudio"
+                    f"/bestvideo+bestaudio[protocol^=http]"
                     f"/bestvideo+bestaudio"
                     f"/best[height<={height}]/best"
                 )
-                ydl_opts["format_sort"] = [f"res:{height}", "fps", "codec:av01:vp9:h264"]
+                ydl_opts["format_sort"] = [f"res:{height}", "fps", "codec:av01:vp9:h264", "proto:https:m3u8"]
             else:
-                ydl_opts["format"] = "bestvideo+bestaudio/best"
-                ydl_opts["format_sort"] = ["res", "fps", "codec:av01:vp9:h264"]
+                ydl_opts["format"] = (
+                    "bestvideo+bestaudio[protocol^=http]"
+                    "/bestvideo+bestaudio"
+                    "/best"
+                )
+                ydl_opts["format_sort"] = ["res", "fps", "codec:av01:vp9:h264", "proto:https:m3u8"]
 
         # Local output conversion. Audio uses the custom converter so every UI
         # target (including OGG, WMA, and AIFF) is handled consistently.
@@ -622,12 +629,12 @@ class DownloadEngine:
             video_args = []
         else:
             video_args = video_conversion_args(settings, target_ext)
+            ydl_opts["merge_output_format"] = (
+                target_ext if target_ext in ("mp4", "mkv", "webm", "ogv", "flv", "avi", "mov", "m4v", "ts", "3gp") else "mkv"
+            )
             if not video_args:
                 # No custom re-encode requested: let yt-dlp remux/recode directly.
                 ydl_opts["recode_video"] = target_ext
-                ydl_opts["merge_output_format"] = (
-                    target_ext if target_ext in ("mp4", "mkv", "webm", "ogv", "flv", "avi", "mov", "m4v", "ts", "3gp") else "mkv"
-                )
 
         started_at = time.time()
         yt_dlp_mod = load_yt_dlp()
@@ -645,10 +652,10 @@ class DownloadEngine:
         final_file = self._resolve_final_file(info, output_dir, started_at, target_ext)
         self.last_result = {"output_dir": output_dir, "final_file": final_file or ""}
         self._verify_integrity(final_file)
-        self._report_selected_format(info, settings, target_ext)
+        self._report_selected_format(info, settings, target_ext, final_file)
         self._log(f"[SUCCESS] Successfully processed: {url}")
 
-    def _report_selected_format(self, info, settings, target_ext):
+    def _report_selected_format(self, info, settings, target_ext, final_file=""):
         """Make actual source and final conversion choices visible in the log."""
         if not isinstance(info, dict):
             return
@@ -692,3 +699,16 @@ class DownloadEngine:
                 f"[FORMAT] Final output is intentionally scaled to {conversion_resolution}."
             )
         self._log(f"[FORMAT] Final container target: {target_ext.upper()}")
+        if final_file and os.path.isfile(final_file):
+            try:
+                from ..services.probe import probe_media_file
+                probe = probe_media_file(final_file)
+                if probe:
+                    w = probe.get("width")
+                    h = probe.get("height")
+                    vc = probe.get("video_codec")
+                    ac = probe.get("audio_codec")
+                    if w and h:
+                        self._log(f"[FORMAT] Verified output file on disk: {w}x{h} ({h}p), video={vc}, audio={ac}")
+            except Exception:
+                pass
