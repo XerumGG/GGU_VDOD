@@ -35,9 +35,25 @@ jobs:
         shell: pwsh
         run: |
           $zip = "$env:RUNNER_TEMP\ffmpeg.zip"
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $zip -TimeoutSec 300
+          $downloaded = $false
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            gh release download --repo GyanD/codexffmpeg --pattern "*-essentials_build.zip" --output $zip --clobber
+            if ($LASTEXITCODE -eq 0) {
+              $downloaded = $true
+              break
+            }
+            if ($attempt -lt 3) { Start-Sleep -Seconds (10 * $attempt) }
+          }
+          if (!$downloaded) {
+            Write-Warning "GitHub mirror unavailable; trying gyan.dev."
+            Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $zip -TimeoutSec 300 -MaximumRetryCount 3 -RetryIntervalSec 10 -ErrorAction Stop
+          }
           Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP\ffmpeg" -Force
-          $bin = (Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Directory | Select-Object -First 1).FullName + "\bin"
+          $bins = @(Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Filter ffmpeg.exe -File -Recurse)
+          if ($bins.Count -ne 1) { throw "Expected one ffmpeg.exe in the downloaded archive." }
+          $bin = $bins[0].DirectoryName
+          if (!(Test-Path "$bin\ffprobe.exe")) { throw "Downloaded archive is missing ffprobe.exe." }
+          $global:LASTEXITCODE = 0
           New-Item -ItemType Directory -Force -Path "ffmpeg" | Out-Null
           Copy-Item "$bin\ffmpeg.exe"  "ffmpeg\ffmpeg.exe"
           Copy-Item "$bin\ffprobe.exe" "ffmpeg\ffprobe.exe"
