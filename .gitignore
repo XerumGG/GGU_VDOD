@@ -15,8 +15,21 @@ auth_sessions.dat
 # Virtual Environment
 venv/
 
+# IDE & Runner Artifacts
+.vscode/
+.idea/
+tempCodeRunnerFile*
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+test_dl*/
+issues/
+
 # Build output
 installer_output/
+**/installer_output/
 build/
 dist/
 dist_v*/
@@ -24,17 +37,15 @@ dist_v*/
 # Local FFmpeg binary
 ffmpeg/
 
-# IDE
-.vscode/
-.idea/
-
 # OS
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs & Temp
 *.log
 *.AGENTS.md
+*.tmp
+*.bak
 
 # Zip backups
 *.zip
