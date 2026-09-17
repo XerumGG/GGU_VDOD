@@ -95,7 +95,7 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
             alt_opts = dict(options)
             alt_args = dict(alt_opts.get("extractor_args") or {})
             yt_args = dict(alt_args.get("youtube") or {})
-            yt_args["player_client"] = ["tv", "web_safari", "web_embedded"]
+            yt_args["player_client"] = ["tv_embedded"]
             alt_args["youtube"] = yt_args
             alt_opts["extractor_args"] = alt_args
             try:

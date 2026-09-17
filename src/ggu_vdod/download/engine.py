@@ -12,6 +12,9 @@ import sys
 import time
 import urllib.parse
 
+os.environ.setdefault("PYTHONIOENCODING", "utf-8")
+os.environ.setdefault("PYTHONUTF8", "1")
+
 from ..config.paths import (
     get_default_ffmpeg_dir, get_default_ffmpeg_path,
     get_default_output_dir, get_default_qjs_path,
@@ -379,7 +382,7 @@ class DownloadEngine:
                     settings["youtube_alt_clients"] = True
                     self._log(
                         "[WARNING] YouTube bot-check / 403 detected; retrying once with alternate "
-                        "YouTube clients (Android/iOS/TV). For reliable access configure browser cookies."
+                        "YouTube client (TV Embedded). For reliable access configure browser cookies."
                     )
                     continue
                 if looks_like_connection_error(error) and attempt < MAX_RETRIES:
@@ -496,10 +499,11 @@ class DownloadEngine:
         if extractor_args:
             ydl_opts["extractor_args"] = extractor_args
         if settings.get("youtube_alt_clients"):
-            # Alternate clients frequently bypass YouTube's anonymous bot-check.
-            # Android/iOS clients currently bypass the 403 SABR challenge most reliably.
+            # Alternate client tv_embedded bypasses YouTube's anonymous bot-check
+            # while providing the full 4K/2K/1080p/720p stream catalog (unlike mobile
+            # android/ios clients which restrict streams to legacy 360p).
             ydl_opts.setdefault("extractor_args", {}).setdefault("youtube", {})["player_client"] = [
-                "android", "ios", "mweb", "tv", "web_safari", "web_embedded",
+                "tv_embedded",
             ]
 
         # Automatic DPAPI Account & Session Injection for current target URL
@@ -594,17 +598,22 @@ class DownloadEngine:
             ydl_opts["format"] = exact_format_id
         elif is_audio:
             ydl_opts["format"] = "bestaudio/best"
+            ydl_opts["format_sort"] = ["abr", "quality"]
         else:
             quality = settings.get("quality", "Best available")
             height = HEIGHT_MAP.get(quality)
             if height:
                 ydl_opts["format"] = (
-                    f"bestvideo[height={height}]+bestaudio/best[height={height}]"
-                    f"/bestvideo[height<={height}]+bestaudio/best[height<={height}]"
+                    f"bestvideo[height={height}]+bestaudio"
+                    f"/bestvideo[height<={height}]+bestaudio"
+                    f"/bestvideo[width<={height}]+bestaudio"
+                    f"/bestvideo+bestaudio"
                     f"/best[height<={height}]/best"
                 )
+                ydl_opts["format_sort"] = [f"res:{height}", "fps", "codec:av01:vp9:h264"]
             else:
                 ydl_opts["format"] = "bestvideo+bestaudio/best"
+                ydl_opts["format_sort"] = ["res", "fps", "codec:av01:vp9:h264"]
 
         # Local output conversion. Audio uses the custom converter so every UI
         # target (including OGG, WMA, and AIFF) is handled consistently.

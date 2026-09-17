@@ -50,11 +50,17 @@ def get_default_ffmpeg_dir():
                 return folder
 
     perm_dir = r"D:\GGU_VDOD\ffmpeg"
-    if os.path.isdir(perm_dir):
+    if os.path.isdir(perm_dir) and os.path.exists(os.path.join(perm_dir, "ffmpeg.exe")):
         return perm_dir
     repo_ffmpeg = os.path.join(get_app_dir(), "ffmpeg")
-    if os.path.isdir(repo_ffmpeg):
+    if os.path.isdir(repo_ffmpeg) and os.path.exists(os.path.join(repo_ffmpeg, "ffmpeg.exe")):
         return repo_ffmpeg
+    import shutil
+    ffmpeg_on_path = shutil.which("ffmpeg")
+    if ffmpeg_on_path:
+        path_dir = os.path.dirname(os.path.abspath(ffmpeg_on_path))
+        if os.path.exists(os.path.join(path_dir, "ffmpeg.exe")):
+            return path_dir
     return perm_dir
 
 

@@ -93,6 +93,7 @@ class QtDownloadOptionTests(unittest.TestCase):
                 worker._process_single_url("https://example.invalid/video", settings)
             self.assertIn("bestvideo[height=2160]", captured[0].options["format"])
             self.assertIn("bestvideo[height<=2160]", captured[0].options["format"])
+            self.assertEqual(captured[0].options["format_sort"][0], "res:2160")
             self.assertTrue(captured[0].download)
         finally:
             engine_module.yt_dlp = original_ytdlp
@@ -174,6 +175,46 @@ class QtDownloadOptionTests(unittest.TestCase):
             "compression_level": "Auto",
             "clean_sidecars": False,
         }
+
+    def test_youtube_alt_clients_uses_tv_embedded(self):
+        import ggu_vdod.ui.qt.main_window as module
+        captured = []
+
+        class FakeYDL:
+            def __init__(self, options):
+                self.options = options
+                self.params = options
+                captured.append(self)
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def extract_info(self, _url, download=False):
+                target = os.path.join(output_dir, "simulated.mp4")
+                with open(target, "wb") as f:
+                    f.write(os.urandom(64 * 1024))
+                return {"requested_formats": [{"format_id": "401", "height": 2160}], "filepath": target}
+
+        class FakeYTDLP:
+            YoutubeDL = FakeYDL
+
+        import ggu_vdod.download.engine as engine_module
+        original_ytdlp = engine_module.yt_dlp
+        engine_module.yt_dlp = FakeYTDLP
+        try:
+            with tempfile.TemporaryDirectory() as output_dir:
+                settings = self._settings(output_dir, quality="2160p (4K)")
+                settings["youtube_alt_clients"] = True
+                worker = module.QtDownloadWorker(["https://example.invalid/video"], settings)
+                worker._process_single_url("https://example.invalid/video", settings)
+            clients = captured[0].options.get("extractor_args", {}).get("youtube", {}).get("player_client", [])
+            self.assertIn("tv_embedded", clients)
+            self.assertNotIn("android", clients)
+        finally:
+            engine_module.yt_dlp = original_ytdlp
 
 
 if __name__ == "__main__":
