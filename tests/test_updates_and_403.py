@@ -188,6 +188,23 @@ class InstallerDownloadTests(unittest.TestCase):
             if os.path.exists(dest):
                 os.remove(dest)
 
+    def test_zero_stall_deadline_is_deterministic(self):
+        body = b"MZ" + b"\x00" * 500
+
+        def fake_urlopen(request, timeout=30):
+            return ChunkedResponse(url=request.full_url, body=body)
+
+        dest = os.path.join(os.path.dirname(__file__), "_ggu_test_stall.exe")
+        try:
+            with mock.patch.object(updates.urllib.request, "urlopen", side_effect=fake_urlopen):
+                with self.assertRaises(TimeoutError):
+                    updates.download_installer(
+                        "https://x/s.exe", dest, stall_deadline_s=0
+                    )
+        finally:
+            if os.path.exists(dest):
+                os.remove(dest)
+
 
 class VerifyInstallerTests(unittest.TestCase):
     def test_missing_and_small_and_html_files_rejected(self):

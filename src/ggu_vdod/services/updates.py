@@ -144,7 +144,7 @@ def download_installer(url, dest_path, progress_cb=None, timeout=30,
                 while True:
                     if should_stop is not None and should_stop():
                         raise InterruptedError("cancelled")
-                    if _time.monotonic() - last_activity > stall_deadline_s:
+                    if _time.monotonic() - last_activity >= stall_deadline_s:
                         raise TimeoutError(
                             f"no data received for {stall_deadline_s}s (stalled connection)"
                         )
