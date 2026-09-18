@@ -12,7 +12,7 @@ if str(SOURCE_ROOT) not in sys.path:
 from PySide6.QtWidgets import QApplication
 from ggu_vdod.auth.mailpit import MailpitClient, is_staging_domain
 from ggu_vdod.ui.qt.main_window import QtMainWindow
-from ggu_vdod.ui.qt.test_inbox import MailpitTestInboxWidget
+from ggu_vdod.ui.qt.mailpit_inbox import MailpitTestInboxWidget
 
 app = QApplication.instance() or QApplication(sys.argv)
 

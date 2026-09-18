@@ -51,14 +51,18 @@ def kill_own_ffmpeg_children():
             f"Where-Object {{ $_.ParentProcessId -eq {my_pid} }} | "
             "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
         )
-        subprocess.run(query, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15)
+        subprocess.run(query, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=15,
+                       creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     except Exception:
         pass
 
 
 def format_eta_clean(eta_seconds) -> str:
     """Format ETA seconds into clean rounded figures (e.g. '5m 49s' or '45s')."""
-    if not eta_seconds or float(eta_seconds) <= 0:
+    try:
+        if not eta_seconds or float(eta_seconds) <= 0:
+            return "—"
+    except (ValueError, TypeError):
         return "—"
     try:
         secs = int(round(float(eta_seconds)))
@@ -133,8 +137,6 @@ def expand_playlist_urls(urls, log=None, max_items=PLAYLIST_EXPANSION_CAP):
                             if "youtube" in ie_key:
                                 entry_url = f"https://www.youtube.com/watch?v={entry_url}"
                         if not entry_url.startswith(("http://", "https://")):
-                            continue
-                        if not entry_url:
                             continue
                         entries.append((entry.get("title") or entry_url, entry_url))
                         if len(entries) >= max_items:
@@ -399,6 +401,9 @@ class DownloadEngine:
                 self._log(f"[ERROR] Failed {url}: {explain_download_error(error)}")
                 self._error(url, str(error))
                 return False
+        # All retry attempts exhausted via fallback branches without success.
+        self._log(f"[ERROR] Failed {url}: all retry strategies exhausted")
+        self._error(url, "all retry strategies exhausted")
         return False
 
     def process_url(self, url, settings):
@@ -523,9 +528,19 @@ class DownloadEngine:
         except Exception:
             pass
 
-        ffmpeg_dir = get_default_ffmpeg_dir()
-        ffmpeg_path = settings.get("ffmpeg_path") or get_default_ffmpeg_path()
-        target_ffmpeg_dir = ffmpeg_dir if (os.path.isdir(ffmpeg_dir) and os.path.exists(os.path.join(ffmpeg_dir, "ffmpeg.exe"))) else (os.path.dirname(ffmpeg_path) if (ffmpeg_path and os.path.exists(ffmpeg_path)) else None)
+        # User-configured FFmpeg path takes priority over bundled defaults.
+        user_ffmpeg = settings.get("ffmpeg_path") or ""
+        if user_ffmpeg and os.path.exists(user_ffmpeg):
+            target_ffmpeg_dir = os.path.dirname(user_ffmpeg)
+        else:
+            ffmpeg_dir = get_default_ffmpeg_dir()
+            ffmpeg_path = get_default_ffmpeg_path()
+            if ffmpeg_dir and os.path.isdir(ffmpeg_dir) and os.path.exists(os.path.join(ffmpeg_dir, "ffmpeg.exe")):
+                target_ffmpeg_dir = ffmpeg_dir
+            elif ffmpeg_path and os.path.exists(ffmpeg_path):
+                target_ffmpeg_dir = os.path.dirname(ffmpeg_path)
+            else:
+                target_ffmpeg_dir = None
 
         if target_ffmpeg_dir:
             path_entries = os.environ.get("PATH", "").split(os.pathsep)
@@ -689,9 +704,10 @@ class DownloadEngine:
                 "The highest accessible lower-quality stream was used."
             )
             if available:
+                closest_label = f"{closest}p" if closest is not None else "N/A"
                 self._log(
                     f"[FORMAT] Available heights: {', '.join(map(str, available))}. "
-                    f"Closest match to your request: {closest}p"
+                    f"Closest match to your request: {closest_label}"
                 )
         conversion_resolution = settings.get("conversion_resolution", "Source")
         if conversion_resolution != "Source":

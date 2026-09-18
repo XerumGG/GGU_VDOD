@@ -1,9 +1,9 @@
-# This folder contains temporary files
-# Do not commit
+# GGU_VDOD .gitignore
 
 # Python cache
 __pycache__/
 *.py[cod]
+*.egg-info/
 
 # Per-user application preferences and secrets
 settings.json
@@ -34,8 +34,16 @@ build/
 dist/
 dist_v*/
 
-# Local FFmpeg binary
+# Local FFmpeg / QJS binaries
 ffmpeg/
+bin/
+
+# yt-dlp partial / fragment downloads
+*.part
+*.ytdl
+
+# Temporary cookies (DPAPI decryptor output)
+temp_cookies/
 
 # OS
 .DS_Store

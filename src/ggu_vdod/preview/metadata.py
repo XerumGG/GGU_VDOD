@@ -31,9 +31,10 @@ def preview_target_url(url):
 
 
 def best_thumbnail_url(info):
-    video_id = info.get("id") or youtube_video_id(info.get("webpage_url") or info.get("url") or "")
-    if video_id:
-        maxres_url = f"https://i.ytimg.com/vi/{video_id}/maxresdefault.jpg"
+    # Only attempt the YouTube maxresdefault lookup for actual YouTube sources.
+    yt_id = youtube_video_id(info.get("webpage_url") or info.get("url") or "")
+    if yt_id:
+        maxres_url = f"https://i.ytimg.com/vi/{yt_id}/maxresdefault.jpg"
         try:
             req = urllib.request.Request(maxres_url, headers={"User-Agent": "Mozilla/5.0"}, method="HEAD")
             with urllib.request.urlopen(req, timeout=3) as resp:

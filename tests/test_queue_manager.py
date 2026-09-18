@@ -156,7 +156,9 @@ class QueuePanelTests(unittest.TestCase):
         self.assertEqual(table.rowCount(), 2)
         self.assertEqual(table.item(0, 2).text(), "Queued")
         self.assertEqual(table.item(1, 1).text(), "Title B")
-        self.assertTrue(self.window.queue_clear_btn.isEnabled())
+        # Clear Queue button stays disabled during active downloads; it is
+        # enabled only after the queue completes (_on_download_complete).
+        self.assertFalse(self.window.queue_clear_btn.isEnabled())
         self.assertFalse(self.window.queue_retry_btn.isEnabled())
 
     def test_lifecycle_updates_rows_and_retry_button(self):

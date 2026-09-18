@@ -3,10 +3,7 @@
 import os
 import re
 
-from ..core.constants import (
-    BITRATE_MAP, COMPRESSION_OPTIONS, FRAME_RATE_OPTIONS, SAMPLE_RATE_OPTIONS,
-    VIDEO_CODEC_ARGS, VIDEO_RESOLUTION_OPTIONS, VIDEO_SIDECAR_EXTENSIONS,
-)
+from ..core.constants import BITRATE_MAP, COMPRESSION_OPTIONS, VIDEO_CODEC_ARGS
 
 
 def valid_bitrate(value):
@@ -120,7 +117,7 @@ def video_conversion_args(settings, target_ext):
 def audio_conversion_args(settings, target_ext):
     output_format = str(settings.get("output_format") or "").upper()
     args = list(audio_fallback_args(target_ext, output_format))
-    if target_ext not in {"wav", "flac", "aiff", "alac"}:
+    if target_ext not in {"wav", "flac", "aiff", "alac"} and output_format != "ALAC":
         raw_quality = str(settings.get("quality") or "")
         bitrate_val = BITRATE_MAP.get(raw_quality) or re.search(r"\d+", raw_quality)
         bitrate_str = bitrate_val.group(0) if hasattr(bitrate_val, "group") else (bitrate_val or "320")

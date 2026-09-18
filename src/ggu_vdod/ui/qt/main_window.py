@@ -44,7 +44,7 @@ from ...preview.service import fetch_preview
 from ...services.network import explain_download_error
 from ...services.cookies import inspect_netscape_cookie_file
 from .account_panel import AccountSessionWidget
-from .test_inbox import MailpitTestInboxWidget
+from .mailpit_inbox import MailpitTestInboxWidget
 from .dialogs import (
     AboutDialog, DeepMediaInspectorDialog,
     ErrorAlertDialog, FontPreferencesDialog, HelpCenterDialog, KeyBindingsDialog, LibraryDialog,
@@ -1778,6 +1778,8 @@ class QtMainWindow(QMainWindow):
             self._download_worker.start()
         except Exception as err:
             self.log_box.appendPlainText(f"[ERROR] Could not start download: {err}")
+            self.download_button.setEnabled(True)
+            self.cancel_button.setEnabled(False)
             from ...services.errors import classify_error
             err_details = classify_error(err)
             dlg = ErrorAlertDialog(err_details, self)
@@ -1815,7 +1817,9 @@ class QtMainWindow(QMainWindow):
         self._queue_rows = {}
         self.queue_table.setRowCount(0)
         self.queue_retry_btn.setEnabled(False)
-        self.queue_clear_btn.setEnabled(bool(pairs))
+        # Keep Clear Queue disabled while downloads are in progress to prevent
+        # table corruption; it is re-enabled in _on_queue_completed.
+        self.queue_clear_btn.setEnabled(False)
         for index, (title, url) in enumerate(pairs, 1):
             row = self.queue_table.rowCount()
             self.queue_table.insertRow(row)
@@ -2006,6 +2010,7 @@ class QtMainWindow(QMainWindow):
     def _on_download_complete(self, success_count, failure_count):
         self.download_button.setEnabled(True)
         self.cancel_button.setEnabled(False)
+        self.queue_clear_btn.setEnabled(True)
         self.log_box.appendPlainText(f"\n[FINISHED] Queue finished: {success_count} succeeded, {failure_count} failed.")
         if failure_count > 0:
             self.transfer_status.status_label.setText(

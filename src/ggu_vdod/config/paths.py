@@ -33,7 +33,7 @@ def get_app_dir():
 
 
 def get_default_ffmpeg_dir():
-    r"""Return the permanent FFmpeg & FFprobe directory (D:\GGU_VDOD\ffmpeg)."""
+    """Return the FFmpeg & FFprobe directory, searching bundled/repo/PATH locations."""
     if getattr(sys, "frozen", False):
         exe_dir = os.path.dirname(sys.executable)
         meipass = getattr(sys, "_MEIPASS", exe_dir)
@@ -49,9 +49,7 @@ def get_default_ffmpeg_dir():
             ):
                 return folder
 
-    perm_dir = r"D:\GGU_VDOD\ffmpeg"
-    if os.path.isdir(perm_dir) and os.path.exists(os.path.join(perm_dir, "ffmpeg.exe")):
-        return perm_dir
+    # Check relative to the repository / app root (portable).
     repo_ffmpeg = os.path.join(get_app_dir(), "ffmpeg")
     if os.path.isdir(repo_ffmpeg) and os.path.exists(os.path.join(repo_ffmpeg, "ffmpeg.exe")):
         return repo_ffmpeg
@@ -61,11 +59,13 @@ def get_default_ffmpeg_dir():
         path_dir = os.path.dirname(os.path.abspath(ffmpeg_on_path))
         if os.path.exists(os.path.join(path_dir, "ffmpeg.exe")):
             return path_dir
-    return perm_dir
+    # Fallback: return the expected repo-relative directory even if it doesn't
+    # exist yet — callers check for existence before using it.
+    return repo_ffmpeg
 
 
 def get_default_ffmpeg_path():
-    r"""Return default FFmpeg binary path (D:\GGU_VDOD\ffmpeg\ffmpeg.exe)."""
+    """Return default FFmpeg binary path, searching bundled/repo/PATH locations."""
     dir_path = get_default_ffmpeg_dir()
     exe = os.path.join(dir_path, "ffmpeg.exe")
     if os.path.exists(exe):
@@ -79,26 +79,26 @@ def get_default_ffmpeg_path():
     except Exception:
         pass
 
-    return r"D:\GGU_VDOD\ffmpeg\ffmpeg.exe"
+    # Return the expected repo-relative path as a last resort.
+    return os.path.join(get_app_dir(), "ffmpeg", "ffmpeg.exe")
 
 
 def get_default_ffprobe_path():
-    r"""Return default FFprobe binary path (D:\GGU_VDOD\ffmpeg\ffprobe.exe)."""
+    """Return default FFprobe binary path, searching bundled/repo/PATH locations."""
     dir_path = get_default_ffmpeg_dir()
     exe = os.path.join(dir_path, "ffprobe.exe")
     if os.path.exists(exe):
         return exe
-    return r"D:\GGU_VDOD\ffmpeg\ffprobe.exe"
+    return os.path.join(get_app_dir(), "ffmpeg", "ffprobe.exe")
 
 
 def get_default_qjs_path():
-    r"""Return default QuickJS binary path (qjs.exe) for solving YouTube JavaScript challenges."""
+    """Return default QuickJS binary path (qjs.exe) for solving YouTube JavaScript challenges."""
+    app_root = get_app_dir()
     for folder in [
         get_default_ffmpeg_dir(),
-        os.path.join(get_app_dir(), "ffmpeg"),
-        os.path.join(get_app_dir(), "bin"),
-        r"D:\GGU_VDOD\ffmpeg",
-        r"D:\GGU_VDOD\bin",
+        os.path.join(app_root, "ffmpeg"),
+        os.path.join(app_root, "bin"),
     ]:
         if folder and os.path.isdir(folder):
             exe = os.path.join(folder, "qjs.exe")

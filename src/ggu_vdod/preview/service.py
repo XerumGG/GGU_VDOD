@@ -106,10 +106,17 @@ def fetch_preview(url, browser="None", cookies_file="", proxy=""):
                 final_error = retry_err
 
         if final_error is not None and browser != "None" and looks_like_cookie_database_error(final_error):
-            options.pop("cookiesfrombrowser", None)
-            options.pop("impersonate", None)
+            stripped_opts = dict(options)
+            stripped_opts.pop("cookiesfrombrowser", None)
+            stripped_opts.pop("impersonate", None)
+            # Also remove stale generic impersonation extractor args.
+            ea = stripped_opts.get("extractor_args")
+            if isinstance(ea, dict) and "generic" in ea:
+                ea = dict(ea)
+                ea.pop("generic", None)
+                stripped_opts["extractor_args"] = ea
             try:
-                with yt_dlp.YoutubeDL(options) as downloader:
+                with yt_dlp.YoutubeDL(stripped_opts) as downloader:
                     info = downloader.extract_info(target_url, download=False)
                     final_error = None
             except Exception as retry_error:
