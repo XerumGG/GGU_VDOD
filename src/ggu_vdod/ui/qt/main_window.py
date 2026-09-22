@@ -54,7 +54,7 @@ from .dialogs import (
 from ...services.i18n import SUPPORTED_LANGUAGES, i18n, t
 from .theme import BASE_FONT_SIZE, apply_theme, normalize_theme
 from .widgets import TransferStatusBar, detach_running_worker
-
+from .update_banner import UpdateBanner
 
 def _load_yt_dlp():
     """Import yt-dlp lazily so cold start does not pay for it before a download.
@@ -281,7 +281,7 @@ class UpdateFetchWorker(QThread):
 
 class UpdateDownloadWorker(QThread):
     """Stream the new setup exe with progress callbacks."""
-    progressed = Signal(int, int)
+    progressed = Signal(int, int, float)
     finished_ok = Signal(str)
     failed = Signal(str)
 
@@ -301,13 +301,9 @@ class UpdateDownloadWorker(QThread):
             for _attempt in (1, 2):
                 if self._is_cancelled:
                     return
-                last_pct = [-1]
 
-                def _throttled_progress(done, total):
-                    pct = int(done * 100 / total) if total else 0
-                    if pct != last_pct[0]:
-                        last_pct[0] = pct
-                        self.progressed.emit(done, total)
+                def _throttled_progress(done, total, speed_bps=0.0):
+                    self.progressed.emit(done, total, float(speed_bps))
 
                 try:
                     updates.download_installer(
@@ -593,6 +589,13 @@ class QtMainWindow(QMainWindow):
         main_vbox = QVBoxLayout(root)
         main_vbox.setContentsMargins(0, 0, 0, 0)
         main_vbox.setSpacing(0)
+
+        # Update Banner
+        self.update_banner = UpdateBanner(self)
+        self.update_banner.download_requested.connect(self._start_update_download)
+        self.update_banner.cancel_requested.connect(self._cancel_update_download)
+        self.update_banner.install_requested.connect(self._launch_update)
+        main_vbox.addWidget(self.update_banner)
 
         # Scroll Area for main content
         self.content_scroll = QScrollArea()
@@ -1200,10 +1203,23 @@ class QtMainWindow(QMainWindow):
     def _on_scheduled_update_results(self, results):
         updates = [f"{name} (Installed: {inst}, Latest: {lat})" for name, ctype, inst, lat, status in results if status == "Update available"]
         if updates:
-            msg = f"[NOTICE] Scheduled 24-hr update check: {len(updates)} update(s) available -> " + ", ".join(updates)
+            msg = f"[NOTICE] Scheduled 24-hr update check: {len(updates)} component update(s) available -> " + ", ".join(updates)
             self.log_box.appendPlainText(msg)
         else:
             self.log_box.appendPlainText("[INFO] Scheduled 24-hr update check complete: All frameworks, libraries, and binaries are up to date.")
+            
+        # Now check for app updates
+        if not getattr(self, "_update_fetch_worker", None) or not self._update_fetch_worker.isRunning():
+            self._update_fetch_worker = UpdateFetchWorker(self)
+            self._update_fetch_worker.checked.connect(self._on_scheduled_app_update_check_done)
+            detach_running_worker(self._update_fetch_worker, grace_ms=0)
+            self._update_fetch_worker.start()
+
+    def _on_scheduled_app_update_check_done(self, release):
+        from ...services import updates
+        if updates.is_newer(release["version_tuple"]):
+            self.log_box.appendPlainText(f"[NOTICE] App update available: {release['tag_name']}")
+            self.update_banner.show_available(release)
 
     def _choose_ffmpeg_file(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Select ffmpeg.exe", "", "Executables (*.exe);;All files (*.*)")
@@ -2213,6 +2229,11 @@ class QtMainWindow(QMainWindow):
         dlg.exec()
 
     def _check_for_updates_clicked(self):
+        if getattr(self, "_update_dl_worker", None) and self._update_dl_worker.isRunning():
+            return
+        if getattr(self, "_update_fetch_worker", None) and self._update_fetch_worker.isRunning():
+            return
+            
         self.update_btn.setEnabled(False)
         self.update_btn.setText("Checking…")
         self._update_fetch_worker = UpdateFetchWorker(self)
@@ -2261,95 +2282,52 @@ class QtMainWindow(QMainWindow):
                 QDesktopServices.openUrl(QUrl(release.get("html_url") or "https://github.com/XerumGG/GGU_VDOD/releases/latest"))
             return
 
-        answer = QMessageBox.question(
-            self,
-            "Update available",
-            f"This app: {DEVELOPMENT_BUILD_LABEL}\n"
-            f"Latest release: {release['tag_name']}\n\nDownload and install it now?\n"
-            "The app will close, the setup wizard will launch, and your settings stay.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
+        self.update_banner.show_available(release)
 
+    def _start_update_download(self):
         import tempfile
+        release = self.update_banner.release_info
+        if not release:
+            return
+            
+        installer_url = release.get("installer_url")
         dest = os.path.join(tempfile.gettempdir(), f"GGU_VDOD-setup-{release['tag_name']}.exe")
         self.log_box.appendPlainText(
             f"[UPDATE] Downloading {release['tag_name']} — the app will close when the setup launches."
         )
-        self._progress = QProgressDialog("Connecting to download update…", "Cancel", 0, 100, self)
-        self._progress.setWindowTitle("GGU_VDOD Update")
-        self._progress.setMinimumDuration(0)
-        self._progress.setWindowModality(Qt.WindowModality.WindowModal)
-        self._progress.setAutoClose(False)
-        self._progress.setAutoReset(False)
-        self._progress.setValue(0)
-        self._progress.show()
+        
+        self.update_banner.show_downloading()
 
         self._update_dl_worker = UpdateDownloadWorker(installer_url, dest, self)
-        self._progress.canceled.connect(self._update_dl_worker.cancel)
-        self._update_dl_worker.progressed.connect(self._on_update_download_progress)
-        self._update_dl_worker.finished_ok.connect(self._launch_update)
+        self._update_dl_worker.progressed.connect(self.update_banner.update_progress)
+        self._update_dl_worker.finished_ok.connect(self._on_update_download_finished)
         self._update_dl_worker.failed.connect(self._on_update_download_failed)
         self._update_dl_worker.start()
 
-    def _on_update_download_progress(self, done, total):
-        pct = int(done * 100 / total) if total else 0
-        if hasattr(self, "_progress") and self._progress:
-            self._progress.setValue(pct)
-            total_mb = max(1, total // (1024 * 1024)) if total else 0
-            done_mb = done // (1024 * 1024)
-            self._progress.setLabelText(f"Downloading update… {done_mb} / {total_mb} MB")
+    def _cancel_update_download(self):
+        if getattr(self, "_update_dl_worker", None):
+            self._update_dl_worker.cancel()
+        self.update_banner.hide()
+
+    def _on_update_download_finished(self, dest):
+        self.update_banner.show_ready(dest)
 
     def _on_update_download_failed(self, error):
-        if hasattr(self, "_progress") and self._progress:
-            try:
-                self._progress.cancel()
-            except Exception:
-                pass
         self.log_box.appendPlainText(f"[UPDATE] Download failed: {error}")
-        box = QMessageBox(self)
-        box.setWindowTitle("Update download failed")
-        box.setIcon(QMessageBox.Icon.Critical)
-        box.setText(
-            f"Could not download the update installer:\n{error}\n\n"
-            "Open the Releases page to download it manually?"
-        )
-        open_btn = box.addButton("Open Releases page", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
-        box.exec()
-        if box.clickedButton() is open_btn:
-            QDesktopServices.openUrl(QUrl("https://github.com/XerumGG/GGU_VDOD/releases/latest"))
+        self.update_banner.show_error(error)
 
     def _launch_update(self, path):
         from ...services import updates
-        if hasattr(self, "_progress") and self._progress:
-            try:
-                self._progress.setValue(100)
-                self._progress.close()
-            except Exception:
-                pass
-        if not updates.verify_installer_file(path):
+        if not path or not updates.verify_installer_file(path):
             try:
                 if path and os.path.exists(path):
                     os.remove(path)
             except Exception:
                 pass
             self.log_box.appendPlainText("[UPDATE] Downloaded file failed verification; deleted.")
-            box = QMessageBox(self)
-            box.setWindowTitle("Update failed verification")
-            box.setIcon(QMessageBox.Icon.Critical)
-            box.setText(
-                "The downloaded update file was incomplete or invalid, so it was deleted.\n\n"
-                "Open the Releases page to download it manually?"
-            )
-            open_btn = box.addButton("Open Releases page", QMessageBox.ButtonRole.AcceptRole)
-            box.addButton("Close", QMessageBox.ButtonRole.RejectRole)
-            box.exec()
-            if box.clickedButton() is open_btn:
-                QDesktopServices.openUrl(QUrl("https://github.com/XerumGG/GGU_VDOD/releases/latest"))
-            return  # do NOT quit: the app is still the working version
+            self.update_banner.show_error("Downloaded file failed verification.")
+            return
+
         self.log_box.appendPlainText(f"[UPDATE] Launching installer: {path}")
         try:
             os.startfile(path)

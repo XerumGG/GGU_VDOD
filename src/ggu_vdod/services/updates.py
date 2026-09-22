@@ -127,8 +127,8 @@ def verify_installer_file(path, min_bytes=MIN_INSTALLER_BYTES):
 
 
 def download_installer(url, dest_path, progress_cb=None, timeout=30,
-                       stall_deadline_s=90, should_stop=None):
-    """Stream the setup exe to dest_path; progress_cb(bytes_done, total_bytes).
+                       stall_deadline_s=180, should_stop=None):
+    """Stream the setup exe to dest_path; progress_cb(bytes_done, total_bytes, speed_bps).
 
     Raises TimeoutError if no bytes arrive for stall_deadline_s seconds, and
     InterruptedError if should_stop() returns True (partial file is removed).
@@ -139,12 +139,14 @@ def download_installer(url, dest_path, progress_cb=None, timeout=30,
         total = int(response.headers.get("Content-Length") or 0)
         done = 0
         last_activity = _time.monotonic()
+        start_time = _time.monotonic()
         try:
             with open(dest_path, "wb") as f:
                 while True:
                     if should_stop is not None and should_stop():
                         raise InterruptedError("cancelled")
-                    if _time.monotonic() - last_activity >= stall_deadline_s:
+                    now = _time.monotonic()
+                    if now - last_activity >= stall_deadline_s:
                         raise TimeoutError(
                             f"no data received for {stall_deadline_s}s (stalled connection)"
                         )
@@ -154,8 +156,11 @@ def download_installer(url, dest_path, progress_cb=None, timeout=30,
                     f.write(chunk)
                     done += len(chunk)
                     last_activity = _time.monotonic()
+                    
                     if progress_cb:
-                        progress_cb(done, total)
+                        elapsed = last_activity - start_time
+                        speed_bps = (done / elapsed) if elapsed > 0 else 0
+                        progress_cb(done, total, speed_bps)
         except BaseException:
             if should_stop is not None and should_stop():
                 try:

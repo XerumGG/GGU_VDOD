@@ -146,7 +146,7 @@ class InstallerDownloadTests(unittest.TestCase):
                                    headers={"Content-Length": str(len(body))})
 
         dest, result = self._run_download(
-            fake_urlopen, progress_cb=lambda done, total: seen.append((done, total))
+            fake_urlopen, progress_cb=lambda done, total, speed: seen.append((done, total))
         )
         try:
             self.assertEqual(result, dest)
